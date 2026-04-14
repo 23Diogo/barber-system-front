@@ -1,2 +1,109 @@
-/* Financeiro: espaço reservado para estilos específicos do módulo */
-.page--financeiro{}
+.page--financeiro {
+  .finance-metrics-grid {
+    margin-bottom: 14px;
+  }
+
+  .finance-row-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .fin-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 10px;
+    border-left: 3px solid transparent;
+    border-radius: 12px;
+    transition: transform 0.18s ease, background 0.18s ease;
+  }
+
+  .finance-row-button:hover .fin-row,
+  .finance-row-button:focus-visible .fin-row {
+    transform: translateY(-2px);
+    background: rgba(79, 195, 247, 0.04);
+  }
+
+  .fin-icon {
+    width: 28px;
+    text-align: center;
+    font-size: 20px;
+  }
+
+  .fin-info {
+    min-width: 0;
+  }
+
+  .fin-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8f0fe;
+  }
+
+  .fin-date {
+    font-size: 10px;
+    color: #5a6888;
+    margin-top: 3px;
+  }
+
+  .fin-val {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .finance-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .finance-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .finance-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .finance-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .finance-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .finance-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .finance-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .finance-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
