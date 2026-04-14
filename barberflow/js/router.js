@@ -13,6 +13,7 @@ import { renderFidelidade } from './modules/fidelidade.js';
 import { renderAvaliacoes } from './modules/avaliacoes.js';
 import { renderConfiguracoes } from './modules/configuracoes.js';
 
+
 const renderers = {
   agenda: renderAgenda,
   clientes: renderClientes,
@@ -29,6 +30,7 @@ const renderers = {
 
 const initializers = {
   agenda: initAgendaPage,
+  barbeiros: initBarbeirosPage,
 };
 
 function renderPage(pageId) {
