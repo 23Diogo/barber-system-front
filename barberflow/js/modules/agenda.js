@@ -7,6 +7,7 @@ import {
   getBarbers,
   getServices,
   createAppointment,
+  updateAppointmentStatus,
 } from '../services/api.js';
 
 const agendaState = {
@@ -86,6 +87,24 @@ function getStatusMeta(status) {
   };
 
   return map[status] || map.pending;
+}
+
+function getStatusDisplayName(status) {
+  return getStatusMeta(status).label;
+}
+
+function getAvailableStatusActions(currentStatus) {
+  const transitions = {
+    pending: ['confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'],
+    confirmed: ['in_progress', 'completed', 'cancelled', 'no_show'],
+    in_progress: ['completed', 'cancelled', 'no_show'],
+    completed: [],
+    cancelled: ['pending', 'confirmed'],
+    no_show: ['pending', 'confirmed'],
+  };
+
+  return transitions[currentStatus] || ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show']
+    .filter(status => status !== currentStatus);
 }
 
 function createSummary(appointments) {
@@ -241,6 +260,46 @@ function getSourceLabel(source) {
   return map[source] || source || 'Não informado';
 }
 
+function renderStatusActions(appointment) {
+  const actions = getAvailableStatusActions(appointment.status);
+
+  if (!actions.length) {
+    return `
+      <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
+        Este agendamento já está finalizado neste status.
+      </div>
+    `;
+  }
+
+  return `
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">
+      ${actions.map((status) => {
+        const meta = getStatusMeta(status);
+
+        return `
+          <button
+            type="button"
+            class="agenda-status-action"
+            data-status="${escapeHtml(status)}"
+            data-appointment-id="${escapeHtml(appointment.id)}"
+            style="
+              padding:8px 12px;
+              border-radius:8px;
+              border:1px solid ${meta.border};
+              background:${meta.pillBg};
+              color:${meta.text};
+              font-weight:700;
+              cursor:pointer;
+            "
+          >
+            ${escapeHtml(getStatusDisplayName(status))}
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function renderAppointmentDetails(appointment) {
   const meta = getStatusMeta(appointment.status);
 
@@ -277,13 +336,36 @@ function renderAppointmentDetails(appointment) {
         <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
           <strong style="color:#c0cce8;">Origem:</strong> ${escapeHtml(getSourceLabel(appointment.source))}
         </div>
+        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
+          <strong style="color:#c0cce8;">Status atual:</strong> ${escapeHtml(getStatusDisplayName(appointment.status))}
+        </div>
       </div>
+
+      <div style="margin-top:4px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a6888;margin-bottom:8px;">
+          Alterar status
+        </div>
+        ${renderStatusActions(appointment)}
+      </div>
+
+      <div id="agenda-details-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
 
       <div class="modal-buttons" style="margin-top:6px;">
         <button type="button" class="btn-cancel" id="agenda-details-close">Fechar</button>
       </div>
     </div>
   `;
+}
+
+function setAppointmentDetailsFeedback(message, variant = 'neutral') {
+  const el = document.getElementById('agenda-details-feedback');
+  if (!el) return;
+
+  el.textContent = message || '';
+  el.style.color =
+    variant === 'error' ? '#ff8a8a' :
+    variant === 'success' ? '#00e676' :
+    '#5a6888';
 }
 
 function openAppointmentDetails(appointmentId) {
@@ -302,14 +384,27 @@ function openAppointmentDetails(appointmentId) {
   modal.classList.add('open');
 
   document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
+
+  document.querySelectorAll('.agenda-status-action').forEach((button) => {
+    button.addEventListener('click', () => {
+      const nextStatus = button.dataset.status;
+      const currentAppointmentId = button.dataset.appointmentId;
+
+      if (!nextStatus || !currentAppointmentId) return;
+      handleAppointmentStatusChange(currentAppointmentId, nextStatus);
+    });
+  });
 }
 
 function closeAppointmentDetails() {
   const modal = document.getElementById('agenda-details-modal');
+  const content = document.getElementById('agenda-details-content');
   if (!modal) return;
 
   modal.classList.remove('open');
   modal.style.display = 'none';
+
+  if (content) content.innerHTML = '';
 }
 
 function openCreateModal() {
@@ -433,6 +528,7 @@ async function handleCreateAppointment(event) {
     if (pageDateInput) pageDateInput.value = dateValue;
 
     await loadAgendaForDate(dateValue);
+
     setTimeout(() => {
       closeCreateModal();
       setCreateFeedback('', 'neutral');
@@ -447,6 +543,27 @@ async function handleCreateAppointment(event) {
   } finally {
     submitBtn?.removeAttribute('disabled');
     if (submitBtn) submitBtn.textContent = 'Salvar agendamento';
+  }
+}
+
+async function handleAppointmentStatusChange(appointmentId, status) {
+  const buttons = document.querySelectorAll('.agenda-status-action');
+
+  try {
+    buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    setAppointmentDetailsFeedback('Atualizando status...', 'neutral');
+
+    await updateAppointmentStatus(appointmentId, status);
+
+    setAppointmentDetailsFeedback('Status atualizado com sucesso.', 'success');
+
+    closeAppointmentDetails();
+    await loadAgendaForDate(agendaState.currentDate);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível atualizar o status.';
+    setAppointmentDetailsFeedback(message, 'error');
+  } finally {
+    buttons.forEach((button) => button.removeAttribute('disabled'));
   }
 }
 
@@ -466,6 +583,7 @@ async function loadAgendaForDate(dateValue) {
 
   const apiUrl = getApiBaseUrl();
   if (!apiUrl) {
+    agendaState.currentAppointments = [];
     listContainer.innerHTML = renderConfigHint(
       'API não configurada',
       'Abra o login dev e informe a URL pública do backend no Railway para começar a integrar os menus.',
@@ -476,6 +594,7 @@ async function loadAgendaForDate(dateValue) {
   }
 
   if (!hasAuthToken()) {
+    agendaState.currentAppointments = [];
     listContainer.innerHTML = renderConfigHint(
       'Login de desenvolvimento pendente',
       'Faça o login dev com o e-mail do usuário cadastrado no backend para liberar as rotas protegidas da Agenda.',
@@ -507,7 +626,7 @@ async function loadAgendaForDate(dateValue) {
           <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(dateValue))}</div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <button class="card-action" id="agenda-new-action" type="button" style="padding:7px 12px;border:1px solid rgba(79,195,247,.18);border-radius:8px;background:rgba(79,195,247,.06);">+ Novo agendamento</button>
-            <div class="card-action" id="agenda-refresh-action">Atualizar</div>
+            <button class="card-action" id="agenda-refresh-action" type="button">Atualizar</button>
           </div>
         </div>
         ${safeAppointments.map(renderAppointmentRow).join('')}
@@ -519,20 +638,23 @@ async function loadAgendaForDate(dateValue) {
     document.getElementById('agenda-refresh-action')?.addEventListener('click', () => {
       loadAgendaForDate(dateValue);
     });
+
     document.getElementById('agenda-new-action')?.addEventListener('click', handleOpenCreateModal);
+
     document.querySelectorAll('.appt-row[data-appointment-id]').forEach((row) => {
       row.addEventListener('click', () => {
         openAppointmentDetails(row.dataset.appointmentId);
       });
-    
+
       row.addEventListener('keydown', (event) => {
         if (event.key === 'Enter' || event.key === ' ') {
           event.preventDefault();
           openAppointmentDetails(row.dataset.appointmentId);
         }
       });
-    });    
+    });
   } catch (error) {
+    agendaState.currentAppointments = [];
     const message = error instanceof Error ? error.message : 'Não foi possível carregar a agenda.';
     listContainer.innerHTML = renderConfigHint('Erro ao consultar a agenda', message, true);
     summaryContainer.innerHTML = renderEmptyState('Sem resumo disponível por causa do erro de integração.');
@@ -551,7 +673,7 @@ export function renderAgenda() {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <input id="agenda-date-input" type="date" value="${today}" style="background:#0a0c1a;border:1px solid #1e2345;border-radius:8px;padding:8px 10px;color:#e8f0fe;font:inherit;min-width:160px;" />
           <button id="agenda-create-cta" type="button" style="padding:8px 12px;border:1px solid rgba(79,195,247,.18);border-radius:8px;background:rgba(79,195,247,.08);color:#4fc3f7;font-weight:600;cursor:pointer;">+ Novo agendamento</button>
-          <div class="card-action" id="agenda-load-action" style="padding:8px 12px;border:1px solid #1e2345;border-radius:8px;background:#0a0c1a;cursor:pointer;">Carregar data</div>
+          <button id="agenda-load-action" type="button" class="card-action" style="padding:8px 12px;border:1px solid #1e2345;border-radius:8px;background:#0a0c1a;cursor:pointer;">Carregar data</button>
         </div>
       </div>
       <div id="agenda-list-container"></div>
@@ -559,7 +681,7 @@ export function renderAgenda() {
     <div id="agenda-summary-container"></div>
   </div>
 
-  <div id="agenda-create-modal" class="modal-overlay">
+  <div id="agenda-create-modal" class="modal-overlay" style="display:none;">
     <div class="modal" style="width:min(92vw, 520px);">
       <div class="modal-title">Novo agendamento</div>
       <div class="modal-sub">Preencha os dados abaixo para incluir um horário real na agenda.</div>
@@ -587,6 +709,7 @@ export function renderAgenda() {
       </form>
     </div>
   </div>
+
   <div id="agenda-details-modal" class="modal-overlay" style="display:none;">
     <div class="modal" style="width:min(92vw, 520px);">
       <div id="agenda-details-content"></div>
@@ -603,8 +726,8 @@ export function initAgendaPage() {
   const createForm = document.getElementById('agenda-create-form');
   const createCancel = document.getElementById('agenda-create-cancel');
   const modal = document.getElementById('agenda-create-modal');
-  const initialDate = dateInput?.value || agendaState.currentDate || formatDateForApi(new Date());
   const detailsModal = document.getElementById('agenda-details-modal');
+  const initialDate = dateInput?.value || agendaState.currentDate || formatDateForApi(new Date());
 
   const loadCurrentSelection = () => {
     const selectedDate = dateInput?.value || formatDateForApi(new Date());
@@ -616,6 +739,7 @@ export function initAgendaPage() {
   createButton?.addEventListener('click', handleOpenCreateModal);
   createForm?.addEventListener('submit', handleCreateAppointment);
   createCancel?.addEventListener('click', closeCreateModal);
+
   modal?.addEventListener('click', (event) => {
     if (event.target === modal) closeCreateModal();
   });
