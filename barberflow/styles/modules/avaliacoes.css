@@ -1,2 +1,108 @@
-/* Avaliações: espaço reservado para estilos específicos do módulo */
-.page--avaliacoes{}
+.page--avaliacoes {
+  .avaliacoes-metrics-grid {
+    margin-bottom: 14px;
+  }
+
+  .avaliacoes-metric-center {
+    text-align: center;
+  }
+
+  .review-card-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .review-card {
+    border-left: 3px solid #4fc3f7;
+    border-radius: 12px;
+    padding: 14px 14px 12px;
+    transition: transform 0.18s ease, background 0.18s ease;
+  }
+
+  .review-card-button:hover .review-card,
+  .review-card-button:focus-visible .review-card {
+    transform: translateY(-2px);
+    background: rgba(79, 195, 247, 0.04);
+  }
+
+  .review-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+  }
+
+  .review-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8f0fe;
+  }
+
+  .review-text {
+    font-size: 11px;
+    color: #5a6888;
+    line-height: 1.65;
+    margin-bottom: 8px;
+    text-align: left;
+  }
+
+  .review-meta {
+    font-size: 10px;
+    color: #5a6888;
+    text-align: left;
+  }
+
+  .avaliacoes-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .avaliacoes-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .avaliacoes-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .avaliacoes-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .avaliacoes-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .avaliacoes-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .avaliacoes-textarea {
+    min-height: 100px;
+    resize: vertical;
+  }
+
+  .avaliacoes-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
