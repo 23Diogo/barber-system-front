@@ -1,2 +1,96 @@
-/* Configurações: espaço reservado para estilos específicos do módulo */
-.page--configuracoes{}
+.page--configuracoes {
+  .cfg-action-link {
+    font-size: 11px;
+    color: #4fc3f7;
+  }
+
+  .cfg-action-muted {
+    font-size: 11px;
+    color: #5a6888;
+  }
+
+  .cfg-badge {
+    padding: 3px 9px;
+    border-radius: 8px;
+    font-size: 10px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    white-space: nowrap;
+  }
+
+  .cfg-badge--success {
+    background: rgba(0, 230, 118, 0.1);
+    color: #00e676;
+  }
+
+  .cfg-badge--info {
+    background: rgba(79, 195, 247, 0.1);
+    color: #4fc3f7;
+  }
+
+  .cfg-custom-card {
+    padding: 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    cursor: pointer;
+    border: 1px solid #1e2345;
+    margin-bottom: 10px;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .cfg-custom-card:hover {
+    background: rgba(79, 195, 247, 0.03);
+    border-color: rgba(79, 195, 247, 0.18);
+  }
+
+  .cfg-custom-title {
+    font-size: 10px;
+    font-weight: 700;
+    color: #4fc3f7;
+    margin-bottom: 8px;
+  }
+
+  .cfg-custom-content {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cfg-logo-preview {
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #ffd700, #7a5a10);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 18px;
+    font-weight: 900;
+    color: #000;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .cfg-logo-image {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: 9px;
+    display: block;
+  }
+
+  .cfg-brand-name {
+    font-size: 11px;
+    font-weight: 600;
+    color: #e8f0fe;
+  }
+
+  .cfg-brand-subtitle {
+    font-size: 9px;
+    color: #3a4568;
+    margin-top: 2px;
+  }
+}
