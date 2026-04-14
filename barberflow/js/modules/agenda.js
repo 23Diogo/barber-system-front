@@ -14,6 +14,7 @@ const agendaState = {
   cachedClients: null,
   cachedBarbers: null,
   cachedServices: null,
+  currentAppointments: [],
 };
 
 function escapeHtml(value) {
@@ -134,7 +135,14 @@ function renderAppointmentRow(appointment) {
   const serviceText = `${escapeHtml(getServiceName(appointment))} · ${escapeHtml(getBarberName(appointment))} · ${escapeHtml(formatCurrency(getServicePrice(appointment)))}`;
 
   return `
-    <div class="appt-row" style="border-color:${meta.border}">
+    <div
+      class="appt-row"
+      data-appointment-id="${escapeHtml(appointment.id)}"
+      role="button"
+      tabindex="0"
+      title="Ver detalhes do agendamento"
+      style="border-color:${meta.border};cursor:pointer;"
+    >
       <div class="appt-time" style="color:${meta.text}">${escapeHtml(formatTime(appointment.scheduled_at))}</div>
       <div class="appt-info">
         <div class="appt-client">${escapeHtml(getClientName(appointment))}</div>
@@ -220,6 +228,88 @@ function renderConfigHint(title, body, showAuthButton = false) {
 
 function renderModalSelectOptions(items, getValue, getLabel) {
   return items.map(item => `<option value="${escapeHtml(getValue(item))}">${escapeHtml(getLabel(item))}</option>`).join('');
+}
+
+function getSourceLabel(source) {
+  const map = {
+    dashboard: 'Dashboard',
+    whatsapp: 'WhatsApp',
+    walk_in: 'Walk-in',
+    link: 'Link',
+  };
+
+  return map[source] || source || 'Não informado';
+}
+
+function renderAppointmentDetails(appointment) {
+  const meta = getStatusMeta(appointment.status);
+
+  return `
+    <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div>
+          <div class="modal-title" style="margin:0;">${escapeHtml(getClientName(appointment))}</div>
+          <div class="modal-sub" style="margin-top:4px;">Detalhes do agendamento</div>
+        </div>
+        <div class="status-pill" style="background:${meta.pillBg};color:${meta.text};border:1px solid ${meta.border};">
+          ${meta.label}
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="mini-card">
+          <div class="mini-lbl">Horário</div>
+          <div class="mini-val" style="font-size:18px;">${escapeHtml(formatTime(appointment.scheduled_at))}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Valor</div>
+          <div class="mini-val" style="font-size:18px;">${escapeHtml(formatCurrency(getServicePrice(appointment)))}</div>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr;gap:8px;">
+        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
+          <strong style="color:#c0cce8;">Serviço:</strong> ${escapeHtml(getServiceName(appointment))}
+        </div>
+        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
+          <strong style="color:#c0cce8;">Barbeiro:</strong> ${escapeHtml(getBarberName(appointment))}
+        </div>
+        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
+          <strong style="color:#c0cce8;">Origem:</strong> ${escapeHtml(getSourceLabel(appointment.source))}
+        </div>
+      </div>
+
+      <div class="modal-buttons" style="margin-top:6px;">
+        <button type="button" class="btn-cancel" id="agenda-details-close">Fechar</button>
+      </div>
+    </div>
+  `;
+}
+
+function openAppointmentDetails(appointmentId) {
+  const modal = document.getElementById('agenda-details-modal');
+  const content = document.getElementById('agenda-details-content');
+  if (!modal || !content) return;
+
+  const appointment = agendaState.currentAppointments.find(
+    item => String(item.id) === String(appointmentId)
+  );
+
+  if (!appointment) return;
+
+  content.innerHTML = renderAppointmentDetails(appointment);
+  modal.style.display = 'flex';
+  modal.classList.add('open');
+
+  document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
+}
+
+function closeAppointmentDetails() {
+  const modal = document.getElementById('agenda-details-modal');
+  if (!modal) return;
+
+  modal.classList.remove('open');
+  modal.style.display = 'none';
 }
 
 function openCreateModal() {
@@ -401,6 +491,7 @@ async function loadAgendaForDate(dateValue) {
   try {
     const appointments = await getAppointmentsByDate(dateValue);
     const safeAppointments = Array.isArray(appointments) ? appointments : [];
+    agendaState.currentAppointments = safeAppointments;
 
     if (!safeAppointments.length) {
       listContainer.innerHTML = renderEmptyState('Nenhum agendamento encontrado para a data selecionada.');
@@ -429,6 +520,18 @@ async function loadAgendaForDate(dateValue) {
       loadAgendaForDate(dateValue);
     });
     document.getElementById('agenda-new-action')?.addEventListener('click', handleOpenCreateModal);
+    document.querySelectorAll('.appt-row[data-appointment-id]').forEach((row) => {
+      row.addEventListener('click', () => {
+        openAppointmentDetails(row.dataset.appointmentId);
+      });
+    
+      row.addEventListener('keydown', (event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          openAppointmentDetails(row.dataset.appointmentId);
+        }
+      });
+    });    
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Não foi possível carregar a agenda.';
     listContainer.innerHTML = renderConfigHint('Erro ao consultar a agenda', message, true);
@@ -484,6 +587,11 @@ export function renderAgenda() {
       </form>
     </div>
   </div>
+  <div id="agenda-details-modal" class="modal-overlay" style="display:none;">
+    <div class="modal" style="width:min(92vw, 520px);">
+      <div id="agenda-details-content"></div>
+    </div>
+  </div>
 </section>
   `;
 }
@@ -496,6 +604,7 @@ export function initAgendaPage() {
   const createCancel = document.getElementById('agenda-create-cancel');
   const modal = document.getElementById('agenda-create-modal');
   const initialDate = dateInput?.value || agendaState.currentDate || formatDateForApi(new Date());
+  const detailsModal = document.getElementById('agenda-details-modal');
 
   const loadCurrentSelection = () => {
     const selectedDate = dateInput?.value || formatDateForApi(new Date());
@@ -509,6 +618,10 @@ export function initAgendaPage() {
   createCancel?.addEventListener('click', closeCreateModal);
   modal?.addEventListener('click', (event) => {
     if (event.target === modal) closeCreateModal();
+  });
+
+  detailsModal?.addEventListener('click', (event) => {
+    if (event.target === detailsModal) closeAppointmentDetails();
   });
 
   loadAgendaForDate(initialDate);
