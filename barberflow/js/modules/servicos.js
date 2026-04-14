@@ -523,7 +523,7 @@ export function renderServicos() {
     <div class="card">
       <div class="card-header">
         <div class="card-title">Serviços Cadastrados</div>
-        <button type="button" class="card-action" id="service-new-button">+ Novo serviço</button>
+        <button type="button" class="btn-primary-gradient" id="service-new-button">+ Novo serviço</button>
       </div>
 
       <div id="services-list">
