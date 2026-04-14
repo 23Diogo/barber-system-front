@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>BarberFlow — Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&amp;family=DM+Sans:wght@400;500;600&amp;display=swap" rel="stylesheet"/>
+
+<link href="styles/base.css" rel="stylesheet"/><link href="styles/layout.css" rel="stylesheet"/><link href="styles/components.css" rel="stylesheet"/><link href="styles/theme.css" rel="stylesheet"/><link href="styles/modules/dashboard.css" rel="stylesheet"/><link href="styles/modules/agenda.css" rel="stylesheet"/><link href="styles/modules/clientes.css" rel="stylesheet"/><link href="styles/modules/financeiro.css" rel="stylesheet"/><link href="styles/modules/estoque.css" rel="stylesheet"/><link href="styles/modules/servicos.css" rel="stylesheet"/><link href="styles/modules/barbeiros.css" rel="stylesheet"/><link href="styles/modules/whatsapp.css" rel="stylesheet"/><link href="styles/modules/marketing.css" rel="stylesheet"/><link href="styles/modules/fidelidade.css" rel="stylesheet"/><link href="styles/modules/avaliacoes.css" rel="stylesheet"/><link href="styles/modules/configuracoes.css" rel="stylesheet"/>
+<style>
+body.auth-locked { overflow: hidden; }
+body.auth-locked .app { filter: blur(2px) brightness(.42); pointer-events: none; user-select: none; }
+body.auth-locked #authModal { display: flex; }
+body.auth-locked #authModal .modal { pointer-events: auto; }
+body.auth-locked #modal { display: none !important; }
+.auth-gate-badge { display:inline-flex; align-items:center; gap:6px; padding:6px 10px; border-radius:999px; font-size:10px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; background:rgba(79,195,247,.08); border:1px solid rgba(79,195,247,.18); color:#4fc3f7; margin-bottom:10px; }
+.auth-gate-note { font-size:10px; color:#5a6888; line-height:1.6; margin-top:2px; }
+.auth-dev-btn.is-connected { color:#00e676; border-color:rgba(0,230,118,.25); background:rgba(0,230,118,.08); }
+.auth-status-chip.is-connected { color:#00e676; border-color:rgba(0,230,118,.25); background:rgba(0,230,118,.08); }
+</style>
+</head>
+<body>
+<!-- Estrutura HTML separada do CSS e JavaScript para facilitar manutenção e publicação -->
+<div class="app">
+<!-- ════════ SIDEBAR ════════ -->
+<div class="sidebar">
+<div class="logo-area" data-open-modal="true">
+<div class="logo-mark" id="logoMark">
+<span class="logo-mark-text" id="logoChar">B</span>
+</div>
+<div class="logo-info">
+<div class="name" id="shopName">BarberFlow</div>
+<div class="shop" id="shopSub">Barbearia do Diogo</div>
+<div class="badge">⚡ PRO</div>
+</div>
+</div>
+<div class="customize-hint" data-open-modal="true">✏️ Personalizar logo e cores →</div>
+<nav class="nav">
+<div class="nav-group-label">Principal</div>
+<div class="nav-item active" data-nav-target="dash">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><rect height="7" rx="1" width="7" x="3" y="3"></rect><rect height="7" rx="1" width="7" x="14" y="3"></rect><rect height="7" rx="1" width="7" x="3" y="14"></rect><rect height="7" rx="1" width="7" x="14" y="14"></rect></svg>
+        Dashboard
+      </div>
+<div class="nav-item" data-nav-target="agenda">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><rect height="18" rx="2" width="18" x="3" y="4"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>
+        Agenda <span class="nav-badge badge-green">8</span>
+</div>
+<div class="nav-item" data-nav-target="clientes">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+        Clientes
+      </div>
+<div class="nav-group-label">Gestão</div>
+<div class="nav-item" data-nav-target="fin">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><line x1="12" x2="12" y1="1" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        Financeiro
+      </div>
+<div class="nav-item" data-nav-target="estoque">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path><line x1="3" x2="21" y1="6" y2="6"></line></svg>
+        Estoque <span class="nav-badge badge-red">3</span>
+</div>
+<div class="nav-item" data-nav-target="servicos">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path></svg>
+        Serviços
+      </div>
+<div class="nav-item" data-nav-target="barbeiros">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+        Barbeiros
+      </div>
+<div class="nav-group-label">Relacionamento</div>
+<div class="nav-item" data-nav-target="whats">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 13.5 19.79 19.79 0 01.4 4.84 2 2 0 012 2.84h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 10.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 17.92z"></path></svg>
+        WhatsApp Bot
+      </div>
+<div class="nav-item" data-nav-target="mkt">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
+        Marketing <span class="nav-badge badge-purple">2</span>
+</div>
+<div class="nav-item" data-nav-target="fidel">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
+        Fidelidade
+      </div>
+<div class="nav-item" data-nav-target="aval">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+        Avaliações <span class="nav-badge badge-green">4</span>
+</div>
+<div class="nav-group-label">Sistema</div>
+<div class="nav-item" data-nav-target="config">
+<svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M1 12h2M21 12h2M12 1v2M12 21v2"></path></svg>
+        Configurações
+      </div>
+</nav>
+<div class="sidebar-footer">
+<div class="auth-status-chip" id="authStatusChip">Sem login dev</div>
+<div class="user-card">
+<div class="avatar" id="sidebarAvatar">DB</div>
+<div>
+<div id="sidebarUserName" style="font-size:11px;font-weight:600">Diogo Barbeiro</div>
+<div id="sidebarUserRole" style="font-size:9px;color:#3a4568">Modo desenvolvimento</div>
+</div>
+</div>
+<div class="theme-btn" id="themeToggleBtn">
+<span id="themeLabel">🌙 Tema escuro</span>
+<div class="theme-pill" id="themePill"><div class="theme-pill-dot" id="themeDot"></div></div>
+</div>
+</div>
+</div>
+<!-- ════════ MAIN ════════ -->
+<div class="main">
+<div class="topbar">
+<div class="topbar-title" id="pageTitle">DASHBOARD</div>
+<div class="search-box">
+<svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewbox="0 0 24 24" width="12"><circle cx="11" cy="11" r="8"></circle><line x1="21" x2="16.65" y1="21" y2="16.65"></line></svg>
+        Buscar clientes, serviços...
+        <span class="kbd">⌘K</span>
+</div>
+<div class="notif-btn">
+<svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24" width="14"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+<div class="notif-dot"></div>
+</div>
+<button class="auth-dev-btn" data-open-auth-modal="true" id="openAuthModalBtn" type="button">🔐 Login dev</button>
+<div class="avatar" id="topAvatar" style="cursor:pointer">DB</div>
+</div>
+<div class="content">
+<!-- ══ HERO DASHBOARD ══ -->
+<div id="hero">
+<!-- Logo BarberFlow grande no topo -->
+<div class="hero-logo">
+<div class="hero-B">B</div>
+<div class="hero-name">Barber<span>Flow</span></div>
+</div>
+<div class="hero-actions">
+<button class="restore-widgets-btn" id="restoreWidgetsBtn" type="button">↺ Restaurar widgets</button>
+</div>
+<!-- Anéis orbitais -->
+<div class="orbit" style="width:340px;height:170px">
+<div class="orbit-dot" style="background:#4fc3f7;color:#4fc3f7"></div>
+</div>
+<div class="orbit orbit-2" style="width:420px;height:210px">
+<div class="orbit-dot" style="background:#9c6fff;color:#9c6fff"></div>
+</div>
+<!-- Cadeira 3D no centro -->
+<div class="chair-wrap">
+<svg fill="none" height="205" viewbox="0 0 185 205" width="185">
+<!-- Sombra base -->
+<ellipse cx="92" cy="196" fill="#2a3570" opacity=".65" rx="55" ry="9"></ellipse>
+<!-- Coluna/polo -->
+<rect fill="#252e58" height="27" rx="5" width="22" x="82" y="170"></rect>
+<!-- Base disco -->
+<rect fill="#252e58" height="14" rx="7" width="92" x="46" y="162"></rect>
+<!-- Apoio pés -->
+<rect fill="#1c2448" height="9" rx="4" width="62" x="60" y="157"></rect>
+<!-- Braço esquerdo -->
+<rect fill="#1c2248" height="52" rx="6" width="17" x="32" y="108"></rect>
+<rect fill="#3a4278" height="13" rx="6" width="24" x="28" y="100"></rect>
+<!-- Braço direito -->
+<rect fill="#1c2248" height="52" rx="6" width="17" x="136" y="108"></rect>
+<rect fill="#3a4278" height="13" rx="6" width="24" x="133" y="100"></rect>
+<!-- Almofada assento -->
+<rect fill="url(#seat)" height="34" rx="9" width="96" x="44" y="120"></rect>
+<rect fill="rgba(255,255,255,.07)" height="12" rx="6" width="82" x="51" y="124"></rect>
+<!-- Encosto -->
+<rect fill="url(#back)" height="86" rx="12" width="80" x="52" y="38"></rect>
+<!-- Painel encosto -->
+<rect fill="url(#panel)" height="64" rx="8" width="60" x="62" y="50"></rect>
+<rect fill="rgba(255,255,255,.05)" height="28" rx="5" width="46" x="69" y="56"></rect>
+<!-- Cabeçote -->
+<rect fill="url(#head)" height="36" rx="11" width="68" x="58" y="10"></rect>
+<rect fill="rgba(255,255,255,.06)" height="18" rx="7" width="50" x="67" y="17"></rect>
+<!-- Listras neon azul -->
+<rect fill="url(#neon1)" height="74" rx="1.5" width="3" x="52" y="46"></rect>
+<rect fill="url(#neon1)" height="74" rx="1.5" width="3" x="130" y="46"></rect>
+<rect fill="url(#neon2)" height="3" rx="1.5" width="66" x="59" y="12"></rect>
+<rect fill="url(#neon2)" height="3" opacity=".5" rx="1.5" width="96" x="44" y="120"></rect>
+<!-- Pontos de luz -->
+<circle cx="92" cy="5" fill="#4fc3f7" opacity=".9" r="5"></circle>
+<circle cx="92" cy="5" fill="#4fc3f7" opacity=".12" r="9"></circle>
+<circle cx="44" cy="120" fill="#00b4ff" opacity=".7" r="4"></circle>
+<circle cx="140" cy="120" fill="#00b4ff" opacity=".7" r="4"></circle>
+<!-- Setas decorativas -->
+<path d="M18 94 L6 82 M6 82 L13 82 M6 82 L6 89" opacity=".6" stroke="#4fc3f7" stroke-linecap="round" stroke-width="1.8"></path>
+<path d="M167 110 L179 98 M179 98 L172 98 M179 98 L179 105" opacity=".6" stroke="#4fc3f7" stroke-linecap="round" stroke-width="1.8"></path>
+<defs>
+<lineargradient id="seat" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#7e3222"></stop><stop offset="50%" stop-color="#9e3e2a"></stop><stop offset="100%" stop-color="#6e2a1a"></stop></lineargradient>
+<lineargradient id="back" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#5e261a"></stop><stop offset="100%" stop-color="#8e3422"></stop></lineargradient>
+<lineargradient id="panel" x1="0" x2="1" y1="0" y2="1"><stop offset="0%" stop-color="#7e301e" stop-opacity=".85"></stop><stop offset="100%" stop-color="#9e3c26" stop-opacity=".65"></stop></lineargradient>
+<lineargradient id="head" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#6e2c1a"></stop><stop offset="100%" stop-color="#8e3422"></stop></lineargradient>
+<lineargradient id="neon1" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#4fc3f7" stop-opacity=".9"></stop><stop offset="100%" stop-color="#0066ff" stop-opacity=".3"></stop></lineargradient>
+<lineargradient id="neon2" x1="0" x2="1" y1="0" y2="0"><stop offset="0%" stop-color="#4fc3f7" stop-opacity=".15"></stop><stop offset="50%" stop-color="#4fc3f7" stop-opacity=".9"></stop><stop offset="100%" stop-color="#4fc3f7" stop-opacity=".15"></stop></lineargradient>
+</defs>
+</svg>
+<div class="chair-glow"></div>
+<div class="chair-ring"></div>
+</div>
+<!-- CARD CANTO SUPERIOR ESQUERDO — FINANCEIRO -->
+<div class="analytics-card pos-tl dashboard-widget" data-target="fin" data-widget-id="widget-fin" title="Abrir Financeiro">
+<div class="widget-topbar"><div class="ac-title">Financeiro</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
+<div class="ac-value">R$7.840</div>
+<div class="ac-sub">↑ 12% na receita da semana</div>
+<div class="chart-line">
+<svg height="52" preserveaspectratio="none" viewbox="0 0 220 52" width="100%">
+<defs>
+<lineargradient id="lineGrad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#4fc3f7" stop-opacity=".45"></stop>
+<stop offset="100%" stop-color="#4fc3f7" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0 42 C20 42,26 22,44 24 S68 38,84 18 S112 8,134 12 S162 6,186 4 L220 2" fill="none" stroke="#4fc3f7" stroke-width="2"></path>
+<path d="M0 42 C20 42,26 22,44 24 S68 38,84 18 S112 8,134 12 S162 6,186 4 L220 2 L220 52 L0 52Z" fill="url(#lineGrad)"></path>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="2" y="51">Seg</text>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="60" y="51">Ter</text>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="118" y="51">Qua</text>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="182" y="51">Hoje</text>
+</svg>
+</div>
+<div class="widget-module">Módulo: Financeiro</div>
+</div>
+<!-- CARD CANTO SUPERIOR DIREITO — AVALIAÇÕES -->
+<div class="analytics-card pos-tr dashboard-widget" data-target="aval" data-widget-id="widget-aval" title="Abrir Avaliações">
+<div class="widget-topbar"><div class="ac-title">Avaliações</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
+<div class="ac-value" style="color:#9c6fff">94%</div>
+<div class="ac-sub" style="color:#9c6fff">clientes satisfeitos no mês</div>
+<div class="chart-line">
+<svg height="52" preserveaspectratio="none" viewbox="0 0 220 52" width="100%">
+<defs>
+<lineargradient id="purpleGrad" x1="0" x2="0" y1="0" y2="1">
+<stop offset="0%" stop-color="#9c6fff" stop-opacity=".45"></stop>
+<stop offset="100%" stop-color="#9c6fff" stop-opacity="0"></stop>
+</lineargradient>
+</defs>
+<path d="M0 42 C16 42,20 30,36 32 S58 40,74 22 S100 10,120 8 S150 3,178 2 L220 1" fill="none" stroke="#9c6fff" stroke-width="2"></path>
+<path d="M0 42 C16 42,20 30,36 32 S58 40,74 22 S100 10,120 8 S150 3,178 2 L220 1 L220 52 L0 52Z" fill="url(#purpleGrad)"></path>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="2" y="51">1★</text>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="60" y="51">3★</text>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="118" y="51">4★</text>
+<text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="182" y="51">5★</text>
+</svg>
+</div>
+<div class="widget-module" style="color:#d8b4fe;border-color:rgba(156,111,255,.24);background:rgba(156,111,255,.08)">Módulo: Avaliações</div>
+</div>
+<!-- CARD CANTO INFERIOR ESQUERDO — AGENDA -->
+<div class="analytics-card pos-bl dashboard-widget" data-target="agenda" data-widget-id="widget-agenda" title="Abrir Agenda">
+<div class="widget-topbar"><div class="ac-title">Agenda de hoje</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
+<div class="data-nums"><span style="color:#343868">09:00</span><span style="color:#00e676">Rafael</span><span style="color:#00e676">Concluído</span></div>
+<div class="data-nums"><span style="color:#343868">14:30</span><span style="color:#4fc3f7">Carlos</span><span style="color:#4fc3f7">Agora</span></div>
+<div class="data-nums" style="margin-bottom:8px"><span style="color:#343868">15:30</span><span style="color:#9c6fff">Bruno</span><span style="color:#9c6fff">Próximo</span></div>
+<div class="ac-title">Ocupação <span>Hoje</span></div>
+<div class="data-row"><span class="data-name">Jorge</span><div class="data-bar"><div class="data-fill" style="width:96%"></div></div><span class="data-val">96%</span></div>
+<div class="data-row"><span class="data-name">Marcos</span><div class="data-bar"><div class="data-fill" style="width:74%"></div></div><span class="data-val">74%</span></div>
+<div class="data-row"><span class="data-name">Lucas</span><div class="data-bar"><div class="data-fill" style="width:58%"></div></div><span class="data-val">58%</span></div>
+<div class="widget-module">Módulo: Agenda</div>
+</div>
+<!-- CARD CANTO INFERIOR DIREITO — SERVIÇOS -->
+<div class="analytics-card pos-br dashboard-widget" data-target="servicos" data-widget-id="widget-servicos" title="Abrir Serviços">
+<div class="widget-topbar"><div class="ac-title">Serviços mais vendidos</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
+<div class="bar-chart">
+<div class="bar-col" style="height:42%;background:rgba(79,195,247,.3)"></div>
+<div class="bar-col" style="height:72%;background:linear-gradient(180deg,#4fc3f7,#0066ff)"></div>
+<div class="bar-col" style="height:30%;background:rgba(79,195,247,.25)"></div>
+<div class="bar-col" style="height:88%;background:linear-gradient(180deg,#4fc3f7,#0066ff)"></div>
+<div class="bar-col" style="height:48%;background:rgba(79,195,247,.2)"></div>
+<div class="bar-col" style="height:58%;background:rgba(156,111,255,.35)"></div>
+<div class="bar-col" style="height:100%;background:linear-gradient(180deg,#9c6fff,#5530dd)"></div>
+</div>
+<div class="ac-title">Resumo por serviço <span>Hoje</span></div>
+<div class="data-row"><span class="data-name">Corte premium</span><div class="data-bar"><div class="data-fill" style="width:84%;background:linear-gradient(90deg,#ff6b00,#ff3d00)"></div></div><span class="data-val" style="color:#ff6b00">84%</span></div>
+<div class="data-row"><span class="data-name">Barba</span><div class="data-bar"><div class="data-fill" style="width:66%;background:linear-gradient(90deg,#9c6fff,#6c3fff)"></div></div><span class="data-val" style="color:#9c6fff">66%</span></div>
+<div class="data-row"><span class="data-name">Pigmentação</span><div class="data-bar"><div class="data-fill" style="width:41%"></div></div><span class="data-val">41%</span></div>
+<div class="data-row"><span class="data-name">Sobrancelha</span><div class="data-bar"><div class="data-fill" style="width:31%"></div></div><span class="data-val">31%</span></div>
+<div class="widget-module">Módulo: Serviços</div>
+</div>
+</div><!-- /hero -->
+<!-- ══ PAGES ══ -->
+<div id="pages"><!-- Conteúdo dos menus renderizado dinamicamente pelos módulos JS --></div><!-- /pages -->
+</div><!-- /content -->
+</div><!-- /main -->
+</div><!-- /app -->
+<!-- ════════ MODAL ════════ -->
+<div class="modal-overlay" id="modal">
+<div class="modal">
+<div class="modal-title">📷 Personalizar BarberFlow</div>
+<div class="modal-sub">Logo, nome e cor de destaque do sistema</div>
+<div class="upload-zone" id="uploadZone">
+<input accept="image/*" id="logoFile" style="display:none" type="file"/>
+<div class="upload-icon" id="uploadPreview">🖼️</div>
+<div class="upload-text">Clique para fazer upload do seu logo</div>
+<div class="upload-hint">PNG, JPG ou SVG · aparece em todo o sistema</div>
+</div>
+<div class="color-section-label">Cor de destaque do sistema</div>
+<div class="color-row" id="colorPicker">
+<div class="color-dot selected" data-color="#4fc3f7" data-grad="linear-gradient(135deg,#4fc3f7,#0066ff)" style="background:linear-gradient(135deg,#4fc3f7,#0066ff)"></div>
+<div class="color-dot" data-color="#9c6fff" data-grad="linear-gradient(135deg,#9c6fff,#5530dd)" style="background:linear-gradient(135deg,#9c6fff,#5530dd)"></div>
+<div class="color-dot" data-color="#ff4500" data-grad="linear-gradient(135deg,#ff4500,#ff8c00)" style="background:linear-gradient(135deg,#ff4500,#ff8c00)"></div>
+<div class="color-dot" data-color="#00e676" data-grad="linear-gradient(135deg,#00e676,#00b248)" style="background:linear-gradient(135deg,#00e676,#00b248)"></div>
+<div class="color-dot" data-color="#ffd700" data-grad="linear-gradient(135deg,#ffd700,#ff8c00)" style="background:linear-gradient(135deg,#ffd700,#ff8c00)"></div>
+<div class="color-dot" data-color="#ff1744" data-grad="linear-gradient(135deg,#ff1744,#d50000)" style="background:linear-gradient(135deg,#ff1744,#d50000)"></div>
+</div>
+<div class="color-section-label">Nome da barbearia no sistema</div>
+<input class="modal-input" id="shopNameInput" placeholder="Nome da sua barbearia" type="text" value="Barbearia do Diogo"/>
+<div class="modal-buttons">
+<div class="btn-cancel" id="modalCancelBtn">Cancelar</div>
+<div class="btn-save" id="modalSaveBtn">✅ Salvar alterações</div>
+</div>
+</div>
+</div>
+<div class="modal-overlay" id="authModal">
+<div class="modal">
+<div class="auth-gate-badge">🔐 Acesso obrigatório</div><div class="modal-title">Entrar no BarberFlow</div>
+<div class="modal-sub">Faça login antes de acessar o sistema. Esta versão ainda usa o fluxo de desenvolvimento com Railway.</div>
+<form class="auth-stack" id="authForm">
+<div class="auth-helper" id="authHelperText">Informe a URL da API e o e-mail cadastrado para gerar o JWT de desenvolvimento.</div>
+<div class="auth-inline-meta">
+<div class="auth-inline-status" id="authCurrentStatus">Ainda não autenticado</div>
+<button class="btn-cancel" id="authDisconnectBtn" type="button" style="display:none;flex:0 0 auto;padding:6px 10px;">Remover token</button>
+</div>
+<div class="color-section-label">URL pública da API</div>
+<input class="modal-input" id="authApiUrlInput" placeholder="https://seu-backend.up.railway.app" type="url" />
+<div class="color-section-label">E-mail do usuário cadastrado</div>
+<input class="modal-input" id="authEmailInput" placeholder="seu-email@dominio.com" type="email" />
+<div class="auth-feedback" id="authFeedback"></div><div class="auth-gate-note" id="authGateNote">Sem autenticação, a navegação e os módulos ficam bloqueados.</div>
+<div class="modal-buttons">
+<button class="btn-cancel" id="authCancelBtn" type="button">Fechar</button>
+<button class="btn-save" id="authConnectBtn" type="submit">Entrar e salvar token</button>
+</div>
+</form>
+</div>
+</div>
+
+<script src="js/app.js" type="module"></script></body>
+</html>

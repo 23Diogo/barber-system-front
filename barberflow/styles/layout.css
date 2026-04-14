@@ -1,0 +1,57 @@
+/* ─── LAYOUT ─── */
+  .app{display:flex;width:100vw;height:100vh;overflow:hidden}
+
+  /* ─── SIDEBAR ─── */
+  .sidebar{width:220px;height:100vh;flex-shrink:0;background:#0a0c1a;border-right:1px solid #1a1f38;display:flex;flex-direction:column;overflow:hidden;position:relative;z-index:10}
+  .sidebar::after{content:'';position:absolute;top:0;right:0;width:1px;height:100%;background:linear-gradient(180deg,transparent,#4fc3f7 50%,transparent);opacity:.25;pointer-events:none}
+
+  .logo-area{padding:14px 14px 8px;border-bottom:1px solid #1a1f38;display:flex;align-items:center;gap:10px;cursor:pointer;transition:opacity .15s}
+  .logo-area:hover{opacity:.85}
+  .logo-mark{width:40px;height:40px;border-radius:10px;background:#120600;border:1px solid rgba(255,100,0,.5);display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 0 16px rgba(255,69,0,.4);overflow:hidden;position:relative}
+  .logo-mark img{width:100%;height:100%;object-fit:cover;border-radius:9px;position:absolute;inset:0}
+  .logo-mark-text{font-family:'Orbitron',sans-serif;font-size:20px;font-weight:900;background:linear-gradient(180deg,#ffd700,#ff4500);-webkit-background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 0 6px rgba(255,100,0,.8))}
+  .logo-flames span{position:absolute;width:2px;background:#ff6b00;border-radius:50%;animation:flame 1s ease-in-out infinite;bottom:2px}
+  @keyframes flame{0%{opacity:1;transform:translateY(0)}100%{opacity:0;transform:translateY(-14px)}}
+  .logo-info .name{font-family:'Orbitron',sans-serif;font-size:14px;font-weight:700;color:#e8f0fe}
+  .logo-info .shop{font-size:10px;color:#3a4568;margin-top:1px}
+  .logo-info .badge{display:inline-flex;align-items:center;gap:3px;background:rgba(79,195,247,.1);border:1px solid rgba(79,195,247,.3);color:#4fc3f7;font-size:8px;font-weight:700;padding:2px 8px;border-radius:10px;margin-top:3px}
+  .customize-hint{font-size:9px;color:#3a4060;padding:4px 14px 6px;cursor:pointer;display:flex;align-items:center;gap:4px;transition:color .15s}
+  .customize-hint:hover{color:#4fc3f7}
+
+  .nav{flex:1;padding:8px 7px;overflow-y:auto;display:flex;flex-direction:column}
+  .nav::-webkit-scrollbar{display:none}
+  .nav-group-label{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#252840;padding:9px 8px 3px}
+  .nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#505878;font-size:12px;font-weight:500;transition:all .12s;position:relative;user-select:none;margin-bottom:1px}
+  .nav-item:hover{background:rgba(79,195,247,.06);color:#c0cce8}
+  .nav-item.active{background:rgba(79,195,247,.1);color:#4fc3f7;font-weight:600}
+  .nav-item.active::before{content:'';position:absolute;left:0;top:22%;bottom:22%;width:3px;background:#4fc3f7;border-radius:0 2px 2px 0;box-shadow:0 0 8px #4fc3f7}
+  .nav-icon{width:15px;height:15px;flex-shrink:0;opacity:.45}
+  .nav-item.active .nav-icon,.nav-item:hover .nav-icon{opacity:1}
+  .nav-badge{margin-left:auto;font-size:9px;font-weight:700;padding:2px 7px;border-radius:50%;min-width:20px;text-align:center;border:1px solid}
+  .badge-green{background:rgba(0,230,118,.12);color:#00e676;border-color:rgba(0,230,118,.3)}
+  .badge-red{background:rgba(255,23,68,.12);color:#ff1744;border-color:rgba(255,23,68,.3)}
+  .badge-purple{background:rgba(156,111,255,.12);color:#9c6fff;border-color:rgba(156,111,255,.3)}
+
+  .sidebar-footer{padding:10px 7px;border-top:1px solid #1a1f38;display:flex;flex-direction:column;gap:6px}
+  .user-card{display:flex;align-items:center;gap:8px;padding:8px 10px;background:#0d0f1e;border-radius:9px;border:1px solid #1a1f38;cursor:pointer}
+  .avatar{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,#00b4ff,#6c3fff);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#fff;flex-shrink:0;overflow:hidden;box-shadow:0 0 8px rgba(0,180,255,.3)}
+  .avatar img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+  .theme-btn{display:flex;align-items:center;gap:7px;padding:7px 10px;background:#0d0f1e;border-radius:8px;border:1px solid #1a1f38;font-size:11px;color:#6b6888;cursor:pointer;transition:all .15s}
+  .theme-btn:hover{border-color:rgba(79,195,247,.3);color:#4fc3f7}
+  .theme-pill{margin-left:auto;width:32px;height:17px;border-radius:9px;background:linear-gradient(90deg,#00b4ff,#9c6fff);position:relative;flex-shrink:0}
+  .theme-pill-dot{width:12px;height:12px;background:#fff;border-radius:50%;position:absolute;top:2.5px;right:2.5px;transition:transform .25s;box-shadow:0 0 4px rgba(0,180,255,.6)}
+
+  /* ─── MAIN ─── */
+  .main{flex:1;display:flex;flex-direction:column;height:100vh;overflow:hidden;min-width:0}
+  
+  .topbar{height:50px;background:#0a0c1a;border-bottom:1px solid #1a1f38;display:flex;align-items:center;padding:0 18px;gap:10px;flex-shrink:0;position:relative;z-index:5}
+  .topbar-title{font-family:'Orbitron',sans-serif;font-size:13px;font-weight:700;color:#4fc3f7;letter-spacing:.1em;text-shadow:0 0 12px rgba(79,195,247,.5)}
+  .search-box{display:flex;align-items:center;gap:6px;background:#0d0f1e;border:1px solid #1a1f38;border-radius:8px;padding:6px 13px;font-size:11px;color:#3a4060;margin-left:auto;cursor:pointer;transition:all .15s}
+  .search-box:hover{border-color:rgba(79,195,247,.3)}
+  .kbd{background:#131620;border-radius:4px;padding:1px 6px;font-size:9px;color:#3a4060}
+  .notif-btn{width:32px;height:32px;border-radius:8px;background:#0d0f1e;border:1px solid #1a1f38;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;position:relative;transition:all .15s}
+  .notif-btn:hover{border-color:rgba(79,195,247,.3)}
+  .notif-dot{width:7px;height:7px;background:#ff1744;border-radius:50%;position:absolute;top:5px;right:5px;box-shadow:0 0 4px #ff1744}
+
+  /* ─── CONTENT ─── */
+  .content{flex:1;overflow:hidden;position:relative}

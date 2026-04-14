@@ -1,0 +1,170 @@
+/* ─── LIGHT THEME ─── */
+body.light-theme,
+body.light-theme html {
+  background: #f3efe7;
+  color: #111827;
+}
+
+body.light-theme .main,
+body.light-theme .content,
+body.light-theme #hero,
+body.light-theme #pages {
+  background: #f7f3eb;
+  background-image:
+    linear-gradient(rgba(15, 23, 42, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.04) 1px, transparent 1px);
+}
+
+body.light-theme .sidebar,
+body.light-theme .topbar,
+body.light-theme .card,
+body.light-theme .metric-card,
+body.light-theme .modal,
+body.light-theme .user-card,
+body.light-theme .theme-btn,
+body.light-theme .search-box,
+body.light-theme .notif-btn,
+body.light-theme .mini-card,
+body.light-theme .row-item,
+body.light-theme .appt-row,
+body.light-theme .fin-row,
+body.light-theme .svc-row,
+body.light-theme .review-card,
+body.light-theme .camp-row,
+body.light-theme .chat-area,
+body.light-theme .cfg-row,
+body.light-theme .analytics-card {
+  background: rgba(255, 255, 255, 0.82);
+  border-color: rgba(148, 163, 184, 0.35);
+  color: #111827;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
+}
+
+body.light-theme .sidebar::after {
+  opacity: 0.12;
+}
+
+body.light-theme .logo-info .name,
+body.light-theme .ac-value,
+body.light-theme .metric-value,
+body.light-theme .row-name,
+body.light-theme .appt-client,
+body.light-theme .fin-title,
+body.light-theme .svc-name,
+body.light-theme .review-name,
+body.light-theme .camp-name,
+body.light-theme .cfg-label,
+body.light-theme .data-table td {
+  color: #0f172a;
+}
+
+body.light-theme .logo-info .shop,
+body.light-theme .customize-hint,
+body.light-theme .nav-group-label,
+body.light-theme .data-name,
+body.light-theme .data-table th,
+body.light-theme .metric-label,
+body.light-theme .mini-lbl,
+body.light-theme .appt-svc,
+body.light-theme .fin-date,
+body.light-theme .svc-detail,
+body.light-theme .review-text,
+body.light-theme .review-meta,
+body.light-theme .camp-detail,
+body.light-theme .cfg-sub,
+body.light-theme .upload-text,
+body.light-theme .upload-hint,
+body.light-theme .modal-sub {
+  color: #64748b;
+}
+
+body.light-theme .nav-item {
+  color: #475569;
+}
+
+body.light-theme .nav-item:hover {
+  background: rgba(79, 195, 247, 0.10);
+  color: #0f172a;
+}
+
+body.light-theme .nav-item.active {
+  background: rgba(79, 195, 247, 0.14);
+  color: #0284c7;
+}
+
+body.light-theme .topbar-title,
+body.light-theme .card-title,
+body.light-theme .card-action,
+body.light-theme .data-val,
+body.light-theme .svc-price {
+  color: #0284c7;
+}
+
+body.light-theme .hero-name {
+  color: #0f172a;
+  text-shadow: none;
+}
+
+body.light-theme .hero-name span {
+  color: #0284c7;
+  text-shadow: none;
+}
+
+body.light-theme .kbd {
+  background: #e5e7eb;
+  color: #475569;
+}
+
+body.light-theme .data-bar,
+body.light-theme .row-prog {
+  background: #dbe4f0;
+}
+
+body.light-theme .theme-btn:hover,
+body.light-theme .search-box:hover,
+body.light-theme .notif-btn:hover,
+body.light-theme .cfg-row:hover,
+body.light-theme .upload-zone:hover {
+  border-color: rgba(2, 132, 199, 0.35);
+}
+
+body.light-theme .chair-glow {
+  background: radial-gradient(ellipse, rgba(56, 189, 248, 0.22), transparent 70%);
+}
+
+body.light-theme .chair-ring {
+  border-color: rgba(14, 165, 233, 0.4);
+  box-shadow: 0 0 12px rgba(14, 165, 233, 0.18);
+}
+
+
+body.light-theme .auth-dev-btn,
+body.light-theme .auth-status-chip,
+body.light-theme .auth-helper,
+body.light-theme .auth-inline-meta{
+  background: rgba(255,255,255,.82);
+  border-color: rgba(148,163,184,.35);
+  color:#475569;
+}
+
+body.light-theme .auth-dev-btn:hover,
+body.light-theme .dev-auth-inline-btn:hover {
+  border-color: rgba(2,132,199,.35);
+}
+
+body.light-theme .auth-dev-btn.is-connected,
+body.light-theme .auth-status-chip.is-connected {
+  color:#059669;
+  border-color: rgba(5,150,105,.22);
+  background: rgba(5,150,105,.08);
+}
+
+body.light-theme .dev-auth-inline-btn {
+  background: rgba(2,132,199,.08);
+  border-color: rgba(2,132,199,.2);
+  color:#0284c7;
+}
+
+body.light-theme .auth-inline-status {
+  color:#0f172a;
+}
