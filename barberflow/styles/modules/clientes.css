@@ -1,2 +1,155 @@
-/* Clientes: espaço reservado para estilos específicos do módulo */
-.page--clientes{}
+.page--clientes {
+  .clients-toolbar {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 14px;
+    align-items: center;
+  }
+
+  .clients-search-wrap {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    background: #0a0c1a;
+    border: 1px solid #1e2345;
+    border-radius: 9px;
+    padding: 0 13px;
+    min-height: 44px;
+  }
+
+  .clients-search-icon {
+    font-size: 12px;
+    color: #5a6888;
+    flex: 0 0 auto;
+  }
+
+  .clients-search-input {
+    width: 100%;
+    border: 0;
+    outline: none;
+    background: transparent;
+    font: inherit;
+    font-size: 11px;
+    color: #e8f0fe;
+
+    &::placeholder {
+      color: #5a6888;
+    }
+  }
+
+  .clients-new-button {
+    padding: 12px 18px;
+    background: linear-gradient(90deg, #00b4ff, #6c3fff);
+    color: #fff;
+    border: 0;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+    box-shadow: 0 10px 25px rgba(79, 195, 247, 0.18);
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
+  }
+
+  .clients-new-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 14px 28px rgba(79, 195, 247, 0.22);
+  }
+
+  .clients-table tbody tr.client-row {
+    cursor: pointer;
+    transition: background 0.18s ease;
+  }
+
+  .clients-table tbody tr.client-row:hover,
+  .clients-table tbody tr.client-row:focus-visible {
+    background: rgba(79, 195, 247, 0.04);
+    outline: none;
+  }
+
+  .client-name {
+    font-weight: 600;
+  }
+
+  .client-service {
+    font-size: 9px;
+    color: #3a4568;
+    margin-top: 2px;
+  }
+
+  .client-muted {
+    color: #5a6888;
+  }
+
+  .client-spent {
+    font-weight: 600;
+  }
+
+  .client-spent.is-vip {
+    color: #ffd700;
+  }
+
+  .client-spent.is-active {
+    color: #4fc3f7;
+  }
+
+  .client-spent.is-inactive {
+    color: #5a6888;
+  }
+
+  .clients-empty {
+    text-align: center;
+    color: #5a6888;
+    padding: 22px 10px;
+    font-size: 11px;
+  }
+
+  .clients-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .clients-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .clients-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .clients-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .clients-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .clients-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .clients-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .clients-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
