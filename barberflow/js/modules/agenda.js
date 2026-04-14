@@ -260,25 +260,6 @@ function getSourceLabel(source) {
   return map[source] || source || 'Não informado';
 }
 
-function getAgendaButtonStyle(minHeight = 44) {
-  return `
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    min-height:${minHeight}px;
-    padding:0 18px;
-    border:1px solid #1e2345;
-    border-radius:12px;
-    background:#0a0c1a;
-    color:#ffffff;
-    font:inherit;
-    font-size:11px;
-    font-weight:700;
-    cursor:pointer;
-    white-space:nowrap;
-  `;
-}
-
 function renderStatusActions(appointment) {
   const actions = getAvailableStatusActions(appointment.status);
 
@@ -644,10 +625,10 @@ async function loadAgendaForDate(dateValue) {
         <div class="card-header">
           <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(dateValue))}</div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button id="agenda-new-action" type="button" style="${getAgendaButtonStyle(44)}">
+            <button class="btn-primary-gradient" id="agenda-new-action" type="button">
               + Novo agendamento
             </button>
-            <button id="agenda-refresh-action" type="button" style="${getAgendaButtonStyle(44)}">
+            <button class="btn-primary-gradient" id="agenda-refresh-action" type="button">
               Atualizar
             </button>
           </div>
@@ -700,10 +681,10 @@ export function renderAgenda() {
             value="${today}"
             style="background:#0a0c1a;border:1px solid #1e2345;border-radius:8px;padding:8px 10px;color:#e8f0fe;font:inherit;min-width:160px;"
           />
-          <button id="agenda-create-cta" type="button" style="${getAgendaButtonStyle(44)}">
+          <button id="agenda-create-cta" type="button" class="btn-primary-gradient">
             + Novo agendamento
           </button>
-          <button id="agenda-load-action" type="button" style="${getAgendaButtonStyle(44)}">
+          <button id="agenda-load-action" type="button" class="btn-primary-gradient">
             Carregar data
           </button>
         </div>
