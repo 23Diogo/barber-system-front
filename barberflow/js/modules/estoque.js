@@ -530,7 +530,7 @@ export function renderEstoque() {
     <div class="card">
       <div class="card-header">
         <div class="card-title">⚠️ Estoque Crítico</div>
-        <button type="button" class="card-action estoque-restock-button" id="estoque-restock-all-button">Repor tudo</button>
+        <button type="button" class="btn-primary-gradient" id="estoque-restock-all-button">Repor tudo</button>
       </div>
 
       <div id="estoque-products-list">
@@ -541,7 +541,7 @@ export function renderEstoque() {
     <div class="card">
       <div class="card-header">
         <div class="card-title">Resumo do Estoque</div>
-        <button type="button" class="card-action" id="estoque-new-button">+ Produto</button>
+        <button type="button" class="btn-primary-gradient" id="estoque-new-button">+ Produto</button>
       </div>
 
       <div id="estoque-summary">
