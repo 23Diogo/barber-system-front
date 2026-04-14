@@ -11,7 +11,7 @@ import { renderWhatsApp } from './modules/whatsapp.js';
 import { renderMarketing, initMarketingPage } from './modules/marketing.js';
 import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
-import { renderConfiguracoes } from './modules/configuracoes.js';
+import { renderConfiguracoes,initConfiguracoesPage } from './modules/configuracoes.js';
 
 
 
@@ -39,6 +39,7 @@ const initializers = {
   mkt: initMarketingPage,
   fidel: initFidelidadePage,
   aval: initAvaliacoesPage,
+  config: initAvaliacoesPage,
 };
 
 function renderPage(pageId) {
