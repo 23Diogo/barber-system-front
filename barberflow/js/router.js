@@ -3,7 +3,7 @@ import { state, setCurrentPage } from './state.js';
 import { updateActiveNav } from './components/sidebar.js';
 import { renderAgenda, initAgendaPage } from './modules/agenda.js';
 import { renderClientes, initClientesPage } from './modules/clientes.js';
-import { renderFinanceiro } from './modules/financeiro.js';
+import { renderFinanceiro, initFinanceiroPage } from './modules/financeiro.js';
 import { renderEstoque } from './modules/estoque.js';
 import { renderServicos, initServicosPage } from './modules/servicos.js';
 import { renderBarbeiros, initBarbeirosPage } from './modules/barbeiros.js';
@@ -32,6 +32,7 @@ const renderers = {
 const initializers = {
   agenda: initAgendaPage,
   clientes: initClientesPage,
+  fin: initFinanceiroPage,
   servicos: initServicosPage,
   barbeiros: initBarbeirosPage,
 };
