@@ -172,4 +172,26 @@
     opacity: 0.65;
     cursor: default;
   }
+
+  .barber-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .barber-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .barber-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .barber-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
 }
