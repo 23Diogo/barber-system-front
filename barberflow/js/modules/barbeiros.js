@@ -614,7 +614,7 @@ export function renderBarbeiros() {
       <div class="barbeiros-subtitle">Visualize desempenho e atualize o status da equipe em tempo real.</div>
     </div>
 
-    <button type="button" class="card-action barbeiros-action-btn" id="barber-new-button">
+    <button type="button" class="btn-primary-gradient" id="barber-new-button">
       + Novo barbeiro
     </button>
   </div>
