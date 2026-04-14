@@ -535,7 +535,7 @@ export function renderClientes() {
       />
     </div>
 
-    <button type="button" class="clients-new-button" id="client-new-button">
+    <button type="button" class="btn-primary-gradient" id="client-new-button">
       + Novo cliente
     </button>
   </div>
