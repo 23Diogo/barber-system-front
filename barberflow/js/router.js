@@ -5,13 +5,14 @@ import { renderAgenda, initAgendaPage } from './modules/agenda.js';
 import { renderClientes } from './modules/clientes.js';
 import { renderFinanceiro } from './modules/financeiro.js';
 import { renderEstoque } from './modules/estoque.js';
-import { renderServicos } from './modules/servicos.js';
+import { renderServicos, initServicosPage } from './modules/servicos.js';
 import { renderBarbeiros, initBarbeirosPage } from './modules/barbeiros.js';
 import { renderWhatsApp } from './modules/whatsapp.js';
 import { renderMarketing } from './modules/marketing.js';
 import { renderFidelidade } from './modules/fidelidade.js';
 import { renderAvaliacoes } from './modules/avaliacoes.js';
 import { renderConfiguracoes } from './modules/configuracoes.js';
+
 
 
 const renderers = {
@@ -30,6 +31,7 @@ const renderers = {
 
 const initializers = {
   agenda: initAgendaPage,
+  servicos: initServicosPage,
   barbeiros: initBarbeirosPage,
 };
 
