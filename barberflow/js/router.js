@@ -2,7 +2,7 @@ import { pageTitles } from './constants.js';
 import { state, setCurrentPage } from './state.js';
 import { updateActiveNav } from './components/sidebar.js';
 import { renderAgenda, initAgendaPage } from './modules/agenda.js';
-import { renderClientes } from './modules/clientes.js';
+import { renderClientes, initClientesPage } from './modules/clientes.js';
 import { renderFinanceiro } from './modules/financeiro.js';
 import { renderEstoque } from './modules/estoque.js';
 import { renderServicos, initServicosPage } from './modules/servicos.js';
@@ -31,6 +31,7 @@ const renderers = {
 
 const initializers = {
   agenda: initAgendaPage,
+  clientes: initClientesPage,
   servicos: initServicosPage,
   barbeiros: initBarbeirosPage,
 };
