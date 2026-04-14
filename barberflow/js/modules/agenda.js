@@ -223,11 +223,19 @@ function renderModalSelectOptions(items, getValue, getLabel) {
 }
 
 function openCreateModal() {
-  document.getElementById('agenda-create-modal')?.classList.add('open');
+  const modal = document.getElementById('agenda-create-modal');
+  if (!modal) return;
+
+  modal.classList.add('open');
+  modal.style.display = 'flex';
 }
 
 function closeCreateModal() {
-  document.getElementById('agenda-create-modal')?.classList.remove('open');
+  const modal = document.getElementById('agenda-create-modal');
+  if (!modal) return;
+
+  modal.classList.remove('open');
+  modal.style.display = 'none';
 }
 
 function setCreateFeedback(message, variant = 'neutral') {
@@ -448,7 +456,7 @@ export function renderAgenda() {
     <div id="agenda-summary-container"></div>
   </div>
 
-  <div id="agenda-create-modal" class="modal-overlay" style="display:none;">
+  <div id="agenda-create-modal" class="modal-overlay">
     <div class="modal" style="width:min(92vw, 520px);">
       <div class="modal-title">Novo agendamento</div>
       <div class="modal-sub">Preencha os dados abaixo para incluir um horário real na agenda.</div>
