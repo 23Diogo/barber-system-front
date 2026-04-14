@@ -91,3 +91,5 @@ export function renderConfiguracoes() {
 </section>
   `;
 }
+
+export function initConfiguracoesPage() {}
