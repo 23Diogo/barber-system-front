@@ -1,2 +1,111 @@
-/* Marketing: espaço reservado para estilos específicos do módulo */
-.page--marketing{}
+.page--marketing {
+  .marketing-row-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .camp-row {
+    padding: 12px 10px;
+    border-left: 3px solid transparent;
+    border-radius: 12px;
+    transition: transform 0.18s ease, background 0.18s ease;
+  }
+
+  .marketing-row-button:hover .camp-row,
+  .marketing-row-button:focus-visible .camp-row,
+  .marketing-row-button:hover .marketing-inactive-row,
+  .marketing-row-button:focus-visible .marketing-inactive-row {
+    transform: translateY(-2px);
+    background: rgba(79, 195, 247, 0.04);
+  }
+
+  .camp-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 6px;
+  }
+
+  .camp-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8f0fe;
+  }
+
+  .camp-status {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .camp-detail {
+    font-size: 10px;
+    color: #5a6888;
+  }
+
+  .marketing-inactive-row {
+    transition: transform 0.18s ease, background 0.18s ease;
+    border-radius: 12px;
+  }
+
+  .marketing-inactive-days {
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .marketing-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .marketing-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .marketing-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .marketing-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .marketing-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .marketing-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .marketing-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .marketing-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
