@@ -1,2 +1,145 @@
-/* Serviços: espaço reservado para estilos específicos do módulo */
-.page--servicos{}
+.page--servicos {
+  .svc-row-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .svc-row {
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 10px;
+    border-radius: 12px;
+    transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+  }
+
+  .svc-row-button:hover .svc-row,
+  .svc-row-button:focus-visible .svc-row {
+    transform: translateY(-2px);
+    background: rgba(79, 195, 247, 0.04);
+  }
+
+  .svc-icon {
+    font-size: 20px;
+    width: 26px;
+    text-align: center;
+  }
+
+  .svc-info {
+    min-width: 0;
+  }
+
+  .svc-name {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8f0fe;
+  }
+
+  .svc-detail {
+    font-size: 10px;
+    color: #5a6888;
+    margin-top: 3px;
+  }
+
+  .svc-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .svc-price {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 18px;
+    font-weight: 700;
+    color: #4fc3f7;
+  }
+
+  .svc-status-badge {
+    font-size: 10px;
+    padding: 4px 10px;
+    border-radius: 999px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
+  }
+
+  .svc-top-icon {
+    font-size: 20px;
+    width: 24px;
+    text-align: center;
+  }
+
+  .svc-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .svc-modal-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .svc-modal-icon {
+    width: 58px;
+    height: 58px;
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(79, 195, 247, 0.08);
+    border: 1px solid rgba(79, 195, 247, 0.18);
+    font-size: 28px;
+  }
+
+  .svc-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .svc-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .svc-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .svc-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .svc-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .svc-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .svc-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
