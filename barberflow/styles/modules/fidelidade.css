@@ -1,2 +1,77 @@
-/* Fidelidade: espaço reservado para estilos específicos do módulo */
-.page--fidelidade{}
+.page--fidelidade {
+  .fidelidade-metrics-grid {
+    margin-bottom: 14px;
+  }
+
+  .fidelidade-row-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .fidelidade-row-item,
+  .fidelidade-row-button .fin-row {
+    transition: transform 0.18s ease, background 0.18s ease;
+    border-radius: 12px;
+  }
+
+  .fidelidade-row-button:hover .fidelidade-row-item,
+  .fidelidade-row-button:focus-visible .fidelidade-row-item,
+  .fidelidade-row-button:hover .fin-row,
+  .fidelidade-row-button:focus-visible .fin-row {
+    transform: translateY(-2px);
+    background: rgba(79, 195, 247, 0.04);
+  }
+
+  .fidelidade-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .fidelidade-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .fidelidade-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .fidelidade-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .fidelidade-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .fidelidade-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .fidelidade-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .fidelidade-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
