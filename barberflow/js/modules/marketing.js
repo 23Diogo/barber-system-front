@@ -645,7 +645,7 @@ export function renderMarketing() {
     <div class="card">
       <div class="card-header">
         <div class="card-title">Campanhas</div>
-        <button type="button" class="card-action" id="marketing-new-button">+ Nova campanha</button>
+        <button type="button" class="btn-primary-gradient" id="marketing-new-button">+ Nova campanha</button>
       </div>
 
       <div id="marketing-campaigns-list">
@@ -656,7 +656,7 @@ export function renderMarketing() {
     <div class="card">
       <div class="card-header">
         <div class="card-title">Clientes Inativos</div>
-        <button type="button" class="card-action" id="marketing-send-button">Enviar campanha →</button>
+        <button type="button" class="btn-primary-gradient" id="marketing-send-button">Enviar campanha →</button>
       </div>
 
       <div id="marketing-inactive-list">
