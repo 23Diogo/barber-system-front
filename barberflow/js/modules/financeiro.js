@@ -652,7 +652,7 @@ export function renderFinanceiro() {
     <div class="card">
       <div class="card-header">
         <div class="card-title">Contas a Pagar</div>
-        <button type="button" class="card-action" id="finance-new-button">+ Adicionar</button>
+        <button type="button" class="btn-primary-gradient" id="finance-new-button">+ Adicionar</button>
       </div>
 
       <div id="finance-payables-list">
