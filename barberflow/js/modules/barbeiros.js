@@ -1,3 +1,11 @@
+const barberThemes = [
+  { avatarGradient: 'linear-gradient(135deg,#ffd700,#ff8c00)', avatarColor: '#000' },
+  { avatarGradient: 'linear-gradient(135deg,#6b6880,#3a3a4a)', avatarColor: '#fff' },
+  { avatarGradient: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', avatarColor: '#fff' },
+  { avatarGradient: 'linear-gradient(135deg,#9c6fff,#5530dd)', avatarColor: '#fff' },
+  { avatarGradient: 'linear-gradient(135deg,#00e676,#00b248)', avatarColor: '#001b0b' },
+];
+
 const barbeirosState = {
   items: [
     {
@@ -46,6 +54,8 @@ const barbeirosState = {
       todayAppointments: 5,
     },
   ],
+  modalMode: 'closed', // closed | view | edit | create
+  activeBarberId: null,
 };
 
 function escapeHtml(value) {
@@ -86,6 +96,52 @@ function getBarberStatusMeta(status) {
   };
 
   return map[status] || map.available;
+}
+
+function getBarberById(barberId) {
+  return barbeirosState.items.find((item) => item.id === barberId) || null;
+}
+
+function getNextBarberTheme() {
+  return barberThemes[barbeirosState.items.length % barberThemes.length];
+}
+
+function generateInitials(name) {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return parts.slice(0, 2).map((part) => part[0]?.toUpperCase() || '').join('') || 'NB';
+}
+
+function normalizeBarberId(name) {
+  const base = String(name || 'novo-barbeiro')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || 'novo-barbeiro';
+
+  let candidate = base;
+  let counter = 2;
+
+  while (barbeirosState.items.some((item) => item.id === candidate)) {
+    candidate = `${base}-${counter}`;
+    counter += 1;
+  }
+
+  return candidate;
+}
+
+function buildRole(role, commission) {
+  const safeRole = String(role || '').trim();
+  const safeCommission = String(commission || '').trim();
+
+  if (safeRole) return safeRole;
+  if (safeCommission) return `Barbeiro · ${safeCommission} comissão`;
+  return 'Barbeiro';
 }
 
 function renderStatusBadge(status) {
@@ -226,40 +282,139 @@ function renderBarberDetails(barber) {
 
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="barber-modal-close">Fechar</button>
+        <button type="button" class="btn-save" id="barber-edit-button" data-barber-id="${escapeHtml(barber.id)}">Editar informações</button>
       </div>
     </div>
   `;
 }
 
+function renderBarberForm(mode, barber = null) {
+  const isEdit = mode === 'edit';
+  const safeBarber = barber || {
+    name: '',
+    role: '',
+    commission: '',
+    cuts: 0,
+    revenue: 'R$0',
+    rating: '5.0★',
+    todayAppointments: 0,
+    specialties: [],
+    status: 'available',
+  };
+
+  return `
+    <div class="barber-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">${isEdit ? 'Editar barbeiro' : 'Novo barbeiro'}</div>
+        <div class="modal-sub" style="margin-top:4px;">
+          ${isEdit ? 'Atualize os dados do profissional.' : 'Preencha os dados para adicionar um novo barbeiro.'}
+        </div>
+      </div>
+
+      <form id="barber-form" class="barber-form">
+        <div class="barber-form-grid">
+          <div>
+            <div class="color-section-label">Nome</div>
+            <input class="modal-input" name="name" type="text" value="${escapeHtml(safeBarber.name)}" placeholder="Nome do barbeiro" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Função</div>
+            <input class="modal-input" name="role" type="text" value="${escapeHtml(safeBarber.role)}" placeholder="Ex.: Barbeiro · 40% comissão" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Comissão</div>
+            <input class="modal-input" name="commission" type="text" value="${escapeHtml(safeBarber.commission)}" placeholder="Ex.: 40%" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Status</div>
+            <select class="modal-input" name="status">
+              <option value="available" ${safeBarber.status === 'available' ? 'selected' : ''}>Disponível</option>
+              <option value="busy" ${safeBarber.status === 'busy' ? 'selected' : ''}>Em atendimento</option>
+              <option value="break" ${safeBarber.status === 'break' ? 'selected' : ''}>Em pausa</option>
+              <option value="off" ${safeBarber.status === 'off' ? 'selected' : ''}>Ausente</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="color-section-label">Cortes</div>
+            <input class="modal-input" name="cuts" type="number" min="0" value="${escapeHtml(safeBarber.cuts)}" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Agenda hoje</div>
+            <input class="modal-input" name="todayAppointments" type="number" min="0" value="${escapeHtml(safeBarber.todayAppointments)}" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Faturado</div>
+            <input class="modal-input" name="revenue" type="text" value="${escapeHtml(safeBarber.revenue)}" placeholder="Ex.: R$980" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Nota</div>
+            <input class="modal-input" name="rating" type="text" value="${escapeHtml(safeBarber.rating)}" placeholder="Ex.: 4.8★" />
+          </div>
+        </div>
+
+        <div>
+          <div class="color-section-label">Especialidades</div>
+          <textarea class="modal-input barber-textarea" name="specialties" placeholder="Separe por vírgula">${escapeHtml(safeBarber.specialties.join(', '))}</textarea>
+        </div>
+
+        <div id="barber-form-feedback" class="barber-form-feedback"></div>
+
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="${isEdit ? 'barber-form-back' : 'barber-form-cancel'}">
+            ${isEdit ? 'Voltar' : 'Cancelar'}
+          </button>
+          <button type="submit" class="btn-save">
+            ${isEdit ? 'Salvar alterações' : 'Cadastrar barbeiro'}
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function setBarberModalFeedback(message, variant = 'neutral') {
+  const el = document.getElementById('barber-form-feedback');
+  if (!el) return;
+
+  el.textContent = message || '';
+  el.style.color =
+    variant === 'error' ? '#ff8a8a' :
+    variant === 'success' ? '#00e676' :
+    '#5a6888';
+}
+
 function openBarberModal(barberId) {
-  const modal = document.getElementById('barber-details-modal');
-  const content = document.getElementById('barber-details-content');
-  if (!modal || !content) return;
+  barbeirosState.activeBarberId = barberId;
+  barbeirosState.modalMode = 'view';
+  renderBarberModal();
+}
 
-  const barber = barbeirosState.items.find((item) => item.id === barberId);
-  if (!barber) return;
+function openCreateBarberModal() {
+  barbeirosState.activeBarberId = null;
+  barbeirosState.modalMode = 'create';
+  renderBarberModal();
+}
 
-  content.innerHTML = renderBarberDetails(barber);
-  modal.style.display = 'flex';
-  modal.classList.add('open');
-
-  document.getElementById('barber-modal-close')?.addEventListener('click', closeBarberModal);
-
-  document.querySelectorAll('.barber-status-action').forEach((button) => {
-    button.addEventListener('click', () => {
-      const targetBarberId = button.dataset.barberId;
-      const status = button.dataset.status;
-      if (!targetBarberId || !status) return;
-
-      updateBarberStatus(targetBarberId, status);
-    });
-  });
+function openEditBarberModal(barberId) {
+  barbeirosState.activeBarberId = barberId;
+  barbeirosState.modalMode = 'edit';
+  renderBarberModal();
 }
 
 function closeBarberModal() {
   const modal = document.getElementById('barber-details-modal');
   const content = document.getElementById('barber-details-content');
   if (!modal) return;
+
+  barbeirosState.modalMode = 'closed';
+  barbeirosState.activeBarberId = null;
 
   modal.classList.remove('open');
   modal.style.display = 'none';
@@ -277,12 +432,163 @@ function updateBarberStatus(barberId, status) {
   openBarberModal(barberId);
 }
 
-function bindBarbeirosEvents() {
+function collectBarberFormData() {
+  const form = document.getElementById('barber-form');
+  const formData = new FormData(form);
+
+  const name = String(formData.get('name') || '').trim();
+  const role = String(formData.get('role') || '').trim();
+  const commission = String(formData.get('commission') || '').trim();
+  const status = String(formData.get('status') || 'available').trim();
+  const cuts = Number(formData.get('cuts') || 0);
+  const todayAppointments = Number(formData.get('todayAppointments') || 0);
+  const revenue = String(formData.get('revenue') || '').trim() || 'R$0';
+  const rating = String(formData.get('rating') || '').trim() || '0.0★';
+  const specialties = String(formData.get('specialties') || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+
+  return {
+    name,
+    role: buildRole(role, commission),
+    commission: commission || '—',
+    status,
+    cuts,
+    todayAppointments,
+    revenue,
+    rating,
+    specialties,
+  };
+}
+
+function handleBarberFormSubmit(event) {
+  event.preventDefault();
+
+  const data = collectBarberFormData();
+
+  if (!data.name) {
+    setBarberModalFeedback('Informe o nome do barbeiro.', 'error');
+    return;
+  }
+
+  if (!data.specialties.length) {
+    setBarberModalFeedback('Informe ao menos uma especialidade.', 'error');
+    return;
+  }
+
+  if (barbeirosState.modalMode === 'create') {
+    const theme = getNextBarberTheme();
+
+    const newBarber = {
+      id: normalizeBarberId(data.name),
+      initials: generateInitials(data.name),
+      avatarGradient: theme.avatarGradient,
+      avatarColor: theme.avatarColor,
+      ...data,
+    };
+
+    barbeirosState.items = [newBarber, ...barbeirosState.items];
+    rerenderBarbeirosGrid();
+    openBarberModal(newBarber.id);
+    return;
+  }
+
+  if (barbeirosState.modalMode === 'edit' && barbeirosState.activeBarberId) {
+    const currentBarber = getBarberById(barbeirosState.activeBarberId);
+    if (!currentBarber) return;
+
+    const updatedBarber = {
+      ...currentBarber,
+      ...data,
+      initials: generateInitials(data.name),
+    };
+
+    barbeirosState.items = barbeirosState.items.map((item) => {
+      if (item.id !== barbeirosState.activeBarberId) return item;
+      return updatedBarber;
+    });
+
+    rerenderBarbeirosGrid();
+    openBarberModal(updatedBarber.id);
+  }
+}
+
+function renderBarberModal() {
+  const modal = document.getElementById('barber-details-modal');
+  const content = document.getElementById('barber-details-content');
+  if (!modal || !content) return;
+
+  if (barbeirosState.modalMode === 'closed') {
+    modal.classList.remove('open');
+    modal.style.display = 'none';
+    content.innerHTML = '';
+    return;
+  }
+
+  const barber = barbeirosState.activeBarberId ? getBarberById(barbeirosState.activeBarberId) : null;
+
+  if ((barbeirosState.modalMode === 'view' || barbeirosState.modalMode === 'edit') && !barber) {
+    closeBarberModal();
+    return;
+  }
+
+  if (barbeirosState.modalMode === 'view') {
+    content.innerHTML = renderBarberDetails(barber);
+  }
+
+  if (barbeirosState.modalMode === 'edit') {
+    content.innerHTML = renderBarberForm('edit', barber);
+  }
+
+  if (barbeirosState.modalMode === 'create') {
+    content.innerHTML = renderBarberForm('create');
+  }
+
+  modal.style.display = 'flex';
+  modal.classList.add('open');
+
+  bindBarberModalEvents();
+}
+
+function bindBarberModalEvents() {
+  document.getElementById('barber-modal-close')?.addEventListener('click', closeBarberModal);
+
+  document.getElementById('barber-edit-button')?.addEventListener('click', () => {
+    if (!barbeirosState.activeBarberId) return;
+    openEditBarberModal(barbeirosState.activeBarberId);
+  });
+
+  document.getElementById('barber-form-back')?.addEventListener('click', () => {
+    if (!barbeirosState.activeBarberId) return;
+    openBarberModal(barbeirosState.activeBarberId);
+  });
+
+  document.getElementById('barber-form-cancel')?.addEventListener('click', closeBarberModal);
+
+  document.getElementById('barber-form')?.addEventListener('submit', handleBarberFormSubmit);
+
+  document.querySelectorAll('.barber-status-action').forEach((button) => {
+    button.addEventListener('click', () => {
+      const targetBarberId = button.dataset.barberId;
+      const status = button.dataset.status;
+      if (!targetBarberId || !status) return;
+
+      updateBarberStatus(targetBarberId, status);
+    });
+  });
+}
+
+function bindBarbeirosGridEvents() {
   document.querySelectorAll('.barber-card-button[data-barber-id]').forEach((button) => {
     button.addEventListener('click', () => {
       openBarberModal(button.dataset.barberId);
     });
   });
+}
+
+function bindBarbeirosStaticEvents() {
+  document.getElementById('barber-new-button')?.addEventListener('click', openCreateBarberModal);
 
   document.getElementById('barber-details-modal')?.addEventListener('click', (event) => {
     if (event.target?.id === 'barber-details-modal') {
@@ -296,7 +602,7 @@ function rerenderBarbeirosGrid() {
   if (!grid) return;
 
   grid.innerHTML = barbeirosState.items.map(renderBarberCard).join('');
-  bindBarbeirosEvents();
+  bindBarbeirosGridEvents();
 }
 
 export function renderBarbeiros() {
@@ -308,7 +614,7 @@ export function renderBarbeiros() {
       <div class="barbeiros-subtitle">Visualize desempenho e atualize o status da equipe em tempo real.</div>
     </div>
 
-    <button type="button" class="card-action barbeiros-action-btn">
+    <button type="button" class="card-action barbeiros-action-btn" id="barber-new-button">
       + Novo barbeiro
     </button>
   </div>
@@ -327,5 +633,6 @@ export function renderBarbeiros() {
 }
 
 export function initBarbeirosPage() {
-  bindBarbeirosEvents();
+  bindBarbeirosGridEvents();
+  bindBarbeirosStaticEvents();
 }
