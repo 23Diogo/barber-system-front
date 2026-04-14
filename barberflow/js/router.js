@@ -6,7 +6,7 @@ import { renderClientes } from './modules/clientes.js';
 import { renderFinanceiro } from './modules/financeiro.js';
 import { renderEstoque } from './modules/estoque.js';
 import { renderServicos } from './modules/servicos.js';
-import { renderBarbeiros } from './modules/barbeiros.js';
+import { renderBarbeiros, initBarbeirosPage } from './modules/barbeiros.js';
 import { renderWhatsApp } from './modules/whatsapp.js';
 import { renderMarketing } from './modules/marketing.js';
 import { renderFidelidade } from './modules/fidelidade.js';
