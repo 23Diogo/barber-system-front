@@ -625,8 +625,8 @@ async function loadAgendaForDate(dateValue) {
         <div class="card-header">
           <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(dateValue))}</div>
           <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button class="card-action" id="agenda-new-action" type="button" style="padding:7px 12px;border:1px solid rgba(79,195,247,.18);border-radius:8px;background:rgba(79,195,247,.06);">+ Novo agendamento</button>
-            <button class="card-action" id="agenda-refresh-action" type="button">Atualizar</button>
+            <button class="btn-primary-gradient" id="agenda-new-action" type="button" style="padding:7px 12px;border:1px solid rgba(79,195,247,.18);border-radius:8px;background:rgba(79,195,247,.06);">+ Novo agendamento</button>
+            <button class="btn-primary-gradient" id="agenda-refresh-action" type="button">Atualizar</button>
           </div>
         </div>
         ${safeAppointments.map(renderAppointmentRow).join('')}
@@ -672,8 +672,8 @@ export function renderAgenda() {
         <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(today))}</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
           <input id="agenda-date-input" type="date" value="${today}" style="background:#0a0c1a;border:1px solid #1e2345;border-radius:8px;padding:8px 10px;color:#e8f0fe;font:inherit;min-width:160px;" />
-          <button id="agenda-create-cta" type="button" style="padding:8px 12px;border:1px solid rgba(79,195,247,.18);border-radius:8px;background:rgba(79,195,247,.08);color:#4fc3f7;font-weight:600;cursor:pointer;">+ Novo agendamento</button>
-          <button id="agenda-load-action" type="button" class="card-action" style="padding:8px 12px;border:1px solid #1e2345;border-radius:8px;background:#0a0c1a;cursor:pointer;">Carregar data</button>
+          <button id="agenda-create-cta" type="button" class="btn-primary-gradient" style="padding:8px 12px;border:1px solid rgba(79,195,247,.18);border-radius:8px;background:rgba(79,195,247,.08);color:#4fc3f7;font-weight:600;cursor:pointer;">+ Novo agendamento</button>
+          <button id="agenda-load-action" type="button" class="btn-primary-gradient" style="padding:8px 12px;border:1px solid #1e2345;border-radius:8px;background:#0a0c1a;cursor:pointer;">Carregar data</button>
         </div>
       </div>
       <div id="agenda-list-container"></div>
