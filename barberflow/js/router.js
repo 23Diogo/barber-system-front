@@ -8,7 +8,7 @@ import { renderEstoque } from './modules/estoque.js';
 import { renderServicos, initServicosPage } from './modules/servicos.js';
 import { renderBarbeiros, initBarbeirosPage } from './modules/barbeiros.js';
 import { renderWhatsApp } from './modules/whatsapp.js';
-import { renderMarketing } from './modules/marketing.js';
+import { renderMarketing, initMarketingPage } from './modules/marketing.js';
 import { renderFidelidade } from './modules/fidelidade.js';
 import { renderAvaliacoes } from './modules/avaliacoes.js';
 import { renderConfiguracoes } from './modules/configuracoes.js';
@@ -35,6 +35,7 @@ const initializers = {
   fin: initFinanceiroPage,
   servicos: initServicosPage,
   barbeiros: initBarbeirosPage,
+  mkt: initMarketingPage,
 };
 
 function renderPage(pageId) {
