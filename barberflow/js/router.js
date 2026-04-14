@@ -4,7 +4,7 @@ import { updateActiveNav } from './components/sidebar.js';
 import { renderAgenda, initAgendaPage } from './modules/agenda.js';
 import { renderClientes, initClientesPage } from './modules/clientes.js';
 import { renderFinanceiro, initFinanceiroPage } from './modules/financeiro.js';
-import { renderEstoque } from './modules/estoque.js';
+import { renderEstoque, initEstoquePage } from './modules/estoque.js';
 import { renderServicos, initServicosPage } from './modules/servicos.js';
 import { renderBarbeiros, initBarbeirosPage } from './modules/barbeiros.js';
 import { renderWhatsApp } from './modules/whatsapp.js';
@@ -33,6 +33,7 @@ const initializers = {
   agenda: initAgendaPage,
   clientes: initClientesPage,
   fin: initFinanceiroPage,
+  estoque: initEstoquePage,
   servicos: initServicosPage,
   barbeiros: initBarbeirosPage,
   mkt: initMarketingPage,
