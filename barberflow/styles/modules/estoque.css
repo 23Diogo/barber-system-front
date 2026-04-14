@@ -9,6 +9,11 @@
     cursor: pointer;
   }
 
+  .page--estoque {
+     .estoque-row-button .fin-title {
+       color: #e8f0fe !important;
+     }
+  }
   .estoque-row-button .fin-row {
     border-left: 3px solid transparent;
     border-radius: 12px;
