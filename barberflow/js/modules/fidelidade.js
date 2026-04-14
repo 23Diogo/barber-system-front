@@ -639,7 +639,7 @@ export function renderFidelidade() {
     <div class="card">
       <div class="card-header">
         <div class="card-title">🎁 Recompensas</div>
-        <button type="button" class="card-action" id="fidelidade-new-reward-button">+ Criar</button>
+        <button type="button" class="btn-primary-gradient" id="fidelidade-new-reward-button">+ Criar</button>
       </div>
       <div id="fidelidade-rewards-list">
         ${renderRewardList()}
