@@ -1,2 +1,89 @@
-/* Estoque: espaço reservado para estilos específicos do módulo */
-.page--estoque{}
+.page--estoque {
+  .estoque-row-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .estoque-row-button .fin-row {
+    border-left: 3px solid transparent;
+    border-radius: 12px;
+    transition: transform 0.18s ease, background 0.18s ease;
+  }
+
+  .estoque-row-button:hover .fin-row,
+  .estoque-row-button:focus-visible .fin-row {
+    transform: translateY(-2px);
+    background: rgba(79, 195, 247, 0.04);
+  }
+
+  .estoque-restock-button {
+    color: #ff1744;
+  }
+
+  .estoque-summary-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .estoque-summary-card--danger {
+    border: 1px solid rgba(239, 68, 68, 0.2);
+  }
+
+  .estoque-summary-card--success {
+    border: 1px solid rgba(0, 230, 118, 0.2);
+  }
+
+  .estoque-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .estoque-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .estoque-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .estoque-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .estoque-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .estoque-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .estoque-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .estoque-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
