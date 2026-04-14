@@ -132,6 +132,26 @@ export async function createAppointment(payload) {
   });
 }
 
+export async function updateAppointmentStatus(appointmentId, status) {
+  const payload = JSON.stringify({ status });
+
+  try {
+    return await apiFetch(`/api/appointments/${appointmentId}`, {
+      method: 'PATCH',
+      body: payload,
+    });
+  } catch (firstError) {
+    try {
+      return await apiFetch(`/api/appointments/${appointmentId}/status`, {
+        method: 'PATCH',
+        body: payload,
+      });
+    } catch {
+      throw firstError;
+    }
+  }
+}
+
 window.BarberFlowApi = {
   getApiBaseUrl,
   setApiBaseUrl,
@@ -146,5 +166,6 @@ window.BarberFlowApi = {
   getBarbers,
   getServices,
   createAppointment,
+  updateAppointmentStatus,
   formatDateForApi,
 };
