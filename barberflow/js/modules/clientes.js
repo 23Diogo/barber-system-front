@@ -291,7 +291,7 @@ function mapSubscriptionDetail(subscription) {
   };
 }
 
-function getClientById(clientId) {
+function getClientSummaryById(clientId) {
   return clientesState.items.find((item) => item.id === clientId) || null;
 }
 
@@ -887,7 +887,7 @@ async function loadClientDetails(clientId) {
   } catch (error) {
     if (clientesState.activeClientId !== clientId) return;
 
-    const fallbackClient = getClientById(clientId);
+    const fallbackClient = getClientSummaryById(clientId);
     clientesState.detailClient = fallbackClient
       ? {
           ...fallbackClient,
@@ -1105,7 +1105,7 @@ function renderClientModal() {
     return;
   }
 
-  const summaryClient = clientesState.activeClientId ? getClientById(clientesState.activeClientId) : null;
+  const summaryClient = clientesState.activeClientId ? getClientSummaryById(clientesState.activeClientId) : null;
   const detailClient = clientesState.detailClient || summaryClient;
 
   if (clientesState.modalMode === 'view') {
