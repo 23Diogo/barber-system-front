@@ -1,14 +1,4 @@
 .page--planos {
-  #planos-list,
-  #planos-subscriptions-list {
-    display: grid;
-    gap: 10px;
-  }
-
-  .planos-metrics-grid {
-    margin-bottom: 14px;
-  }
-
   .planos-row-button {
     display: block;
     width: 100%;
@@ -21,15 +11,14 @@
     font: inherit;
     appearance: none;
     -webkit-appearance: none;
-    box-shadow: none;
   }
 
   .planos-row {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 14px;
+    display: flex;
     align-items: center;
-    padding: 14px 16px;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px 10px;
     border: 1px solid #1e2345;
     border-radius: 12px;
     background: rgba(255, 255, 255, 0.02);
@@ -45,19 +34,20 @@
 
   .planos-row-main {
     min-width: 0;
+    flex: 1;
   }
 
   .planos-row-title {
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 700;
     color: #e8f0fe;
     line-height: 1.35;
   }
 
   .planos-row-sub {
-    margin-top: 4px;
-    font-size: 11px;
+    font-size: 10px;
     color: #5a6888;
+    margin-top: 4px;
     line-height: 1.5;
   }
 
@@ -71,7 +61,7 @@
 
   .planos-row-price {
     font-family: 'Orbitron', sans-serif;
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
     color: #4fc3f7;
     white-space: nowrap;
