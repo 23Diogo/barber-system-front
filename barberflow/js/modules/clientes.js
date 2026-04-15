@@ -11,6 +11,8 @@ import {
   pauseSubscription,
   reactivateSubscription,
   cancelSubscription,
+  createManualInvoice,
+  createMercadoPagoPreference,
   markInvoicePaid,
   markInvoiceFailed,
   cancelInvoice,
@@ -227,6 +229,141 @@ function getAppointmentServiceName(appointment) {
   return appointment?.services?.name || appointment?.service_name || 'Serviço';
 }
 
+function getInvoicePaymentUrl(invoice) {
+  return (
+    invoice?.payment_url ||
+    invoice?.checkout_url ||
+    invoice?.external_url ||
+    invoice?.gateway_checkout_url ||
+    invoice?.gateway_payment_url ||
+    invoice?.hosted_url ||
+    invoice?.metadata?.payment_url ||
+    invoice?.metadata?.checkout_url ||
+    invoice?.metadata?.init_point ||
+    invoice?.metadata?.mercadopago_init_point ||
+    ''
+  );
+}
+
+function getInvoiceGatewayReference(invoice) {
+  return (
+    invoice?.gateway_reference ||
+    invoice?.gateway_external_id ||
+    invoice?.external_reference ||
+    invoice?.payment_reference ||
+    invoice?.metadata?.preference_id ||
+    ''
+  );
+}
+
+function getSubscriptionAmountCents(subscription) {
+  const raw = subscription?.raw || {};
+  const possibleValues = [
+    raw.amount_cents,
+    raw.plan_price_cents,
+    raw.price_cents,
+    raw.monthly_amount_cents,
+    raw.plans?.amount_cents,
+    raw.plans?.price_cents,
+    Number(raw.plans?.price || 0) * 100,
+    Number(raw.plans?.monthly_price || 0) * 100,
+  ];
+
+  const found = possibleValues.find((value) => Number.isFinite(Number(value)) && Number(value) > 0);
+  return Math.round(Number(found || 0));
+}
+
+function getSubscriptionDueDateIso(subscription) {
+  const latestInvoice = getLatestInvoice(subscription?.raw);
+  const rawValue =
+    subscription?.raw?.next_billing_at ||
+    subscription?.raw?.current_period_end ||
+    latestInvoice?.due_at ||
+    latestInvoice?.created_at;
+
+  if (rawValue) {
+    const parsed = new Date(rawValue);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString();
+    }
+  }
+
+  return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+function buildMercadoPagoInvoicePayloadVariants(subscription, preference) {
+  const amountCents = getSubscriptionAmountCents(subscription);
+  const dueAt = getSubscriptionDueDateIso(subscription);
+
+  const basePayload = {
+    subscription_id: subscription.id,
+    due_at: dueAt,
+    billing_reason: 'manual_charge',
+    gateway_provider: 'mercadopago',
+    status: 'pending',
+    gateway_reference: preference.preferenceId,
+    payment_url: preference.initPoint,
+    sandbox_payment_url: preference.sandboxInitPoint,
+    metadata: {
+      provider: 'mercadopago',
+      preference_id: preference.preferenceId,
+      init_point: preference.initPoint,
+      sandbox_init_point: preference.sandboxInitPoint,
+    },
+  };
+
+  return [
+    {
+      ...basePayload,
+      amount_cents: amountCents,
+    },
+    {
+      ...basePayload,
+      amount: Number((amountCents / 100).toFixed(2)),
+    },
+    {
+      ...basePayload,
+      amount_cents: amountCents,
+      checkout_url: preference.initPoint,
+    },
+  ];
+}
+
+async function createMercadoPagoInvoice(subscription, preference) {
+  const variants = buildMercadoPagoInvoicePayloadVariants(subscription, preference);
+  let lastError = null;
+
+  for (const payload of variants) {
+    try {
+      return await createManualInvoice(payload);
+    } catch (error) {
+      lastError = error;
+    }
+  }
+
+  throw lastError || new Error('Não foi possível registrar a cobrança do Mercado Pago.');
+}
+
+async function copyTextToClipboard(text) {
+  const safeText = String(text || '').trim();
+  if (!safeText) throw new Error('Não há link disponível para copiar.');
+
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(safeText);
+    return;
+  }
+
+  const textarea = document.createElement('textarea');
+  textarea.value = safeText;
+  textarea.setAttribute('readonly', 'readonly');
+  textarea.style.position = 'absolute';
+  textarea.style.left = '-9999px';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  document.body.removeChild(textarea);
+}
+
 function mapClientSummaryFromApi(client) {
   return {
     id: client.id,
@@ -234,7 +371,7 @@ function mapClientSummaryFromApi(client) {
     phone: client.phone || '',
     whatsapp: client.whatsapp || client.phone || '',
     lastService: client.last_service_name || client.lastService || '—',
-    lastCut: client.last_visit_at ? formatDateDisplay(client.last_visit_at) : (client.lastCut || '—'),
+    lastCut: client.last_visit_at ? formatDateDisplay(client.last_visit_at) : client.lastCut || '—',
     visits: Number(client.visits || client.total_visits || client.completed_appointments_count || 0),
     totalSpent: Number(client.total_spent || client.totalSpent || 0),
     status: normalizeClientStatusFromApi(client),
@@ -477,6 +614,14 @@ function renderClientConsumptions(subscription) {
 }
 
 function renderClientInvoices(subscription) {
+  if (!subscription) {
+    return `
+      <div class="clients-modal-info-row">
+        Nenhuma cobrança encontrada para esta assinatura.
+      </div>
+    `;
+  }
+
   const invoices = Array.isArray(subscription?.raw?.subscription_invoices) ? [...subscription.raw.subscription_invoices] : [];
 
   invoices.sort((a, b) => {
@@ -485,65 +630,97 @@ function renderClientInvoices(subscription) {
     return bDate - aDate;
   });
 
-  if (!invoices.length) {
-    return `
+  return `
+    <div class="clients-billing-toolbar">
+      <button
+        type="button"
+        class="clients-action-btn clients-action-btn--primary clients-generate-charge-action"
+        data-subscription-id="${escapeHtml(subscription.id)}"
+      >
+        Gerar cobrança MP
+      </button>
+    </div>
+
+    ${
+      invoices.length
+        ? `
+      <div class="clients-invoice-list">
+        ${invoices
+          .map((invoice) => {
+            const invoiceMeta = getInvoiceStatusMeta(invoice.status);
+            const actionButtons = getInvoiceActionButtons(invoice);
+            const paymentUrl = getInvoicePaymentUrl(invoice);
+            const gatewayReference = getInvoiceGatewayReference(invoice);
+
+            return `
+            <div class="clients-invoice-row">
+              <div class="clients-invoice-main">
+                <div class="clients-invoice-title">${escapeHtml(formatCurrency((invoice.amount_cents || 0) / 100))}</div>
+                <div class="clients-invoice-sub">
+                  Vencimento: ${escapeHtml(formatDateDisplay(invoice.due_at))}
+                  · Motivo: ${escapeHtml(invoice.billing_reason || '—')}
+                  · Gateway: ${escapeHtml(invoice.gateway_provider || '—')}
+                  ${gatewayReference ? `· Ref: ${escapeHtml(gatewayReference)}` : ''}
+                </div>
+
+                ${
+                  paymentUrl
+                    ? `
+                  <div class="clients-link-box">
+                    <div class="clients-link-text">${escapeHtml(paymentUrl)}</div>
+                    <button
+                      type="button"
+                      class="clients-action-btn clients-invoice-copy-link"
+                      data-payment-url="${escapeHtml(paymentUrl)}"
+                    >
+                      Copiar link
+                    </button>
+                  </div>
+                `
+                    : ''
+                }
+
+                ${
+                  actionButtons.length
+                    ? `
+                  <div class="clients-action-grid clients-action-grid--nested">
+                    ${actionButtons
+                      .map(
+                        (button) => `
+                      <button
+                        type="button"
+                        class="clients-action-btn clients-invoice-action"
+                        data-invoice-id="${escapeHtml(invoice.id)}"
+                        data-action="${escapeHtml(button.action)}"
+                      >
+                        ${escapeHtml(button.label)}
+                      </button>
+                    `,
+                      )
+                      .join('')}
+                  </div>
+                `
+                    : ''
+                }
+              </div>
+
+              <div class="clients-invoice-side">
+                <span class="clients-status-chip" style="background:rgba(255,255,255,.04);color:${invoiceMeta.color};">
+                  ${escapeHtml(invoiceMeta.label)}
+                </span>
+              </div>
+            </div>
+          `;
+          })
+          .join('')}
+      </div>
+    `
+        : `
       <div class="clients-modal-info-row">
         Nenhuma cobrança encontrada para esta assinatura.
       </div>
-    `;
-  }
-
-  return `
-    <div class="clients-invoice-list">
-      ${invoices
-        .map((invoice) => {
-          const invoiceMeta = getInvoiceStatusMeta(invoice.status);
-          const actionButtons = getInvoiceActionButtons(invoice);
-
-          return `
-          <div class="clients-invoice-row">
-            <div class="clients-invoice-main">
-              <div class="clients-invoice-title">${escapeHtml(formatCurrency((invoice.amount_cents || 0) / 100))}</div>
-              <div class="clients-invoice-sub">
-                Vencimento: ${escapeHtml(formatDateDisplay(invoice.due_at))}
-                · Motivo: ${escapeHtml(invoice.billing_reason || '—')}
-                · Gateway: ${escapeHtml(invoice.gateway_provider || '—')}
-              </div>
-
-              ${
-                actionButtons.length
-                  ? `
-                <div class="clients-action-grid clients-action-grid--nested">
-                  ${actionButtons
-                    .map(
-                      (button) => `
-                    <button
-                      type="button"
-                      class="clients-action-btn clients-invoice-action"
-                      data-invoice-id="${escapeHtml(invoice.id)}"
-                      data-action="${escapeHtml(button.action)}"
-                    >
-                      ${escapeHtml(button.label)}
-                    </button>
-                  `
-                    )
-                    .join('')}
-                </div>
-              `
-                  : ''
-              }
-            </div>
-
-            <div class="clients-invoice-side">
-              <span class="clients-status-chip" style="background:rgba(255,255,255,.04);color:${invoiceMeta.color};">
-                ${escapeHtml(invoiceMeta.label)}
-              </span>
-            </div>
-          </div>
-        `;
-        })
-        .join('')}
-    </div>
+    `
+    }
   `;
 }
 
@@ -609,7 +786,7 @@ function renderClientSubscription(subscription) {
                   >
                     ${escapeHtml(button.label)}
                   </button>
-                `
+                `,
                   )
                   .join('')}
               </div>
@@ -881,7 +1058,10 @@ async function loadClientsData() {
 
 async function loadClientDetails(clientId) {
   try {
-    const [clientPayload, subscriptionsPayload] = await Promise.all([getClientById(clientId), getSubscriptions({ client_id: clientId })]);
+    const [clientPayload, subscriptionsPayload] = await Promise.all([
+      getClientById(clientId),
+      getSubscriptions({ client_id: clientId }),
+    ]);
 
     const detailClient = mapClientDetailFromApi(clientPayload);
 
@@ -1098,6 +1278,63 @@ async function handleInvoiceAction(invoiceId, action) {
   }
 }
 
+async function handleGenerateMercadoPagoCharge(subscriptionId) {
+  const triggerButtons = document.querySelectorAll('.clients-generate-charge-action, .clients-invoice-action, .clients-invoice-copy-link');
+
+  try {
+    triggerButtons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    setClientDetailFeedback('Gerando cobrança Mercado Pago...', 'neutral');
+
+    if (!clientesState.detailSubscription || clientesState.detailSubscription.id !== subscriptionId) {
+      throw new Error('Assinatura não encontrada para gerar a cobrança.');
+    }
+
+    const subscription = clientesState.detailSubscription;
+    const amountCents = getSubscriptionAmountCents(subscription);
+
+    if (!amountCents) {
+      throw new Error('Não foi possível identificar o valor do plano para gerar a cobrança.');
+    }
+
+    const customerName = clientesState.detailClient?.name || 'Cliente';
+    const preference = await createMercadoPagoPreference({
+      title: `${subscription.planName} - ${customerName}`,
+      quantity: 1,
+      unitPrice: Number((amountCents / 100).toFixed(2)),
+    });
+
+    await createMercadoPagoInvoice(subscription, preference);
+
+    if (!clientesState.activeClientId) return;
+
+    clientesState.isDetailLoading = true;
+    renderClientModal();
+    await loadClientsData();
+    await loadClientDetails(clientesState.activeClientId);
+
+    setTimeout(() => {
+      setClientDetailFeedback('Cobrança Mercado Pago gerada com sucesso.', 'success');
+    }, 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível gerar a cobrança Mercado Pago.';
+    clientesState.isDetailLoading = false;
+    renderClientModal();
+    setClientDetailFeedback(message, 'error');
+  } finally {
+    triggerButtons.forEach((button) => button.removeAttribute('disabled'));
+  }
+}
+
+async function handleCopyInvoiceLink(paymentUrl) {
+  try {
+    await copyTextToClipboard(paymentUrl);
+    setClientDetailFeedback('Link de pagamento copiado com sucesso.', 'success');
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível copiar o link de pagamento.';
+    setClientDetailFeedback(message, 'error');
+  }
+}
+
 function renderClientModal() {
   const modal = document.getElementById('client-details-modal');
   const content = document.getElementById('client-details-content');
@@ -1182,6 +1419,22 @@ function bindClientModalEvents() {
       const action = button.dataset.action;
       if (!invoiceId || !action) return;
       handleInvoiceAction(invoiceId, action);
+    });
+  });
+
+  document.querySelectorAll('.clients-generate-charge-action').forEach((button) => {
+    button.addEventListener('click', () => {
+      const subscriptionId = button.dataset.subscriptionId;
+      if (!subscriptionId) return;
+      handleGenerateMercadoPagoCharge(subscriptionId);
+    });
+  });
+
+  document.querySelectorAll('.clients-invoice-copy-link').forEach((button) => {
+    button.addEventListener('click', () => {
+      const paymentUrl = button.dataset.paymentUrl;
+      if (!paymentUrl) return;
+      handleCopyInvoiceLink(paymentUrl);
     });
   });
 }
