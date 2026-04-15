@@ -12,6 +12,7 @@ import { renderMarketing, initMarketingPage } from './modules/marketing.js';
 import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
 import { renderConfiguracoes,initConfiguracoesPage } from './modules/configuracoes.js';
+import { renderPlanos, initPlanosPage } from './modules/planos.js';
 
 
 
@@ -27,6 +28,7 @@ const renderers = {
   fidel: renderFidelidade,
   aval: renderAvaliacoes,
   config: renderConfiguracoes,
+  planos: renderPlanos,
 };
 
 const initializers = {
@@ -40,6 +42,7 @@ const initializers = {
   fidel: initFidelidadePage,
   aval: initAvaliacoesPage,
   config: initAvaliacoesPage,
+  planos: initPlanosPage,
 };
 
 function renderPage(pageId) {
