@@ -1,4 +1,10 @@
 .page--planos {
+  #planos-list,
+  #planos-subscriptions-list {
+    display: grid;
+    gap: 10px;
+  }
+
   .planos-metrics-grid {
     margin-bottom: 14px;
   }
@@ -11,22 +17,30 @@
     background: transparent;
     text-align: inherit;
     cursor: pointer;
+    color: inherit;
+    font: inherit;
+    appearance: none;
+    -webkit-appearance: none;
+    box-shadow: none;
   }
 
   .planos-row {
     display: grid;
-    grid-template-columns: 1fr auto;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 14px;
     align-items: center;
-    padding: 12px 10px;
+    padding: 14px 16px;
+    border: 1px solid #1e2345;
     border-radius: 12px;
-    transition: transform 0.18s ease, background 0.18s ease;
+    background: rgba(255, 255, 255, 0.02);
+    transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease;
   }
 
   .planos-row-button:hover .planos-row,
   .planos-row-button:focus-visible .planos-row {
     transform: translateY(-2px);
     background: rgba(79, 195, 247, 0.04);
+    border-color: rgba(79, 195, 247, 0.22);
   }
 
   .planos-row-main {
@@ -34,15 +48,16 @@
   }
 
   .planos-row-title {
-    font-size: 13px;
+    font-size: 14px;
     font-weight: 700;
     color: #e8f0fe;
+    line-height: 1.35;
   }
 
   .planos-row-sub {
-    font-size: 10px;
+    margin-top: 4px;
+    font-size: 11px;
     color: #5a6888;
-    margin-top: 3px;
     line-height: 1.5;
   }
 
@@ -51,13 +66,15 @@
     flex-direction: column;
     align-items: flex-end;
     gap: 8px;
+    flex-shrink: 0;
   }
 
   .planos-row-price {
     font-family: 'Orbitron', sans-serif;
-    font-size: 16px;
+    font-size: 18px;
     font-weight: 700;
     color: #4fc3f7;
+    white-space: nowrap;
   }
 
   .planos-badge {
