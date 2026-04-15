@@ -202,6 +202,10 @@ export async function getSubscriptionById(subscriptionId) {
   return apiFetch(`/api/subscriptions/${subscriptionId}`);
 }
 
+export async function getActiveSubscriptionByClient(clientId) {
+  return apiFetch(`/api/subscriptions/client/${clientId}/active`);
+}
+
 export async function createSubscription(payload) {
   return apiFetch('/api/subscriptions', {
     method: 'POST',
@@ -272,6 +276,7 @@ window.BarberFlowApi = {
 
   getSubscriptions,
   getSubscriptionById,
+  getActiveSubscriptionByClient,
   createSubscription,
   updateSubscription,
   generateNextSubscriptionCycle,
