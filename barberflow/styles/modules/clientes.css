@@ -266,4 +266,27 @@
   .clients-history-side {
     flex-shrink: 0;
   }
+
+  #client-details-modal .modal {
+    width: min(92vw, 820px);
+    max-height: 88vh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(79, 195, 247, 0.35) rgba(255, 255, 255, 0.04);
+  }
+
+  #client-details-modal .modal::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  #client-details-modal .modal::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 999px;
+  }
+
+  #client-details-modal .modal::-webkit-scrollbar-thumb {
+    background: rgba(79, 195, 247, 0.35);
+    border-radius: 999px;
+  }
 }
