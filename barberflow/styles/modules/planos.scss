@@ -1,0 +1,133 @@
+.page--planos {
+  .planos-metrics-grid {
+    margin-bottom: 14px;
+  }
+
+  .planos-row-button {
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: inherit;
+    cursor: pointer;
+  }
+
+  .planos-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 12px;
+    align-items: center;
+    padding: 12px 10px;
+    border-radius: 12px;
+    transition: transform 0.18s ease, background 0.18s ease;
+  }
+
+  .planos-row-button:hover .planos-row,
+  .planos-row-button:focus-visible .planos-row {
+    transform: translateY(-2px);
+    background: rgba(79, 195, 247, 0.04);
+  }
+
+  .planos-row-main {
+    min-width: 0;
+  }
+
+  .planos-row-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8f0fe;
+  }
+
+  .planos-row-sub {
+    font-size: 10px;
+    color: #5a6888;
+    margin-top: 3px;
+    line-height: 1.5;
+  }
+
+  .planos-row-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .planos-row-price {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 16px;
+    font-weight: 700;
+    color: #4fc3f7;
+  }
+
+  .planos-badge {
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .planos-badge--success {
+    background: rgba(0, 230, 118, 0.1);
+    color: #00e676;
+    border: 1px solid rgba(0, 230, 118, 0.18);
+  }
+
+  .planos-badge--muted {
+    background: rgba(90, 104, 136, 0.12);
+    color: #5a6888;
+    border: 1px solid rgba(90, 104, 136, 0.18);
+  }
+
+  .planos-modal-body {
+    display: grid;
+    gap: 12px;
+  }
+
+  .planos-modal-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .planos-modal-info {
+    display: grid;
+    gap: 8px;
+  }
+
+  .planos-modal-info-row {
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  .planos-form {
+    display: grid;
+    gap: 12px;
+  }
+
+  .planos-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+
+  .planos-textarea {
+    min-height: 92px;
+    resize: vertical;
+  }
+
+  .planos-form-feedback {
+    min-height: 18px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+}
