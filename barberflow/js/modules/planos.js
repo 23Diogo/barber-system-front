@@ -975,7 +975,6 @@ async function handlePlanFormSubmit(event) {
     name: data.name,
     description: data.description,
     price: parsedPrice.amount,
-    price_cents: parsedPrice.cents,
     currency: 'BRL',
     billing_interval: data.billingInterval === 'Anual' ? 'year' : 'month',
     billing_interval_count: 1,
