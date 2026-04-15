@@ -102,22 +102,14 @@ function formatCompactCurrencyFromCents(cents) {
   return formatCurrencyFromCents(cents);
 }
 
-function getPlanById(planId) {
-  return planosState.plans.find((item) => item.id === planId) || null;
-}
-
-function getSubscriptionById(subscriptionId) {
-  return planosState.subscriptions.find((item) => item.id === subscriptionId) || null;
-}
-
 function normalizeId(value) {
-  const base = String(value || 'novo-plano')
+  const base = String(value || 'novo-item')
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .trim()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'novo-plano';
+    .replace(/^-+|-+$/g, '') || 'novo-item';
 
   let candidate = base;
   let counter = 2;
@@ -131,6 +123,14 @@ function normalizeId(value) {
   }
 
   return candidate;
+}
+
+function getPlanById(planId) {
+  return planosState.plans.find((item) => item.id === planId) || null;
+}
+
+function getSubscriptionById(subscriptionId) {
+  return planosState.subscriptions.find((item) => item.id === subscriptionId) || null;
 }
 
 function getSubscriptionStatusMeta(status) {
@@ -241,10 +241,13 @@ function renderPlanRow(plan) {
         <div class="planos-row-main">
           <div class="planos-row-title">${escapeHtml(plan.name)}</div>
           <div class="planos-row-sub">${escapeHtml(plan.description)}</div>
+          <div class="planos-row-sub">
+            ${escapeHtml(`${plan.includedHaircuts} cortes · ${plan.includedBeards} barbas · ${plan.billingInterval}`)}
+          </div>
         </div>
 
         <div class="planos-row-side">
-          <div class="${statusClass}">${statusText}</div>
+          <div class="${statusClass}">${escapeHtml(statusText)}</div>
           <div class="planos-row-price">${escapeHtml(formatCurrencyFromCents(plan.priceCents))}</div>
         </div>
       </div>
@@ -267,8 +270,9 @@ function renderSubscriptionRow(subscription) {
       <div class="planos-row">
         <div class="planos-row-main">
           <div class="planos-row-title">${escapeHtml(subscription.clientName)}</div>
+          <div class="planos-row-sub">${escapeHtml(plan?.name || 'Plano não encontrado')}</div>
           <div class="planos-row-sub">
-            ${escapeHtml(plan?.name || 'Plano não encontrado')} · Próxima cobrança ${escapeHtml(subscription.nextBillingAt)}
+            ${escapeHtml(`Próxima cobrança ${subscription.nextBillingAt} · ${subscription.paymentMethod}`)}
           </div>
         </div>
 
@@ -289,6 +293,8 @@ function renderSubscriptionRow(subscription) {
 }
 
 function renderPlanDetails(plan) {
+  const statusClass = plan.isActive ? 'planos-badge planos-badge--success' : 'planos-badge planos-badge--muted';
+
   return `
     <div class="planos-modal-body">
       <div>
@@ -317,6 +323,9 @@ function renderPlanDetails(plan) {
 
       <div class="planos-modal-info">
         <div class="planos-modal-info-row">
+          <strong>Status:</strong> <span class="${statusClass}">${escapeHtml(plan.isActive ? 'Ativo' : 'Inativo')}</span>
+        </div>
+        <div class="planos-modal-info-row">
           <strong>Taxa de adesão:</strong> ${escapeHtml(formatCurrencyFromCents(plan.signupFeeCents))}
         </div>
         <div class="planos-modal-info-row">
@@ -332,7 +341,9 @@ function renderPlanDetails(plan) {
 
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="planos-modal-close">Fechar</button>
-        <button type="button" class="btn-save" id="planos-edit-button" data-plan-id="${escapeHtml(plan.id)}">Editar plano</button>
+        <button type="button" class="btn-save" id="planos-edit-button" data-plan-id="${escapeHtml(plan.id)}">
+          Editar plano
+        </button>
       </div>
     </div>
   `;
@@ -449,7 +460,9 @@ function renderSubscriptionDetails(subscription) {
         </div>
         <div class="mini-card">
           <div class="mini-lbl">Status</div>
-          <div class="mini-val" style="font-size:15px;color:${statusMeta.color}">${escapeHtml(statusMeta.label)}</div>
+          <div class="mini-val" style="font-size:15px;color:${statusMeta.color}">
+            ${escapeHtml(statusMeta.label)}
+          </div>
         </div>
         <div class="mini-card">
           <div class="mini-lbl">Próxima cobrança</div>
@@ -469,7 +482,8 @@ function renderSubscriptionDetails(subscription) {
           <strong>Saldo de barbas:</strong> ${escapeHtml(String(subscription.remainingBeards))}
         </div>
         <div class="planos-modal-info-row">
-          <strong>Última cobrança:</strong> <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
+          <strong>Última cobrança:</strong>
+          <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
         </div>
       </div>
 
@@ -829,8 +843,13 @@ function bindPlanosModalEvents() {
 }
 
 function bindPlanosStaticEvents() {
-  document.getElementById('planos-new-plan-button')?.addEventListener('click', openCreatePlanModal);
-  document.getElementById('planos-new-subscription-button')?.addEventListener('click', openCreateSubscriptionModal);
+  document.getElementById('planos-new-plan-button')?.addEventListener('click', () => {
+    openCreatePlanModal();
+  });
+
+  document.getElementById('planos-new-subscription-button')?.addEventListener('click', () => {
+    openCreateSubscriptionModal();
+  });
 
   document.getElementById('planos-details-modal')?.addEventListener('click', (event) => {
     if (event.target?.id === 'planos-details-modal') {
