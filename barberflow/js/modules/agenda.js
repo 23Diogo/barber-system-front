@@ -20,6 +20,12 @@ const agendaState = {
   currentAppointments: [],
   subscriptionLookup: {},
   subscriptionErrors: {},
+  consumptionRegistry: {},
+  filters: {
+    status: 'all',
+    barber: 'all',
+    focus: 'all',
+  },
 };
 
 function escapeHtml(value) {
@@ -315,6 +321,41 @@ function getSubscriptionActionState(subscription) {
   return { canConsume: false, message: 'Cliente sem plano elegível para consumo.' };
 }
 
+function getCachedSubscriptionByClient(clientId) {
+  if (!clientId) return null;
+  return agendaState.subscriptionLookup[String(clientId)] || null;
+}
+
+function clearCachedSubscriptionByClient(clientId) {
+  if (!clientId) return;
+  delete agendaState.subscriptionLookup[String(clientId)];
+  delete agendaState.subscriptionErrors[String(clientId)];
+}
+
+function getConsumedTypesForAppointment(appointmentId) {
+  return Array.isArray(agendaState.consumptionRegistry[String(appointmentId)])
+    ? agendaState.consumptionRegistry[String(appointmentId)]
+    : [];
+}
+
+function markAppointmentBenefitAsConsumed(appointmentId, consumedType) {
+  const key = String(appointmentId);
+  const current = getConsumedTypesForAppointment(key);
+
+  if (!current.includes(consumedType)) {
+    agendaState.consumptionRegistry[key] = [...current, consumedType];
+  }
+}
+
+function getConsumedTypeLabel(type) {
+  const map = {
+    haircut: 'corte',
+    beard: 'barba',
+  };
+
+  return map[type] || type;
+}
+
 function evaluateSubscriptionForAppointment(subscription, appointment) {
   if (!subscription) {
     return {
@@ -444,13 +485,27 @@ function evaluateSubscriptionForAppointment(subscription, appointment) {
   };
 }
 
+function getAppointmentUiContext(appointment) {
+  const subscription = getCachedSubscriptionByClient(getClientId(appointment));
+  const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
+  const consumedTypes = getConsumedTypesForAppointment(appointment.id);
+  const hasConsumedInPlan = consumedTypes.length > 0;
+
+  return {
+    subscription,
+    evaluation,
+    consumedTypes,
+    hasConsumedInPlan,
+    consumedLabel: consumedTypes.map(getConsumedTypeLabel).join(' + '),
+    requiresAttention: evaluation.shouldBlockConsumption,
+  };
+}
+
 function createSummary(appointments) {
   return appointments.reduce(
     (acc, appointment) => {
       const meta = getStatusMeta(appointment.status);
       const price = getServicePrice(appointment);
-      const subscription = getCachedSubscriptionByClient(getClientId(appointment));
-      const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
 
       acc.total += 1;
       acc.receivable += price;
@@ -467,10 +522,6 @@ function createSummary(appointments) {
         acc.cancelled += 1;
         acc.receivable -= price;
       }
-
-      if (evaluation.hasPlan) acc.withPlan += 1;
-      if (evaluation.badges.some((badge) => badge.label === 'Inadimplente')) acc.delinquent += 1;
-      if (evaluation.badges.some((badge) => badge.label === 'Plano pausado')) acc.paused += 1;
 
       const barberName = getBarberName(appointment);
       if (!acc.byBarber[barberName]) {
@@ -490,59 +541,54 @@ function createSummary(appointments) {
       cancelled: 0,
       received: 0,
       receivable: 0,
-      withPlan: 0,
-      delinquent: 0,
-      paused: 0,
       byBarber: {},
     },
   );
 }
 
-function getCachedSubscriptionByClient(clientId) {
-  if (!clientId) return null;
-  return agendaState.subscriptionLookup[String(clientId)] || null;
-}
+function getAgendaCounters(appointments) {
+  return appointments.reduce(
+    (acc, appointment) => {
+      const ui = getAppointmentUiContext(appointment);
 
-function clearCachedSubscriptionByClient(clientId) {
-  if (!clientId) return;
-  delete agendaState.subscriptionLookup[String(clientId)];
-  delete agendaState.subscriptionErrors[String(clientId)];
-}
+      acc.total += 1;
+      if (ui.evaluation.hasPlan) acc.withPlan += 1;
+      if (ui.requiresAttention) acc.blocked += 1;
+      if (ui.hasConsumedInPlan) acc.consumed += 1;
 
-async function hydrateSubscriptionsForAppointments(appointments) {
-  const uniqueClientIds = [...new Set(appointments.map(getClientId).filter(Boolean).map(String))];
-
-  if (!uniqueClientIds.length) return;
-
-  await Promise.all(
-    uniqueClientIds.map(async (clientId) => {
-      if (
-        Object.prototype.hasOwnProperty.call(agendaState.subscriptionLookup, clientId) ||
-        Object.prototype.hasOwnProperty.call(agendaState.subscriptionErrors, clientId)
-      ) {
-        return;
-      }
-
-      try {
-        const subscription = await getActiveSubscriptionByClient(clientId);
-        agendaState.subscriptionLookup[clientId] = subscription || null;
-      } catch (error) {
-        agendaState.subscriptionLookup[clientId] = null;
-        agendaState.subscriptionErrors[clientId] =
-          error instanceof Error ? error.message : 'Erro ao carregar plano.';
-      }
-    }),
+      return acc;
+    },
+    {
+      total: 0,
+      withPlan: 0,
+      blocked: 0,
+      consumed: 0,
+    },
   );
 }
 
-function renderPlanBadges(subscription, appointment) {
-  const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
+function renderAppointmentBadges(ui) {
+  const badges = [...ui.evaluation.badges];
 
-  if (!evaluation.badges.length) return '';
+  if (ui.requiresAttention) {
+    badges.push({
+      label: 'Requer atenção',
+      variant: ui.evaluation.messageVariant === 'danger' ? 'danger' : 'warning',
+    });
+  }
+
+  if (ui.hasConsumedInPlan) {
+    badges.push({
+      label: 'Consumido no plano',
+      variant: 'neutral',
+    });
+  }
+
+  if (!badges.length) return '';
 
   return `
     <div class="agenda-badges">
-      ${evaluation.badges
+      ${badges
         .map(
           (badge) => `
             <span class="agenda-badge agenda-badge--${escapeHtml(badge.variant)}">
@@ -555,27 +601,43 @@ function renderPlanBadges(subscription, appointment) {
   `;
 }
 
-function renderAppointmentAlert(subscription, appointment) {
-  const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
-
-  if (!evaluation.shouldShowMessage) return '';
+function renderAppointmentPlanAlert(ui) {
+  if (!ui.evaluation.shouldShowMessage) return '';
 
   return `
-    <div class="agenda-row-alert agenda-row-alert--${escapeHtml(evaluation.messageVariant)}">
-      ${escapeHtml(evaluation.message)}
+    <div class="agenda-row-alert agenda-row-alert--${escapeHtml(ui.evaluation.messageVariant)}">
+      ${escapeHtml(ui.evaluation.message)}
+    </div>
+  `;
+}
+
+function renderAppointmentConsumedAlert(ui) {
+  if (!ui.hasConsumedInPlan) return '';
+
+  return `
+    <div class="agenda-row-alert agenda-row-alert--neutral">
+      Benefício já lançado neste atendimento: ${escapeHtml(ui.consumedLabel)}.
     </div>
   `;
 }
 
 function renderAppointmentRow(appointment) {
   const meta = getStatusMeta(appointment.status);
-  const subscription = getCachedSubscriptionByClient(getClientId(appointment));
-  const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
+  const ui = getAppointmentUiContext(appointment);
+
   const serviceText = `${escapeHtml(getServiceName(appointment))} · ${escapeHtml(getBarberName(appointment))} · ${escapeHtml(formatCurrency(getServicePrice(appointment)))}`;
+
+  const rowClasses = [
+    'appt-row',
+    ui.evaluation.shouldHighlightRow ? `appt-row--plan-${ui.evaluation.messageVariant}` : '',
+    ui.hasConsumedInPlan ? 'appt-row--consumed' : '',
+  ]
+    .filter(Boolean)
+    .join(' ');
 
   return `
     <div
-      class="appt-row ${evaluation.shouldHighlightRow ? `appt-row--plan-${escapeHtml(evaluation.messageVariant)}` : ''}"
+      class="${rowClasses}"
       data-appointment-id="${escapeHtml(appointment.id)}"
       role="button"
       tabindex="0"
@@ -586,8 +648,9 @@ function renderAppointmentRow(appointment) {
       <div class="appt-info">
         <div class="appt-client">${escapeHtml(getClientName(appointment))}</div>
         <div class="appt-svc">${serviceText}</div>
-        ${renderPlanBadges(subscription, appointment)}
-        ${renderAppointmentAlert(subscription, appointment)}
+        ${renderAppointmentBadges(ui)}
+        ${renderAppointmentPlanAlert(ui)}
+        ${renderAppointmentConsumedAlert(ui)}
       </div>
       <div class="status-pill" style="background:${meta.pillBg};color:${meta.text}">${meta.label}</div>
     </div>
@@ -628,20 +691,24 @@ function renderBarberPerformance(summary) {
     .join('');
 }
 
-function renderSummaryPanel(summary) {
+function renderSummaryPanel(summary, counters) {
   return `
     <div class="card-header"><div class="card-title">Resumo do Dia</div></div>
+
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
       <div class="mini-card"><div class="mini-val" style="color:#00e676">${summary.completed}</div><div class="mini-lbl">Concluídos</div></div>
       <div class="mini-card"><div class="mini-val" style="color:#4fc3f7">${summary.inProgress}</div><div class="mini-lbl">Em andamento</div></div>
       <div class="mini-card"><div class="mini-val" style="color:#ffd700">${escapeHtml(formatCurrency(summary.received))}</div><div class="mini-lbl">Recebido</div></div>
       <div class="mini-card"><div class="mini-val" style="color:#5a6888">${escapeHtml(formatCurrency(Math.max(summary.receivable - summary.received, 0)))}</div><div class="mini-lbl">A receber</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:14px">
-      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#4fc3f7">${summary.withPlan}</div><div class="mini-lbl">Com plano</div></div>
-      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#ff6b6b">${summary.delinquent}</div><div class="mini-lbl">Inadimplentes</div></div>
-      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#f97316">${summary.paused}</div><div class="mini-lbl">Planos pausados</div></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
+      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#4fc3f7">${counters.withPlan}</div><div class="mini-lbl">Com plano</div></div>
+      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#ff6b81">${counters.blocked}</div><div class="mini-lbl">Bloqueados</div></div>
+      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#94a3b8">${counters.consumed}</div><div class="mini-lbl">Consumidos</div></div>
+      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#c0cce8">${counters.total}</div><div class="mini-lbl">Total do dia</div></div>
     </div>
+
     <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;margin-bottom:8px">Por barbeiro</div>
     ${renderBarberPerformance(summary)}
   `;
@@ -736,12 +803,15 @@ function renderStatusActions(appointment) {
 }
 
 function renderConsumptionButtons(evaluation, subscription, appointment) {
-  if (!evaluation.eligibleConsumeTypes.length) return '';
+  const consumedTypes = getConsumedTypesForAppointment(appointment.id);
+  const availableTypes = evaluation.eligibleConsumeTypes.filter((type) => !consumedTypes.includes(type));
+
   if (appointment.status === 'cancelled' || appointment.status === 'no_show') return '';
+  if (!evaluation.canConsumeForAppointment && !consumedTypes.length) return '';
 
   const buttons = [];
 
-  if (evaluation.eligibleConsumeTypes.includes('haircut')) {
+  if (availableTypes.includes('haircut')) {
     buttons.push(`
       <button
         type="button"
@@ -756,7 +826,7 @@ function renderConsumptionButtons(evaluation, subscription, appointment) {
     `);
   }
 
-  if (evaluation.eligibleConsumeTypes.includes('beard')) {
+  if (availableTypes.includes('beard')) {
     buttons.push(`
       <button
         type="button"
@@ -771,13 +841,26 @@ function renderConsumptionButtons(evaluation, subscription, appointment) {
     `);
   }
 
+  const alreadyConsumedNote = consumedTypes.length
+    ? `
+      <div class="row-sub" style="padding:0;color:#5a6888;font-size:10px;">
+        Já consumido neste atendimento: ${escapeHtml(consumedTypes.map(getConsumedTypeLabel).join(' + '))}.
+      </div>
+    `
+    : '';
+
+  if (!buttons.length) {
+    return alreadyConsumedNote;
+  }
+
   return `
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
       ${buttons.join('')}
     </div>
+    ${alreadyConsumedNote}
     ${
-      evaluation.requirement?.type === 'combo' && buttons.length === 2
-        ? '<div class="row-sub" style="padding:0;color:#5a6888;font-size:10px;">Atendimento combo detectado: consuma corte e barba separadamente.</div>'
+      evaluation.requirement?.type === 'combo' && buttons.length >= 1
+        ? '<div class="row-sub" style="padding:0;color:#5a6888;font-size:10px;">Atendimento combo detectado: lance corte e barba separadamente quando necessário.</div>'
         : ''
     }
   `;
@@ -796,8 +879,6 @@ function renderSubscriptionPanel(subscription, appointment) {
   const statusMeta = getSubscriptionStatusMeta(subscription.status);
   const invoiceMeta = getInvoiceStatusMeta(invoice?.status || 'pending');
   const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
-
-  const alertBoxClass = `agenda-plan-message agenda-plan-message--${escapeHtml(evaluation.messageVariant)}`;
 
   return `
     <div style="display:grid;grid-template-columns:1fr;gap:8px;">
@@ -818,15 +899,7 @@ function renderSubscriptionPanel(subscription, appointment) {
       </div>
 
       <div class="agenda-badges" style="margin-top:0;">
-        ${evaluation.badges
-          .map(
-            (badge) => `
-              <span class="agenda-badge agenda-badge--${escapeHtml(badge.variant)}">
-                ${escapeHtml(badge.label)}
-              </span>
-            `,
-          )
-          .join('')}
+        ${renderAppointmentBadges(getAppointmentUiContext(appointment))}
       </div>
 
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
@@ -840,10 +913,11 @@ function renderSubscriptionPanel(subscription, appointment) {
         </div>
       </div>
 
-      <div class="${alertBoxClass}">
+      <div class="agenda-plan-message agenda-plan-message--${escapeHtml(evaluation.messageVariant)}">
         ${escapeHtml(evaluation.message)}
       </div>
 
+      ${renderAppointmentConsumedAlert(getAppointmentUiContext(appointment))}
       ${renderConsumptionButtons(evaluation, subscription, appointment)}
     </div>
   `;
@@ -938,6 +1012,32 @@ async function getAppointmentSubscription(appointment) {
   const subscription = await getActiveSubscriptionByClient(clientId);
   agendaState.subscriptionLookup[cacheKey] = subscription || null;
   return agendaState.subscriptionLookup[cacheKey];
+}
+
+async function hydrateSubscriptionsForAppointments(appointments) {
+  const uniqueClientIds = [...new Set(appointments.map(getClientId).filter(Boolean).map(String))];
+
+  if (!uniqueClientIds.length) return;
+
+  await Promise.all(
+    uniqueClientIds.map(async (clientId) => {
+      if (
+        Object.prototype.hasOwnProperty.call(agendaState.subscriptionLookup, clientId) ||
+        Object.prototype.hasOwnProperty.call(agendaState.subscriptionErrors, clientId)
+      ) {
+        return;
+      }
+
+      try {
+        const subscription = await getActiveSubscriptionByClient(clientId);
+        agendaState.subscriptionLookup[clientId] = subscription || null;
+      } catch (error) {
+        agendaState.subscriptionLookup[clientId] = null;
+        agendaState.subscriptionErrors[clientId] =
+          error instanceof Error ? error.message : 'Erro ao carregar plano.';
+      }
+    }),
+  );
 }
 
 async function openAppointmentDetails(appointmentId) {
@@ -1193,7 +1293,11 @@ async function handleConsumeSubscriptionBenefit(subscriptionId, appointmentId, c
       notes: 'Consumo manual pela agenda',
     });
 
-    if (appointment) clearCachedSubscriptionByClient(getClientId(appointment));
+    markAppointmentBenefitAsConsumed(appointmentId, consumedType);
+
+    if (appointment) {
+      clearCachedSubscriptionByClient(getClientId(appointment));
+    }
 
     setAppointmentDetailsFeedback('Benefício consumido com sucesso.', 'success');
 
@@ -1237,6 +1341,205 @@ async function handleOpenCreateModal() {
   await populateCreateModal();
 }
 
+function getBarberFilterOptions(appointments) {
+  return [...new Set(appointments.map(getBarberName).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+}
+
+function ensureValidAgendaFilters(appointments) {
+  const barberOptions = getBarberFilterOptions(appointments);
+
+  if (
+    agendaState.filters.barber !== 'all' &&
+    !barberOptions.includes(agendaState.filters.barber)
+  ) {
+    agendaState.filters.barber = 'all';
+  }
+}
+
+function applyAgendaFilters(appointments) {
+  return appointments.filter((appointment) => {
+    const ui = getAppointmentUiContext(appointment);
+
+    if (agendaState.filters.status !== 'all' && appointment.status !== agendaState.filters.status) {
+      return false;
+    }
+
+    if (agendaState.filters.barber !== 'all' && getBarberName(appointment) !== agendaState.filters.barber) {
+      return false;
+    }
+
+    if (agendaState.filters.focus === 'withPlan' && !ui.evaluation.hasPlan) {
+      return false;
+    }
+
+    if (agendaState.filters.focus === 'blocked' && !ui.requiresAttention) {
+      return false;
+    }
+
+    if (agendaState.filters.focus === 'consumed' && !ui.hasConsumedInPlan) {
+      return false;
+    }
+
+    return true;
+  });
+}
+
+function renderAgendaToolbar(appointments, counters, filteredCount) {
+  const barberOptions = getBarberFilterOptions(appointments);
+
+  return `
+    <div class="agenda-toolbar">
+      <div class="agenda-focus-chips">
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'all' ? 'is-active' : ''}" data-focus-filter="all">
+          Todos <span>${counters.total}</span>
+        </button>
+
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'withPlan' ? 'is-active' : ''}" data-focus-filter="withPlan">
+          Com plano <span>${counters.withPlan}</span>
+        </button>
+
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'blocked' ? 'is-active' : ''}" data-focus-filter="blocked">
+          Bloqueados <span>${counters.blocked}</span>
+        </button>
+
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'consumed' ? 'is-active' : ''}" data-focus-filter="consumed">
+          Consumidos <span>${counters.consumed}</span>
+        </button>
+      </div>
+
+      <div class="agenda-filter-row">
+        <div class="agenda-filter-field">
+          <label for="agenda-filter-status">Status</label>
+          <select id="agenda-filter-status" class="agenda-filter-select">
+            <option value="all" ${agendaState.filters.status === 'all' ? 'selected' : ''}>Todos</option>
+            <option value="pending" ${agendaState.filters.status === 'pending' ? 'selected' : ''}>Agendado</option>
+            <option value="confirmed" ${agendaState.filters.status === 'confirmed' ? 'selected' : ''}>Confirmado</option>
+            <option value="in_progress" ${agendaState.filters.status === 'in_progress' ? 'selected' : ''}>Em andamento</option>
+            <option value="completed" ${agendaState.filters.status === 'completed' ? 'selected' : ''}>Concluído</option>
+            <option value="cancelled" ${agendaState.filters.status === 'cancelled' ? 'selected' : ''}>Cancelado</option>
+            <option value="no_show" ${agendaState.filters.status === 'no_show' ? 'selected' : ''}>No-show</option>
+          </select>
+        </div>
+
+        <div class="agenda-filter-field">
+          <label for="agenda-filter-barber">Barbeiro</label>
+          <select id="agenda-filter-barber" class="agenda-filter-select">
+            <option value="all">Todos</option>
+            ${barberOptions
+              .map(
+                (barber) => `
+                  <option value="${escapeHtml(barber)}" ${agendaState.filters.barber === barber ? 'selected' : ''}>
+                    ${escapeHtml(barber)}
+                  </option>
+                `,
+              )
+              .join('')}
+          </select>
+        </div>
+      </div>
+
+      <div class="agenda-filter-result">
+        Exibindo <strong>${filteredCount}</strong> de <strong>${appointments.length}</strong> atendimentos.
+      </div>
+    </div>
+  `;
+}
+
+function renderFilteredEmptyState() {
+  return `
+    <div class="agenda-filter-empty">
+      Nenhum atendimento encontrado com os filtros aplicados.
+    </div>
+  `;
+}
+
+function bindAgendaListInteractions() {
+  document.getElementById('agenda-refresh-action')?.addEventListener('click', () => {
+    loadAgendaForDate(agendaState.currentDate);
+  });
+
+  document.getElementById('agenda-new-action')?.addEventListener('click', handleOpenCreateModal);
+
+  document.querySelectorAll('.appt-row[data-appointment-id]').forEach((row) => {
+    row.addEventListener('click', () => {
+      openAppointmentDetails(row.dataset.appointmentId);
+    });
+
+    row.addEventListener('keydown', (event) => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        openAppointmentDetails(row.dataset.appointmentId);
+      }
+    });
+  });
+
+  document.getElementById('agenda-filter-status')?.addEventListener('change', (event) => {
+    agendaState.filters.status = event.target.value || 'all';
+    renderAgendaData();
+  });
+
+  document.getElementById('agenda-filter-barber')?.addEventListener('change', (event) => {
+    agendaState.filters.barber = event.target.value || 'all';
+    renderAgendaData();
+  });
+
+  document.querySelectorAll('[data-focus-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+      agendaState.filters.focus = button.dataset.focusFilter || 'all';
+      renderAgendaData();
+    });
+  });
+}
+
+function renderAgendaData() {
+  const listContainer = document.getElementById('agenda-list-container');
+  const summaryContainer = document.getElementById('agenda-summary-container');
+
+  if (!listContainer || !summaryContainer) return;
+
+  const appointments = Array.isArray(agendaState.currentAppointments) ? agendaState.currentAppointments : [];
+
+  if (!appointments.length) {
+    listContainer.innerHTML = renderEmptyState('Nenhum agendamento encontrado para a data selecionada.');
+    summaryContainer.innerHTML = renderEmptyState('Sem dados para resumir nesta data.');
+    return;
+  }
+
+  ensureValidAgendaFilters(appointments);
+
+  const counters = getAgendaCounters(appointments);
+  const summary = createSummary(appointments);
+  const filteredAppointments = applyAgendaFilters(appointments);
+
+  listContainer.innerHTML = `
+    <div class="card">
+      <div class="card-header">
+        <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(agendaState.currentDate))}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button class="btn-primary-gradient" id="agenda-new-action" type="button">
+            + Novo agendamento
+          </button>
+          <button class="btn-primary-gradient" id="agenda-refresh-action" type="button">
+            Atualizar
+          </button>
+        </div>
+      </div>
+
+      ${renderAgendaToolbar(appointments, counters, filteredAppointments.length)}
+
+      ${
+        filteredAppointments.length
+          ? filteredAppointments.map(renderAppointmentRow).join('')
+          : renderFilteredEmptyState()
+      }
+    </div>
+  `;
+
+  summaryContainer.innerHTML = `<div class="card">${renderSummaryPanel(summary, counters)}</div>`;
+
+  bindAgendaListInteractions();
+}
+
 async function loadAgendaForDate(dateValue) {
   agendaState.currentDate = dateValue;
 
@@ -1277,53 +1580,8 @@ async function loadAgendaForDate(dateValue) {
     const safeAppointments = Array.isArray(appointments) ? appointments : [];
     agendaState.currentAppointments = safeAppointments;
 
-    if (!safeAppointments.length) {
-      listContainer.innerHTML = renderEmptyState('Nenhum agendamento encontrado para a data selecionada.');
-      summaryContainer.innerHTML = renderEmptyState('Sem dados para resumir nesta data.');
-      return;
-    }
-
     await hydrateSubscriptionsForAppointments(safeAppointments);
-
-    const summary = createSummary(safeAppointments);
-
-    listContainer.innerHTML = `
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(dateValue))}</div>
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <button class="btn-primary-gradient" id="agenda-new-action" type="button">
-              + Novo agendamento
-            </button>
-            <button class="btn-primary-gradient" id="agenda-refresh-action" type="button">
-              Atualizar
-            </button>
-          </div>
-        </div>
-        ${safeAppointments.map(renderAppointmentRow).join('')}
-      </div>
-    `;
-
-    summaryContainer.innerHTML = `<div class="card">${renderSummaryPanel(summary)}</div>`;
-
-    document.getElementById('agenda-refresh-action')?.addEventListener('click', () => {
-      loadAgendaForDate(dateValue);
-    });
-
-    document.getElementById('agenda-new-action')?.addEventListener('click', handleOpenCreateModal);
-
-    document.querySelectorAll('.appt-row[data-appointment-id]').forEach((row) => {
-      row.addEventListener('click', () => {
-        openAppointmentDetails(row.dataset.appointmentId);
-      });
-
-      row.addEventListener('keydown', (event) => {
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          openAppointmentDetails(row.dataset.appointmentId);
-        }
-      });
-    });
+    renderAgendaData();
   } catch (error) {
     agendaState.currentAppointments = [];
     const message = error instanceof Error ? error.message : 'Não foi possível carregar a agenda.';
