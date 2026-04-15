@@ -32,7 +32,7 @@ function ensureDashboardWidgets() {
           <div class="ac-title">Recorrência</div>
           <div class="widget-actions">
             <span class="widget-open">abrir ↗</span>
-            <button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button>
+            <button aria-label="Fechar widget" class="widget-close" data-widget-close type="button">×</button>
           </div>
         </div>
         <div id="dashboardRecorrenciaContent"></div>
@@ -50,7 +50,7 @@ function ensureDashboardWidgets() {
           <div class="ac-title">Alertas operacionais</div>
           <div class="widget-actions">
             <span class="widget-open">abrir ↗</span>
-            <button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button>
+            <button aria-label="Fechar widget" class="widget-close" data-widget-close type="button">×</button>
           </div>
         </div>
         <div id="dashboardAlertasContent"></div>
@@ -60,19 +60,10 @@ function ensureDashboardWidgets() {
   );
 }
 
-function formatCurrencyFromCents(cents) {
-  const amount = Number(cents || 0) / 100;
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    maximumFractionDigits: 0,
-  }).format(amount);
-}
-
 function formatCompactCurrencyFromCents(cents) {
   const amount = Number(cents || 0) / 100;
   if (amount >= 1000) return `R$${amount.toFixed(1)}k`;
-  return formatCurrencyFromCents(cents);
+  return `R$${amount.toFixed(0)}`;
 }
 
 function getDateKey(value) {
@@ -124,7 +115,6 @@ function flattenInvoices(subscriptions) {
         ...invoice,
         __clientName: subscription?.clients?.name || 'Cliente',
         __planName: subscription?.plans?.name || 'Plano',
-        __subscriptionStatus: subscription?.status || '',
       });
     });
   });
@@ -177,13 +167,7 @@ function buildDashboardSnapshot(subscriptionsPayload, appointmentsPayload) {
     (invoice) => invoice?.status === 'pending' && invoice?.due_at && isBeforeToday(invoice.due_at)
   );
 
-  const failedInvoices = invoices
-    .filter((invoice) => invoice?.status === 'failed')
-    .sort((a, b) => {
-      const aTime = new Date(a?.updated_at || a?.created_at || a?.due_at || 0).getTime();
-      const bTime = new Date(b?.updated_at || b?.created_at || b?.due_at || 0).getTime();
-      return bTime - aTime;
-    });
+  const failedInvoices = invoices.filter((invoice) => invoice?.status === 'failed');
 
   const validSubscriptionStatuses = new Set([
     'active',
@@ -209,8 +193,6 @@ function buildDashboardSnapshot(subscriptionsPayload, appointmentsPayload) {
       subscribedClientIds.has(String(appointment.client_id))
   );
 
-  const topPlans = groupTopPlans(subscriptions);
-
   return {
     activeSubscriptionsCount: activeSubscriptions.length,
     pendingSubscriptionsCount: pendingSubscriptions.length,
@@ -220,10 +202,7 @@ function buildDashboardSnapshot(subscriptionsPayload, appointmentsPayload) {
     overdueCount: overdueInvoices.length,
     appointmentsWithPlanTodayCount: appointmentsWithPlanToday.length,
     failedCount: failedInvoices.length,
-    dueTodayInvoices: dueTodayInvoices.slice(0, 3),
-    failedInvoices: failedInvoices.slice(0, 3),
-    planAppointments: appointmentsWithPlanToday.slice(0, 3),
-    topPlans,
+    topPlans: groupTopPlans(subscriptions),
     updatedAtLabel: new Date().toLocaleTimeString('pt-BR', {
       hour: '2-digit',
       minute: '2-digit',
@@ -231,142 +210,195 @@ function buildDashboardSnapshot(subscriptionsPayload, appointmentsPayload) {
   };
 }
 
-function renderWidgetState(message, tone = 'neutral') {
+function getBarHeight(value, maxValue) {
+  if (maxValue <= 0) return 16;
+  const minHeight = 18;
+  const maxHeight = 52;
+  return Math.round(minHeight + (value / maxValue) * (maxHeight - minHeight));
+}
+
+function renderBars(items) {
+  const maxValue = Math.max(...items.map((item) => Number(item.value || 0)), 1);
+
   return `
-    <div class="dashboard-widget-note dashboard-widget-note--${tone}">
-      ${message}
+    <div class="bar-chart">
+      ${items
+        .map(
+          (item) => `
+            <div
+              class="bar-col"
+              style="height:${getBarHeight(item.value, maxValue)}px;background:${item.color};"
+              title="${item.label}: ${item.value}"
+            ></div>
+          `
+        )
+        .join('')}
+    </div>
+    <div class="data-nums">
+      ${items.map((item) => `<span>${item.short}</span>`).join('')}
+    </div>
+  `;
+}
+
+function renderMetricRows(items) {
+  const maxValue = Math.max(...items.map((item) => Number(item.value || 0)), 1);
+
+  return items
+    .map((item) => {
+      const width = maxValue ? Math.max((Number(item.value || 0) / maxValue) * 100, item.value > 0 ? 12 : 0) : 0;
+
+      return `
+        <div class="data-row">
+          <div class="data-name">${item.label}</div>
+          <div class="data-bar">
+            <div class="data-fill" style="width:${width}%;background:${item.fill || 'linear-gradient(90deg,#4fc3f7,#9c6fff)'}"></div>
+          </div>
+          <div class="data-val" style="${item.valueColor ? `color:${item.valueColor};` : ''}">
+            ${item.displayValue ?? item.value}
+          </div>
+        </div>
+      `;
+    })
+    .join('');
+}
+
+function renderTopPlanRows(topPlans) {
+  if (!topPlans.length) {
+    return `
+      <div class="data-row">
+        <div class="data-name" style="min-width:110px;">Top planos</div>
+        <div class="data-bar">
+          <div class="data-fill" style="width:18%;background:linear-gradient(90deg,#4fc3f7,#9c6fff)"></div>
+        </div>
+        <div class="data-val">—</div>
+      </div>
+    `;
+  }
+
+  return topPlans
+    .map((item) => `
+      <div class="data-row">
+        <div class="data-name" style="min-width:110px;">${item.planName}</div>
+        <div class="data-bar">
+          <div class="data-fill" style="width:${Math.min(item.count * 22, 100)}%;background:linear-gradient(90deg,#4fc3f7,#9c6fff)"></div>
+        </div>
+        <div class="data-val">${item.count}</div>
+      </div>
+    `)
+    .join('');
+}
+
+function renderLoadingCard(title) {
+  return `
+    <div class="ac-value">...</div>
+    <div class="ac-sub">Carregando ${title.toLowerCase()}...</div>
+    <div class="data-row">
+      <div class="data-name">Aguarde</div>
+      <div class="data-bar">
+        <div class="data-fill" style="width:38%"></div>
+      </div>
+      <div class="data-val">•</div>
+    </div>
+  `;
+}
+
+function renderMessageCard(message, color = '#5a6888') {
+  return `
+    <div class="ac-value">—</div>
+    <div class="ac-sub" style="color:${color}">${message}</div>
+    <div class="data-row">
+      <div class="data-name">Status</div>
+      <div class="data-bar">
+        <div class="data-fill" style="width:24%;background:linear-gradient(90deg,#4fc3f7,#9c6fff)"></div>
+      </div>
+      <div class="data-val">OK</div>
     </div>
   `;
 }
 
 function renderRecorrencia(snapshot) {
-  const topPlansMarkup = snapshot.topPlans.length
-    ? snapshot.topPlans
-        .map(
-          (item) => `
-            <div class="dashboard-widget-row">
-              <div class="dashboard-widget-row-main">
-                <div class="dashboard-widget-row-title">${item.planName}</div>
-                <div class="dashboard-widget-row-sub">Plano com mais assinaturas ativas</div>
-              </div>
-              <div class="dashboard-widget-chip">${item.count}</div>
-            </div>
-          `
-        )
-        .join('')
-    : `<div class="dashboard-widget-empty">Ainda não há planos ativos suficientes para montar o ranking.</div>`;
+  const barItems = [
+    { short: 'Atv', label: 'Ativas', value: snapshot.activeSubscriptionsCount, color: 'linear-gradient(180deg,#4fc3f7,#38bdf8)' },
+    { short: 'Pnd', label: 'Pendentes', value: snapshot.pendingSubscriptionsCount, color: 'linear-gradient(180deg,#9c6fff,#7c3aed)' },
+    { short: 'Ina', label: 'Inadimplentes', value: snapshot.pastDueSubscriptionsCount, color: 'linear-gradient(180deg,#ff6b7a,#ff1744)' },
+    { short: 'R$', label: 'Receita', value: Math.max(Math.round(snapshot.recurringRevenueCents / 100), 0), color: 'linear-gradient(180deg,#00e676,#10b981)' },
+  ];
+
+  const metricRows = renderMetricRows([
+    {
+      label: 'Ativas',
+      value: snapshot.activeSubscriptionsCount,
+      fill: 'linear-gradient(90deg,#4fc3f7,#38bdf8)',
+    },
+    {
+      label: 'Inadimpl.',
+      value: snapshot.pastDueSubscriptionsCount,
+      fill: 'linear-gradient(90deg,#ff6b7a,#ff1744)',
+      valueColor: '#ff6b7a',
+    },
+    {
+      label: 'Pendentes',
+      value: snapshot.pendingSubscriptionsCount,
+      fill: 'linear-gradient(90deg,#9c6fff,#7c3aed)',
+    },
+    {
+      label: 'Previsto',
+      value: Math.round(snapshot.recurringRevenueCents / 100),
+      displayValue: formatCompactCurrencyFromCents(snapshot.recurringRevenueCents),
+      fill: 'linear-gradient(90deg,#00e676,#10b981)',
+      valueColor: '#00e676',
+    },
+  ]);
 
   return `
     <div class="ac-value">${formatCompactCurrencyFromCents(snapshot.recurringRevenueCents)}</div>
     <div class="ac-sub">${snapshot.activeSubscriptionsCount} ativas · ${snapshot.pendingSubscriptionsCount} pendentes</div>
-
-    <div class="dashboard-widget-grid">
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Ativas</div>
-        <div class="dashboard-widget-stat-value">${snapshot.activeSubscriptionsCount}</div>
-      </div>
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Inadimplentes</div>
-        <div class="dashboard-widget-stat-value is-danger">${snapshot.pastDueSubscriptionsCount}</div>
-      </div>
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Pendentes</div>
-        <div class="dashboard-widget-stat-value is-info">${snapshot.pendingSubscriptionsCount}</div>
-      </div>
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Previsto</div>
-        <div class="dashboard-widget-stat-value is-success">${formatCompactCurrencyFromCents(snapshot.recurringRevenueCents)}</div>
-      </div>
-    </div>
-
-    <div class="dashboard-widget-section-title">Top planos ativos</div>
-    <div class="dashboard-widget-list">
-      ${topPlansMarkup}
-    </div>
-
-    <div class="dashboard-widget-footnote">Atualizado às ${snapshot.updatedAtLabel}</div>
+    ${renderBars(barItems)}
+    ${metricRows}
+    ${renderTopPlanRows(snapshot.topPlans)}
+    <div class="ac-title" style="margin-top:8px;">Atualizado às ${snapshot.updatedAtLabel}</div>
   `;
 }
 
 function renderAlertas(snapshot) {
-  const priorityRows = [];
+  const barItems = [
+    { short: 'Hoje', label: 'Vencem hoje', value: snapshot.dueTodayCount, color: 'linear-gradient(180deg,#f59e0b,#fb923c)' },
+    { short: 'Venc', label: 'Vencidas', value: snapshot.overdueCount, color: 'linear-gradient(180deg,#ff6b7a,#ff1744)' },
+    { short: 'Plano', label: 'Plano hoje', value: snapshot.appointmentsWithPlanTodayCount, color: 'linear-gradient(180deg,#4fc3f7,#38bdf8)' },
+    { short: 'Falha', label: 'Falhas', value: snapshot.failedCount, color: 'linear-gradient(180deg,#9c6fff,#7c3aed)' },
+  ];
 
-  if (snapshot.dueTodayInvoices.length) {
-    snapshot.dueTodayInvoices.forEach((invoice) => {
-      priorityRows.push(`
-        <div class="dashboard-widget-row">
-          <div class="dashboard-widget-row-main">
-            <div class="dashboard-widget-row-title">${invoice.__clientName}</div>
-            <div class="dashboard-widget-row-sub">Cobrança vence hoje · ${invoice.__planName}</div>
-          </div>
-          <div class="dashboard-widget-chip is-warning">Hoje</div>
-        </div>
-      `);
-    });
-  }
-
-  if (!priorityRows.length && snapshot.failedInvoices.length) {
-    snapshot.failedInvoices.forEach((invoice) => {
-      priorityRows.push(`
-        <div class="dashboard-widget-row">
-          <div class="dashboard-widget-row-main">
-            <div class="dashboard-widget-row-title">${invoice.__clientName}</div>
-            <div class="dashboard-widget-row-sub">Falha recente · ${invoice.__planName}</div>
-          </div>
-          <div class="dashboard-widget-chip is-danger">Falha</div>
-        </div>
-      `);
-    });
-  }
-
-  if (!priorityRows.length && snapshot.planAppointments.length) {
-    snapshot.planAppointments.forEach((appointment) => {
-      const clientName = appointment?.clients?.name || 'Cliente';
-      priorityRows.push(`
-        <div class="dashboard-widget-row">
-          <div class="dashboard-widget-row-main">
-            <div class="dashboard-widget-row-title">${clientName}</div>
-            <div class="dashboard-widget-row-sub">Atendimento hoje com plano</div>
-          </div>
-          <div class="dashboard-widget-chip is-info">Agenda</div>
-        </div>
-      `);
-    });
-  }
-
-  const listMarkup = priorityRows.length
-    ? priorityRows.join('')
-    : `<div class="dashboard-widget-empty">Nenhum alerta operacional crítico neste momento.</div>`;
+  const metricRows = renderMetricRows([
+    {
+      label: 'Vencem hoje',
+      value: snapshot.dueTodayCount,
+      fill: 'linear-gradient(90deg,#f59e0b,#fb923c)',
+      valueColor: '#f59e0b',
+    },
+    {
+      label: 'Vencidas',
+      value: snapshot.overdueCount,
+      fill: 'linear-gradient(90deg,#ff6b7a,#ff1744)',
+      valueColor: '#ff6b7a',
+    },
+    {
+      label: 'Plano hoje',
+      value: snapshot.appointmentsWithPlanTodayCount,
+      fill: 'linear-gradient(90deg,#4fc3f7,#38bdf8)',
+    },
+    {
+      label: 'Falhas',
+      value: snapshot.failedCount,
+      fill: 'linear-gradient(90deg,#9c6fff,#7c3aed)',
+    },
+  ]);
 
   return `
     <div class="ac-value">${snapshot.dueTodayCount}</div>
     <div class="ac-sub">${snapshot.overdueCount} vencidas · ${snapshot.appointmentsWithPlanTodayCount} com plano hoje</div>
-
-    <div class="dashboard-widget-grid">
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Vencem hoje</div>
-        <div class="dashboard-widget-stat-value is-warning">${snapshot.dueTodayCount}</div>
-      </div>
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Vencidas</div>
-        <div class="dashboard-widget-stat-value is-danger">${snapshot.overdueCount}</div>
-      </div>
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Plano hoje</div>
-        <div class="dashboard-widget-stat-value is-info">${snapshot.appointmentsWithPlanTodayCount}</div>
-      </div>
-      <div class="dashboard-widget-stat">
-        <div class="dashboard-widget-stat-label">Falhas</div>
-        <div class="dashboard-widget-stat-value">${snapshot.failedCount}</div>
-      </div>
-    </div>
-
-    <div class="dashboard-widget-section-title">Prioridades do momento</div>
-    <div class="dashboard-widget-list">
-      ${listMarkup}
-    </div>
-
-    <div class="dashboard-widget-footnote">Atualizado às ${snapshot.updatedAtLabel}</div>
+    ${renderBars(barItems)}
+    ${metricRows}
+    <div class="ac-title" style="margin-top:8px;">Atualizado às ${snapshot.updatedAtLabel}</div>
   `;
 }
 
@@ -375,8 +407,8 @@ function setDashboardWidgetsLoading() {
   const alertas = document.getElementById('dashboardAlertasContent');
   if (!recorrencia || !alertas) return;
 
-  recorrencia.innerHTML = renderWidgetState('Carregando indicadores de recorrência...', 'neutral');
-  alertas.innerHTML = renderWidgetState('Carregando alertas operacionais...', 'neutral');
+  recorrencia.innerHTML = renderLoadingCard('recorrência');
+  alertas.innerHTML = renderLoadingCard('alertas');
 }
 
 function setDashboardWidgetsMessage(message, tone = 'neutral') {
@@ -384,8 +416,9 @@ function setDashboardWidgetsMessage(message, tone = 'neutral') {
   const alertas = document.getElementById('dashboardAlertasContent');
   if (!recorrencia || !alertas) return;
 
-  recorrencia.innerHTML = renderWidgetState(message, tone);
-  alertas.innerHTML = renderWidgetState(message, tone);
+  const color = tone === 'error' ? '#ff8a8a' : '#5a6888';
+  recorrencia.innerHTML = renderMessageCard(message, color);
+  alertas.innerHTML = renderMessageCard(message, color);
 }
 
 async function refreshDashboardWidgets() {
@@ -396,12 +429,12 @@ async function refreshDashboardWidgets() {
   if (!recorrencia || !alertas) return;
 
   if (!hasApiConfig()) {
-    setDashboardWidgetsMessage('Configure a URL da API no login dev para exibir os indicadores reais.', 'neutral');
+    setDashboardWidgetsMessage('Configure a API no login dev para exibir os indicadores reais.');
     return;
   }
 
   if (!hasAuthToken()) {
-    setDashboardWidgetsMessage('Faça login dev para carregar os indicadores de recorrência e alertas.', 'neutral');
+    setDashboardWidgetsMessage('Faça login dev para carregar recorrência e alertas.');
     return;
   }
 
