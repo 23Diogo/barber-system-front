@@ -220,6 +220,30 @@ export async function updateSubscription(subscriptionId, payload) {
   });
 }
 
+export async function activateSubscription(subscriptionId) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/activate`, {
+    method: 'POST',
+  });
+}
+
+export async function pauseSubscription(subscriptionId) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/pause`, {
+    method: 'POST',
+  });
+}
+
+export async function reactivateSubscription(subscriptionId) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/reactivate`, {
+    method: 'POST',
+  });
+}
+
+export async function cancelSubscription(subscriptionId) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/cancel`, {
+    method: 'POST',
+  });
+}
+
 export async function generateNextSubscriptionCycle(subscriptionId, payload = {}) {
   return apiFetch(`/api/subscriptions/${subscriptionId}/generate-next-cycle`, {
     method: 'POST',
@@ -246,6 +270,24 @@ export async function createManualInvoice(payload) {
   return apiFetch('/api/payments/invoices/manual', {
     method: 'POST',
     body: JSON.stringify(payload),
+  });
+}
+
+export async function markInvoicePaid(invoiceId) {
+  return apiFetch(`/api/payments/invoices/${invoiceId}/mark-paid`, {
+    method: 'POST',
+  });
+}
+
+export async function markInvoiceFailed(invoiceId) {
+  return apiFetch(`/api/payments/invoices/${invoiceId}/mark-failed`, {
+    method: 'POST',
+  });
+}
+
+export async function cancelInvoice(invoiceId) {
+  return apiFetch(`/api/payments/invoices/${invoiceId}/cancel`, {
+    method: 'POST',
   });
 }
 
@@ -279,9 +321,16 @@ window.BarberFlowApi = {
   getActiveSubscriptionByClient,
   createSubscription,
   updateSubscription,
+  activateSubscription,
+  pauseSubscription,
+  reactivateSubscription,
+  cancelSubscription,
   generateNextSubscriptionCycle,
   consumeSubscriptionBenefit,
 
   getSubscriptionInvoices,
   createManualInvoice,
+  markInvoicePaid,
+  markInvoiceFailed,
+  cancelInvoice,
 };
