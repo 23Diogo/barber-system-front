@@ -309,6 +309,17 @@ export async function cancelInvoice(invoiceId) {
   });
 }
 
+/* =========================
+   MERCADO PAGO
+========================= */
+
+export async function createMercadoPagoPreference(payload) {
+  return apiFetch('/api/mercadopago/create-preference', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 window.BarberFlowApi = {
   getApiBaseUrl,
   setApiBaseUrl,
@@ -327,7 +338,7 @@ window.BarberFlowApi = {
   getClientById,
   createClient,
   updateClient,
-  
+
   getBarbers,
   getServices,
   createAppointment,
@@ -355,4 +366,6 @@ window.BarberFlowApi = {
   markInvoicePaid,
   markInvoiceFailed,
   cancelInvoice,
+
+  createMercadoPagoPreference,
 };
