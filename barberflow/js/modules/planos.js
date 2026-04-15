@@ -9,6 +9,9 @@ import {
   getClients,
 } from '../services/api.js';
 
+const PLAN_NAME_MAX_LENGTH = 100;
+const PLAN_DESCRIPTION_MAX_LENGTH = 500;
+
 const planosState = {
   plans: [],
   subscriptions: [],
@@ -93,13 +96,110 @@ function getLatestInvoice(subscription) {
   return invoices[0] || null;
 }
 
+function sanitizeMoneyInput(rawValue) {
+  const allowedCharsOnly = String(rawValue ?? '').replace(/[^\d,]/g, '');
+  const firstCommaIndex = allowedCharsOnly.indexOf(',');
+
+  if (firstCommaIndex === -1) {
+    return allowedCharsOnly;
+  }
+
+  const integerPart = allowedCharsOnly.slice(0, firstCommaIndex);
+  const decimalPart = allowedCharsOnly
+    .slice(firstCommaIndex + 1)
+    .replace(/,/g, '')
+    .slice(0, 2);
+
+  return `${integerPart},${decimalPart}`;
+}
+
+function parseMoneyInput(rawValue) {
+  const sanitized = sanitizeMoneyInput(rawValue);
+
+  if (!sanitized) return null;
+
+  const normalized = sanitized.replace(',', '.');
+  const amount = Number(normalized);
+
+  if (!Number.isFinite(amount) || amount < 0) return null;
+
+  return {
+    amount: Number(amount.toFixed(2)),
+    cents: Math.round(amount * 100),
+    formatted: amount.toFixed(2).replace('.', ','),
+  };
+}
+
+function formatMoneyInputValue(value) {
+  const amount = Number(value || 0);
+  if (!Number.isFinite(amount)) return '0,00';
+  return amount.toFixed(2).replace('.', ',');
+}
+
+function isNonNegativeInteger(value) {
+  return Number.isInteger(Number(value)) && Number(value) >= 0;
+}
+
+function updateCounter(inputId, counterId, maxLength) {
+  const input = document.getElementById(inputId);
+  const counter = document.getElementById(counterId);
+  if (!input || !counter) return;
+
+  if (input.value.length > maxLength) {
+    input.value = input.value.slice(0, maxLength);
+  }
+
+  counter.textContent = `${input.value.length} / ${maxLength}`;
+}
+
+function bindCounter(inputId, counterId, maxLength) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const sync = () => updateCounter(inputId, counterId, maxLength);
+  input.addEventListener('input', sync);
+  sync();
+}
+
+function initPlanFormEnhancements() {
+  bindCounter('planos-plan-name', 'planos-plan-name-counter', PLAN_NAME_MAX_LENGTH);
+  bindCounter('planos-plan-description', 'planos-plan-description-counter', PLAN_DESCRIPTION_MAX_LENGTH);
+
+  const priceInput = document.getElementById('planos-price');
+  if (priceInput) {
+    priceInput.addEventListener('input', () => {
+      priceInput.value = sanitizeMoneyInput(priceInput.value);
+    });
+
+    priceInput.addEventListener('blur', () => {
+      const parsed = parseMoneyInput(priceInput.value);
+      if (parsed) {
+        priceInput.value = parsed.formatted;
+      }
+    });
+  }
+}
+
 function mapPlanFromApi(plan) {
+  const numericPrice =
+    plan.price != null && plan.price !== ''
+      ? Number(plan.price)
+      : null;
+
+  const priceCents =
+    plan.price_cents != null
+      ? Number(plan.price_cents)
+      : numericPrice != null && Number.isFinite(numericPrice)
+        ? Math.round(numericPrice * 100)
+        : 0;
+
   return {
     id: plan.id,
     name: plan.name || 'Plano sem nome',
     description: plan.description || 'Sem descrição.',
-    priceCents: Number(plan.price_cents || 0),
-    billingInterval: formatBillingInterval(plan.billing_interval, plan.billing_interval_count),
+    price: numericPrice != null && Number.isFinite(numericPrice) ? numericPrice : priceCents / 100,
+    priceCents,
+    billingInterval: formatBillingInterval(plan.billing_interval || 'month', plan.billing_interval_count || 1),
     includedHaircuts: Number(plan.included_haircuts || 0),
     includedBeards: Number(plan.included_beards || 0),
     signupFeeCents: Number(plan.signup_fee_cents || 0),
@@ -143,10 +243,6 @@ function getPlanById(planId) {
 
 function getSubscriptionById(subscriptionId) {
   return planosState.subscriptions.find((item) => item.id === subscriptionId) || null;
-}
-
-function getClientById(clientId) {
-  return planosState.clients.find((item) => item.id === clientId) || null;
 }
 
 function getSubscriptionStatusMeta(status) {
@@ -414,7 +510,8 @@ function renderPlanForm(mode, plan = null) {
   const safePlan = plan || {
     name: '',
     description: '',
-    priceCents: 4990,
+    price: 0,
+    priceCents: 0,
     billingInterval: 'Mensal',
     includedHaircuts: 2,
     includedBeards: 0,
@@ -422,6 +519,13 @@ function renderPlanForm(mode, plan = null) {
     graceDays: 0,
     isActive: true,
   };
+
+  const safePrice =
+    safePlan.raw?.price != null
+      ? Number(safePlan.raw.price)
+      : safePlan.price != null
+        ? Number(safePlan.price)
+        : Number(safePlan.priceCents || 0) / 100;
 
   return `
     <div class="planos-modal-body">
@@ -436,12 +540,35 @@ function renderPlanForm(mode, plan = null) {
         <div class="planos-form-grid">
           <div>
             <div class="color-section-label">Nome</div>
-            <input class="modal-input" name="name" type="text" value="${escapeHtml(safePlan.name)}" placeholder="Nome do plano" />
+            <input
+              class="modal-input"
+              id="planos-plan-name"
+              name="name"
+              type="text"
+              value="${escapeHtml(safePlan.name)}"
+              placeholder="Nome do plano"
+              maxlength="${PLAN_NAME_MAX_LENGTH}"
+            />
+            <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
+              <span id="planos-plan-name-counter">0 / ${PLAN_NAME_MAX_LENGTH}</span>
+            </div>
           </div>
 
           <div>
-            <div class="color-section-label">Preço (centavos)</div>
-            <input class="modal-input" name="priceCents" type="number" min="0" value="${escapeHtml(safePlan.priceCents)}" />
+            <div class="color-section-label">Preço (formato: 69,90)</div>
+            <input
+              class="modal-input"
+              id="planos-price"
+              name="price"
+              type="text"
+              inputmode="decimal"
+              value="${escapeHtml(formatMoneyInputValue(safePrice))}"
+              placeholder="Ex.: 69,90"
+            />
+            <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:10px;color:#5a6888;">
+              <span>Aceita apenas números e vírgula</span>
+              <span>numeric</span>
+            </div>
           </div>
 
           <div>
@@ -454,22 +581,22 @@ function renderPlanForm(mode, plan = null) {
 
           <div>
             <div class="color-section-label">Cortes incluídos</div>
-            <input class="modal-input" name="includedHaircuts" type="number" min="0" value="${escapeHtml(safePlan.includedHaircuts)}" />
+            <input class="modal-input" name="includedHaircuts" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedHaircuts)}" />
           </div>
 
           <div>
             <div class="color-section-label">Barbas incluídas</div>
-            <input class="modal-input" name="includedBeards" type="number" min="0" value="${escapeHtml(safePlan.includedBeards)}" />
+            <input class="modal-input" name="includedBeards" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedBeards)}" />
           </div>
 
           <div>
-            <div class="color-section-label">Taxa de adesão (centavos)</div>
-            <input class="modal-input" name="signupFeeCents" type="number" min="0" value="${escapeHtml(safePlan.signupFeeCents)}" />
+            <div class="color-section-label">Taxa de adesão (centavos inteiros)</div>
+            <input class="modal-input" name="signupFeeCents" type="number" min="0" step="1" value="${escapeHtml(safePlan.signupFeeCents)}" />
           </div>
 
           <div>
             <div class="color-section-label">Carência (dias)</div>
-            <input class="modal-input" name="graceDays" type="number" min="0" value="${escapeHtml(safePlan.graceDays)}" />
+            <input class="modal-input" name="graceDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.graceDays)}" />
           </div>
 
           <div>
@@ -483,7 +610,16 @@ function renderPlanForm(mode, plan = null) {
 
         <div>
           <div class="color-section-label">Descrição</div>
-          <textarea class="modal-input planos-textarea" name="description" placeholder="Descrição do plano">${escapeHtml(safePlan.description)}</textarea>
+          <textarea
+            class="modal-input planos-textarea"
+            id="planos-plan-description"
+            name="description"
+            placeholder="Descrição do plano"
+            maxlength="${PLAN_DESCRIPTION_MAX_LENGTH}"
+          >${escapeHtml(safePlan.description)}</textarea>
+          <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
+            <span id="planos-plan-description-counter">0 / ${PLAN_DESCRIPTION_MAX_LENGTH}</span>
+          </div>
         </div>
 
         <div id="planos-form-feedback" class="planos-form-feedback"></div>
@@ -779,7 +915,7 @@ function collectPlanFormData() {
   return {
     name: String(formData.get('name') || '').trim(),
     description: String(formData.get('description') || '').trim(),
-    priceCents: Number(formData.get('priceCents') || 0),
+    priceInput: String(formData.get('price') || '').trim(),
     billingInterval: String(formData.get('billingInterval') || 'Mensal').trim(),
     includedHaircuts: Number(formData.get('includedHaircuts') || 0),
     includedBeards: Number(formData.get('includedBeards') || 0),
@@ -793,21 +929,53 @@ async function handlePlanFormSubmit(event) {
   event.preventDefault();
 
   const data = collectPlanFormData();
+  const parsedPrice = parseMoneyInput(data.priceInput);
 
   if (!data.name) {
     setPlanFormFeedback('Informe o nome do plano.', 'error');
     return;
   }
 
-  if (data.priceCents < 0) {
-    setPlanFormFeedback('Informe um preço válido.', 'error');
+  if (data.name.length > PLAN_NAME_MAX_LENGTH) {
+    setPlanFormFeedback(`O nome deve ter no máximo ${PLAN_NAME_MAX_LENGTH} caracteres.`, 'error');
+    return;
+  }
+
+  if (data.description.length > PLAN_DESCRIPTION_MAX_LENGTH) {
+    setPlanFormFeedback(`A descrição deve ter no máximo ${PLAN_DESCRIPTION_MAX_LENGTH} caracteres.`, 'error');
+    return;
+  }
+
+  if (!parsedPrice) {
+    setPlanFormFeedback('Informe o preço no formato 69,90.', 'error');
+    return;
+  }
+
+  if (!isNonNegativeInteger(data.includedHaircuts)) {
+    setPlanFormFeedback('Cortes incluídos deve ser um número inteiro maior ou igual a zero.', 'error');
+    return;
+  }
+
+  if (!isNonNegativeInteger(data.includedBeards)) {
+    setPlanFormFeedback('Barbas incluídas deve ser um número inteiro maior ou igual a zero.', 'error');
+    return;
+  }
+
+  if (!isNonNegativeInteger(data.signupFeeCents)) {
+    setPlanFormFeedback('Taxa de adesão deve ser informada em centavos inteiros.', 'error');
+    return;
+  }
+
+  if (!isNonNegativeInteger(data.graceDays)) {
+    setPlanFormFeedback('Carência deve ser um número inteiro maior ou igual a zero.', 'error');
     return;
   }
 
   const payload = {
     name: data.name,
     description: data.description,
-    price_cents: data.priceCents,
+    price: parsedPrice.amount,
+    price_cents: parsedPrice.cents,
     currency: 'BRL',
     billing_interval: data.billingInterval === 'Anual' ? 'year' : 'month',
     billing_interval_count: 1,
@@ -959,6 +1127,7 @@ function renderPlanosModal() {
   modal.classList.add('open');
 
   bindPlanosModalEvents();
+  initPlanFormEnhancements();
 }
 
 function bindPlanEvents() {
