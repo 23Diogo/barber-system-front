@@ -8,6 +8,8 @@ import {
   getServices,
   createAppointment,
   updateAppointmentStatus,
+  getActiveSubscriptionByClient,
+  consumeSubscriptionBenefit,
 } from '../services/api.js';
 
 const agendaState = {
@@ -30,11 +32,13 @@ function escapeHtml(value) {
 function formatAgendaHeader(dateValue) {
   const [year, month, day] = dateValue.split('-').map(Number);
   const date = new Date(year, month - 1, day);
-  return date.toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    day: '2-digit',
-    month: 'long',
-  }).replace(/^./, char => char.toUpperCase());
+  return date
+    .toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'long',
+    })
+    .replace(/^./, (char) => char.toUpperCase());
 }
 
 function formatTime(value) {
@@ -52,8 +56,21 @@ function formatCurrency(value) {
   }).format(Number(value || 0));
 }
 
+function formatDateDisplay(value) {
+  if (!value) return '—';
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+
+  return date.toLocaleDateString('pt-BR');
+}
+
 function getClientName(appointment) {
   return appointment?.clients?.name || appointment?.client_name || 'Cliente não informado';
+}
+
+function getClientId(appointment) {
+  return appointment?.client_id || appointment?.clients?.id || null;
 }
 
 function getServiceName(appointment) {
@@ -72,18 +89,117 @@ function getBarberName(appointment) {
 }
 
 function getBarberInitials(name) {
-  const parts = String(name || 'BF').trim().split(/\s+/).filter(Boolean);
-  return parts.slice(0, 2).map(part => part[0]?.toUpperCase() || '').join('') || 'BF';
+  const parts = String(name || 'BF')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'BF';
 }
 
 function getStatusMeta(status) {
   const map = {
-    completed: { border: '#00e676', text: '#00e676', pillBg: 'rgba(0,230,118,.1)', label: '✓ Feito', summaryBucket: 'completed' },
-    in_progress: { border: '#4fc3f7', text: '#4fc3f7', pillBg: 'rgba(79,195,247,.1)', label: '● Agora', summaryBucket: 'inProgress' },
-    confirmed: { border: '#9c6fff', text: '#9c6fff', pillBg: 'rgba(156,111,255,.1)', label: 'Confirmado', summaryBucket: 'upcoming' },
-    pending: { border: '#1e2345', text: '#c0cce8', pillBg: 'rgba(255,255,255,.04)', label: 'Agendado', summaryBucket: 'pending' },
-    cancelled: { border: '#ff1744', text: '#ff1744', pillBg: 'rgba(255,23,68,.1)', label: 'Cancelado', summaryBucket: 'cancelled' },
-    no_show: { border: '#f97316', text: '#f97316', pillBg: 'rgba(249,115,22,.1)', label: 'No-show', summaryBucket: 'cancelled' },
+    completed: {
+      border: '#00e676',
+      text: '#00e676',
+      pillBg: 'rgba(0,230,118,.1)',
+      label: '✓ Feito',
+      summaryBucket: 'completed',
+    },
+    in_progress: {
+      border: '#4fc3f7',
+      text: '#4fc3f7',
+      pillBg: 'rgba(79,195,247,.1)',
+      label: '● Agora',
+      summaryBucket: 'inProgress',
+    },
+    confirmed: {
+      border: '#9c6fff',
+      text: '#9c6fff',
+      pillBg: 'rgba(156,111,255,.1)',
+      label: 'Confirmado',
+      summaryBucket: 'upcoming',
+    },
+    pending: {
+      border: '#1e2345',
+      text: '#c0cce8',
+      pillBg: 'rgba(255,255,255,.04)',
+      label: 'Agendado',
+      summaryBucket: 'pending',
+    },
+    cancelled: {
+      border: '#ff1744',
+      text: '#ff1744',
+      pillBg: 'rgba(255,23,68,.1)',
+      label: 'Cancelado',
+      summaryBucket: 'cancelled',
+    },
+    no_show: {
+      border: '#f97316',
+      text: '#f97316',
+      pillBg: 'rgba(249,115,22,.1)',
+      label: 'No-show',
+      summaryBucket: 'cancelled',
+    },
+  };
+
+  return map[status] || map.pending;
+}
+
+function getSubscriptionStatusMeta(status) {
+  const map = {
+    active: {
+      label: 'Ativa',
+      color: '#00e676',
+      bg: 'rgba(0,230,118,.1)',
+      border: 'rgba(0,230,118,.18)',
+    },
+    past_due: {
+      label: 'Inadimplente',
+      color: '#ff1744',
+      bg: 'rgba(255,23,68,.1)',
+      border: 'rgba(255,23,68,.18)',
+    },
+    paused: {
+      label: 'Pausada',
+      color: '#f97316',
+      bg: 'rgba(249,115,22,.1)',
+      border: 'rgba(249,115,22,.18)',
+    },
+    canceled: {
+      label: 'Cancelada',
+      color: '#5a6888',
+      bg: 'rgba(90,104,136,.12)',
+      border: 'rgba(90,104,136,.18)',
+    },
+    pending_activation: {
+      label: 'Pendente',
+      color: '#4fc3f7',
+      bg: 'rgba(79,195,247,.1)',
+      border: 'rgba(79,195,247,.18)',
+    },
+    trialing: {
+      label: 'Trial',
+      color: '#9c6fff',
+      bg: 'rgba(156,111,255,.1)',
+      border: 'rgba(156,111,255,.18)',
+    },
+  };
+
+  return map[status] || map.active;
+}
+
+function getInvoiceStatusMeta(status) {
+  const map = {
+    paid: { label: 'Pago', color: '#00e676' },
+    failed: { label: 'Falhou', color: '#ff1744' },
+    pending: { label: 'Pendente', color: '#f97316' },
+    canceled: { label: 'Cancelado', color: '#5a6888' },
+    refunded: { label: 'Estornado', color: '#9c6fff' },
+    expired: { label: 'Expirado', color: '#f97316' },
   };
 
   return map[status] || map.pending;
@@ -103,50 +219,106 @@ function getAvailableStatusActions(currentStatus) {
     no_show: ['pending', 'confirmed'],
   };
 
-  return transitions[currentStatus] || ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show']
-    .filter(status => status !== currentStatus);
+  return (
+    transitions[currentStatus] ||
+    ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'].filter(
+      (status) => status !== currentStatus,
+    )
+  );
+}
+
+function getLatestSubscriptionCycle(subscription) {
+  const cycles = Array.isArray(subscription?.subscription_cycles)
+    ? [...subscription.subscription_cycles]
+    : [];
+
+  if (!cycles.length) return null;
+
+  cycles.sort((a, b) => Number(b?.cycle_number || 0) - Number(a?.cycle_number || 0));
+  return cycles[0] || null;
+}
+
+function getLatestSubscriptionInvoice(subscription) {
+  const invoices = Array.isArray(subscription?.subscription_invoices)
+    ? [...subscription.subscription_invoices]
+    : [];
+
+  if (!invoices.length) return null;
+
+  invoices.sort((a, b) => {
+    const aTime = new Date(a?.created_at || a?.due_at || 0).getTime();
+    const bTime = new Date(b?.created_at || b?.due_at || 0).getTime();
+    return bTime - aTime;
+  });
+
+  return invoices[0] || null;
+}
+
+function getSubscriptionActionState(subscription) {
+  const status = subscription?.status || '';
+
+  if (status === 'active' || status === 'trialing') {
+    return { canConsume: true, message: 'Benefícios disponíveis para consumo.' };
+  }
+
+  if (status === 'past_due') {
+    return { canConsume: false, message: 'Consumo bloqueado: assinatura inadimplente.' };
+  }
+
+  if (status === 'paused') {
+    return { canConsume: false, message: 'Consumo bloqueado: assinatura pausada.' };
+  }
+
+  if (status === 'pending_activation') {
+    return { canConsume: false, message: 'Consumo bloqueado: assinatura aguardando ativação.' };
+  }
+
+  return { canConsume: false, message: 'Cliente sem plano elegível para consumo.' };
 }
 
 function createSummary(appointments) {
-  return appointments.reduce((acc, appointment) => {
-    const meta = getStatusMeta(appointment.status);
-    const price = getServicePrice(appointment);
+  return appointments.reduce(
+    (acc, appointment) => {
+      const meta = getStatusMeta(appointment.status);
+      const price = getServicePrice(appointment);
 
-    acc.total += 1;
-    acc.receivable += price;
+      acc.total += 1;
+      acc.receivable += price;
 
-    if (meta.summaryBucket === 'completed') {
-      acc.completed += 1;
-      acc.received += price;
-    }
+      if (meta.summaryBucket === 'completed') {
+        acc.completed += 1;
+        acc.received += price;
+      }
 
-    if (meta.summaryBucket === 'inProgress') acc.inProgress += 1;
-    if (meta.summaryBucket === 'upcoming' || meta.summaryBucket === 'pending') acc.upcoming += 1;
+      if (meta.summaryBucket === 'inProgress') acc.inProgress += 1;
+      if (meta.summaryBucket === 'upcoming' || meta.summaryBucket === 'pending') acc.upcoming += 1;
 
-    if (meta.summaryBucket === 'cancelled') {
-      acc.cancelled += 1;
-      acc.receivable -= price;
-    }
+      if (meta.summaryBucket === 'cancelled') {
+        acc.cancelled += 1;
+        acc.receivable -= price;
+      }
 
-    const barberName = getBarberName(appointment);
-    if (!acc.byBarber[barberName]) {
-      acc.byBarber[barberName] = { name: barberName, appointments: 0, revenue: 0 };
-    }
+      const barberName = getBarberName(appointment);
+      if (!acc.byBarber[barberName]) {
+        acc.byBarber[barberName] = { name: barberName, appointments: 0, revenue: 0 };
+      }
 
-    acc.byBarber[barberName].appointments += 1;
-    if (appointment.status === 'completed') acc.byBarber[barberName].revenue += price;
+      acc.byBarber[barberName].appointments += 1;
+      if (appointment.status === 'completed') acc.byBarber[barberName].revenue += price;
 
-    return acc;
-  }, {
-    total: 0,
-    completed: 0,
-    inProgress: 0,
-    upcoming: 0,
-    cancelled: 0,
-    received: 0,
-    receivable: 0,
-    byBarber: {},
-  });
+      return acc;
+    },
+    {
+      total: 0,
+      completed: 0,
+      inProgress: 0,
+      upcoming: 0,
+      cancelled: 0,
+      received: 0,
+      receivable: 0,
+      byBarber: {},
+    },
+  );
 }
 
 function renderAppointmentRow(appointment) {
@@ -173,13 +345,15 @@ function renderAppointmentRow(appointment) {
 }
 
 function renderBarberPerformance(summary) {
-  const rows = Object.values(summary.byBarber).sort((a, b) => b.appointments - a.appointments).slice(0, 4);
+  const rows = Object.values(summary.byBarber)
+    .sort((a, b) => b.appointments - a.appointments)
+    .slice(0, 4);
 
   if (!rows.length) {
     return '<div class="row-sub" style="padding:8px 10px">Nenhum barbeiro com atendimento nesta data.</div>';
   }
 
-  const maxAppointments = Math.max(...rows.map(row => row.appointments), 1);
+  const maxAppointments = Math.max(...rows.map((row) => row.appointments), 1);
   const gradients = [
     'linear-gradient(135deg,#ffd700,#ff8c00)',
     'linear-gradient(135deg,#6b6880,#3a3a4a)',
@@ -187,9 +361,10 @@ function renderBarberPerformance(summary) {
     'linear-gradient(135deg,#00b4ff,#6c3fff)',
   ];
 
-  return rows.map((row, index) => {
-    const width = Math.max((row.appointments / maxAppointments) * 100, 15);
-    return `
+  return rows
+    .map((row, index) => {
+      const width = Math.max((row.appointments / maxAppointments) * 100, 15);
+      return `
       <div class="row-item">
         <div class="row-avatar" style="background:${gradients[index % gradients.length]};color:${index === 0 ? '#000' : '#fff'}">${escapeHtml(getBarberInitials(row.name))}</div>
         <div class="row-info">
@@ -199,7 +374,8 @@ function renderBarberPerformance(summary) {
         <div class="row-value">${escapeHtml(formatCurrency(row.revenue))}</div>
       </div>
     `;
-  }).join('');
+    })
+    .join('');
 }
 
 function renderSummaryPanel(summary) {
@@ -246,7 +422,9 @@ function renderConfigHint(title, body, showAuthButton = false) {
 }
 
 function renderModalSelectOptions(items, getValue, getLabel) {
-  return items.map(item => `<option value="${escapeHtml(getValue(item))}">${escapeHtml(getLabel(item))}</option>`).join('');
+  return items
+    .map((item) => `<option value="${escapeHtml(getValue(item))}">${escapeHtml(getLabel(item))}</option>`)
+    .join('');
 }
 
 function getSourceLabel(source) {
@@ -273,10 +451,11 @@ function renderStatusActions(appointment) {
 
   return `
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
-      ${actions.map((status) => {
-        const meta = getStatusMeta(status);
+      ${actions
+        .map((status) => {
+          const meta = getStatusMeta(status);
 
-        return `
+          return `
           <button
             type="button"
             class="agenda-status-action"
@@ -295,12 +474,113 @@ function renderStatusActions(appointment) {
             ${escapeHtml(getStatusDisplayName(status))}
           </button>
         `;
-      }).join('')}
+        })
+        .join('')}
     </div>
   `;
 }
 
-function renderAppointmentDetails(appointment) {
+function renderSubscriptionPanel(subscription, appointment) {
+  if (!subscription) {
+    return `
+      <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
+        <strong style="color:#c0cce8;">Plano do cliente:</strong> Nenhum plano ativo encontrado.
+      </div>
+    `;
+  }
+
+  const cycle = getLatestSubscriptionCycle(subscription);
+  const invoice = getLatestSubscriptionInvoice(subscription);
+  const actionState = getSubscriptionActionState(subscription);
+  const statusMeta = getSubscriptionStatusMeta(subscription.status);
+  const invoiceMeta = getInvoiceStatusMeta(invoice?.status || 'pending');
+
+  const remainingHaircuts = Number(cycle?.remaining_haircuts || 0);
+  const remainingBeards = Number(cycle?.remaining_beards || 0);
+
+  const canShowConsumeButtons =
+    actionState.canConsume &&
+    appointment.status !== 'cancelled' &&
+    appointment.status !== 'no_show';
+
+  return `
+    <div style="display:grid;grid-template-columns:1fr;gap:8px;">
+      <div class="row-sub" style="padding:10px 12px;border:1px solid ${statusMeta.border};border-radius:10px;background:#0a0c1a;">
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+          <strong style="color:#c0cce8;">Plano do cliente:</strong>
+          <span class="status-pill" style="background:${statusMeta.bg};color:${statusMeta.color};border:1px solid ${statusMeta.border};">
+            ${statusMeta.label}
+          </span>
+        </div>
+        <div style="margin-top:8px;color:#c0cce8;">
+          ${escapeHtml(subscription?.plans?.name || 'Plano')}
+        </div>
+        <div style="margin-top:6px;color:#5a6888;font-size:10px;line-height:1.5;">
+          Próxima cobrança: ${escapeHtml(formatDateDisplay(subscription.next_billing_at || subscription.current_period_end))}
+          · Última fatura: <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+        <div class="mini-card">
+          <div class="mini-lbl">Saldo de cortes</div>
+          <div class="mini-val" style="font-size:16px;color:#00e676">${remainingHaircuts}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Saldo de barbas</div>
+          <div class="mini-val" style="font-size:16px;color:#9c6fff">${remainingBeards}</div>
+        </div>
+      </div>
+
+      <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
+        ${escapeHtml(actionState.message)}
+      </div>
+
+      ${
+        canShowConsumeButtons
+          ? `
+            <div style="display:flex;flex-wrap:wrap;gap:8px;">
+              ${
+                remainingHaircuts > 0
+                  ? `
+                    <button
+                      type="button"
+                      class="agenda-consume-action"
+                      data-subscription-id="${escapeHtml(subscription.id)}"
+                      data-appointment-id="${escapeHtml(appointment.id)}"
+                      data-consumed-type="haircut"
+                      style="padding:8px 12px;border-radius:8px;border:1px solid rgba(0,230,118,.2);background:rgba(0,230,118,.1);color:#00e676;font-weight:700;cursor:pointer;"
+                    >
+                      Consumir corte do plano
+                    </button>
+                  `
+                  : ''
+              }
+              ${
+                remainingBeards > 0
+                  ? `
+                    <button
+                      type="button"
+                      class="agenda-consume-action"
+                      data-subscription-id="${escapeHtml(subscription.id)}"
+                      data-appointment-id="${escapeHtml(appointment.id)}"
+                      data-consumed-type="beard"
+                      style="padding:8px 12px;border-radius:8px;border:1px solid rgba(156,111,255,.2);background:rgba(156,111,255,.1);color:#9c6fff;font-weight:700;cursor:pointer;"
+                    >
+                      Consumir barba do plano
+                    </button>
+                  `
+                  : ''
+              }
+            </div>
+          `
+          : ''
+      }
+    </div>
+  `;
+}
+
+function renderAppointmentDetails(appointment, subscription = null) {
   const meta = getStatusMeta(appointment.status);
 
   return `
@@ -343,6 +623,13 @@ function renderAppointmentDetails(appointment) {
 
       <div style="margin-top:4px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a6888;margin-bottom:8px;">
+          Plano do cliente
+        </div>
+        ${renderSubscriptionPanel(subscription, appointment)}
+      </div>
+
+      <div style="margin-top:4px;">
+        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a6888;margin-bottom:8px;">
           Alterar status
         </div>
         ${renderStatusActions(appointment)}
@@ -363,37 +650,88 @@ function setAppointmentDetailsFeedback(message, variant = 'neutral') {
 
   el.textContent = message || '';
   el.style.color =
-    variant === 'error' ? '#ff8a8a' :
-    variant === 'success' ? '#00e676' :
-    '#5a6888';
+    variant === 'error'
+      ? '#ff8a8a'
+      : variant === 'success'
+        ? '#00e676'
+        : '#5a6888';
 }
 
-function openAppointmentDetails(appointmentId) {
+async function getAppointmentSubscription(appointment) {
+  const clientId = getClientId(appointment);
+  if (!clientId) return null;
+  return getActiveSubscriptionByClient(clientId);
+}
+
+async function openAppointmentDetails(appointmentId) {
   const modal = document.getElementById('agenda-details-modal');
   const content = document.getElementById('agenda-details-content');
   if (!modal || !content) return;
 
   const appointment = agendaState.currentAppointments.find(
-    item => String(item.id) === String(appointmentId)
+    (item) => String(item.id) === String(appointmentId),
   );
 
   if (!appointment) return;
 
-  content.innerHTML = renderAppointmentDetails(appointment);
+  content.innerHTML = `
+    <div style="display:grid;gap:10px;">
+      <div class="modal-title" style="margin:0;">${escapeHtml(getClientName(appointment))}</div>
+      <div class="modal-sub">Carregando detalhes do agendamento...</div>
+    </div>
+  `;
+
   modal.style.display = 'flex';
   modal.classList.add('open');
 
-  document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
+  try {
+    const subscription = await getAppointmentSubscription(appointment);
+    content.innerHTML = renderAppointmentDetails(appointment, subscription);
 
-  document.querySelectorAll('.agenda-status-action').forEach((button) => {
-    button.addEventListener('click', () => {
-      const nextStatus = button.dataset.status;
-      const currentAppointmentId = button.dataset.appointmentId;
+    document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
 
-      if (!nextStatus || !currentAppointmentId) return;
-      handleAppointmentStatusChange(currentAppointmentId, nextStatus);
+    document.querySelectorAll('.agenda-status-action').forEach((button) => {
+      button.addEventListener('click', () => {
+        const nextStatus = button.dataset.status;
+        const currentAppointmentId = button.dataset.appointmentId;
+
+        if (!nextStatus || !currentAppointmentId) return;
+        handleAppointmentStatusChange(currentAppointmentId, nextStatus);
+      });
     });
-  });
+
+    document.querySelectorAll('.agenda-consume-action').forEach((button) => {
+      button.addEventListener('click', () => {
+        const subscriptionId = button.dataset.subscriptionId;
+        const currentAppointmentId = button.dataset.appointmentId;
+        const consumedType = button.dataset.consumedType;
+
+        if (!subscriptionId || !currentAppointmentId || !consumedType) return;
+
+        handleConsumeSubscriptionBenefit(subscriptionId, currentAppointmentId, consumedType);
+      });
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Não foi possível carregar o plano do cliente.';
+    content.innerHTML = renderAppointmentDetails(appointment, null);
+
+    setTimeout(() => {
+      setAppointmentDetailsFeedback(message, 'error');
+    }, 0);
+
+    document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
+
+    document.querySelectorAll('.agenda-status-action').forEach((button) => {
+      button.addEventListener('click', () => {
+        const nextStatus = button.dataset.status;
+        const currentAppointmentId = button.dataset.appointmentId;
+
+        if (!nextStatus || !currentAppointmentId) return;
+        handleAppointmentStatusChange(currentAppointmentId, nextStatus);
+      });
+    });
+  }
 }
 
 function closeAppointmentDetails() {
@@ -428,7 +766,12 @@ function setCreateFeedback(message, variant = 'neutral') {
   if (!el) return;
   el.textContent = message || '';
   el.dataset.variant = variant;
-  el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
+  el.style.color =
+    variant === 'error'
+      ? '#ff8a8a'
+      : variant === 'success'
+        ? '#00e676'
+        : '#5a6888';
 }
 
 function updateAgendaHeader(dateValue) {
@@ -467,28 +810,37 @@ async function populateCreateModal() {
     const { clients, barbers, services } = await ensureCreateDependencies();
 
     if (clientSelect) {
-      clientSelect.innerHTML = '<option value="">Selecione o cliente</option>' + renderModalSelectOptions(clients, item => item.id, item => item.name || 'Cliente');
+      clientSelect.innerHTML =
+        '<option value="">Selecione o cliente</option>' +
+        renderModalSelectOptions(clients, (item) => item.id, (item) => item.name || 'Cliente');
     }
 
     if (barberSelect) {
-      barberSelect.innerHTML = '<option value="">Selecione o barbeiro</option>' + renderModalSelectOptions(
-        barbers,
-        item => item.id,
-        item => item?.users?.name || 'Barbeiro'
-      );
+      barberSelect.innerHTML =
+        '<option value="">Selecione o barbeiro</option>' +
+        renderModalSelectOptions(
+          barbers,
+          (item) => item.id,
+          (item) => item?.users?.name || 'Barbeiro',
+        );
     }
 
     if (serviceSelect) {
-      serviceSelect.innerHTML = '<option value="">Selecione o serviço</option>' + renderModalSelectOptions(
-        services,
-        item => item.id,
-        item => `${item.name || 'Serviço'} · ${formatCurrency(item.price)}`
-      );
+      serviceSelect.innerHTML =
+        '<option value="">Selecione o serviço</option>' +
+        renderModalSelectOptions(
+          services,
+          (item) => item.id,
+          (item) => `${item.name || 'Serviço'} · ${formatCurrency(item.price)}`,
+        );
     }
 
     setCreateFeedback('', 'neutral');
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível carregar clientes, barbeiros e serviços.';
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Não foi possível carregar clientes, barbeiros e serviços.';
     setCreateFeedback(message, 'error');
   }
 }
@@ -538,11 +890,41 @@ async function handleCreateAppointment(event) {
       if (modalDateInput) modalDateInput.value = agendaState.currentDate;
     }, 350);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível criar o agendamento.';
+    const message =
+      error instanceof Error ? error.message : 'Não foi possível criar o agendamento.';
     setCreateFeedback(message, 'error');
   } finally {
     submitBtn?.removeAttribute('disabled');
     if (submitBtn) submitBtn.textContent = 'Salvar agendamento';
+  }
+}
+
+async function handleConsumeSubscriptionBenefit(subscriptionId, appointmentId, consumedType) {
+  const buttons = document.querySelectorAll('.agenda-consume-action');
+
+  try {
+    buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    setAppointmentDetailsFeedback('Consumindo benefício do plano...', 'neutral');
+
+    await consumeSubscriptionBenefit(subscriptionId, {
+      appointment_id: appointmentId,
+      consumed_type: consumedType,
+      quantity: 1,
+      notes: 'Consumo manual pela agenda',
+    });
+
+    setAppointmentDetailsFeedback('Benefício consumido com sucesso.', 'success');
+
+    await loadAgendaForDate(agendaState.currentDate);
+    await openAppointmentDetails(appointmentId);
+  } catch (error) {
+    const message =
+      error instanceof Error
+        ? error.message
+        : 'Não foi possível consumir o benefício do plano.';
+    setAppointmentDetailsFeedback(message, 'error');
+  } finally {
+    buttons.forEach((button) => button.removeAttribute('disabled'));
   }
 }
 
@@ -560,7 +942,8 @@ async function handleAppointmentStatusChange(appointmentId, status) {
     closeAppointmentDetails();
     await loadAgendaForDate(agendaState.currentDate);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível atualizar o status.';
+    const message =
+      error instanceof Error ? error.message : 'Não foi possível atualizar o status.';
     setAppointmentDetailsFeedback(message, 'error');
   } finally {
     buttons.forEach((button) => button.removeAttribute('disabled'));
