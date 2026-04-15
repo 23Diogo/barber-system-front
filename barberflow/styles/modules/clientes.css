@@ -38,25 +38,6 @@
     }
   }
 
-  .clients-new-button {
-    padding: 12px 18px;
-    background: linear-gradient(90deg, #00b4ff, #6c3fff);
-    color: #fff;
-    border: 0;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 700;
-    cursor: pointer;
-    white-space: nowrap;
-    box-shadow: 0 10px 25px rgba(79, 195, 247, 0.18);
-    transition: transform 0.18s ease, box-shadow 0.18s ease;
-  }
-
-  .clients-new-button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 14px 28px rgba(79, 195, 247, 0.22);
-  }
-
   .clients-table tbody tr.client-row {
     cursor: pointer;
     transition: background 0.18s ease;
@@ -151,5 +132,138 @@
     min-height: 18px;
     font-size: 10px;
     color: #5a6888;
+  }
+
+  .clients-field-counter-wrap {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+    font-size: 10px;
+    color: #5a6888;
+  }
+
+  .clients-section-title {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: #5a6888;
+    margin-bottom: 8px;
+  }
+
+  .clients-subscription-box {
+    display: grid;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid #1e2345;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.02);
+  }
+
+  .clients-subscription-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+
+  .clients-subscription-title {
+    font-size: 13px;
+    font-weight: 700;
+    color: #e8f0fe;
+  }
+
+  .clients-subscription-sub {
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #5a6888;
+  }
+
+  .clients-subscription-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .clients-status-chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .clients-action-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .clients-action-grid--nested {
+    margin-top: 8px;
+  }
+
+  .clients-action-btn {
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #1e2345;
+    background: rgba(255, 255, 255, 0.02);
+    color: #e8f0fe;
+    font-weight: 700;
+    cursor: pointer;
+  }
+
+  .clients-action-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .clients-invoice-list,
+  .clients-history-list {
+    display: grid;
+    gap: 8px;
+  }
+
+  .clients-invoice-row,
+  .clients-history-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 10px;
+    background: #0a0c1a;
+  }
+
+  .clients-invoice-main,
+  .clients-history-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .clients-invoice-title,
+  .clients-history-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #c0cce8;
+  }
+
+  .clients-invoice-sub,
+  .clients-history-sub {
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.5;
+    color: #5a6888;
+  }
+
+  .clients-invoice-side,
+  .clients-history-side {
+    flex-shrink: 0;
   }
 }
