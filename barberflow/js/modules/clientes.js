@@ -26,10 +26,11 @@ const clientesState = {
   searchTerm: '',
   isLoading: false,
   isLoaded: false,
-  modalMode: 'closed', // closed | view | edit | create
+  modalMode: 'closed',
   activeClientId: null,
   detailClient: null,
   detailSubscription: null,
+  isDetailLoading: false,
 };
 
 function escapeHtml(value) {
@@ -255,8 +256,9 @@ function mapClientDetailFromApi(client) {
   const latestAppointment = getLatestAppointment(appointments);
 
   const visits = completedAppointments.length || Number(client.visits || client.total_visits || 0);
-  const totalSpent = completedAppointments.reduce((sum, item) => sum + Number(item.final_price || 0), 0)
-    || Number(client.total_spent || 0);
+  const totalSpent =
+    completedAppointments.reduce((sum, item) => sum + Number(item.final_price || 0), 0) ||
+    Number(client.total_spent || 0);
 
   return {
     id: client.id,
@@ -300,14 +302,7 @@ function getFilteredClients() {
   if (!term) return clientesState.items;
 
   return clientesState.items.filter((client) => {
-    return [
-      client.name,
-      client.phone,
-      client.whatsapp,
-      client.lastService,
-      client.lastCut,
-      getClientStatusMeta(client.status).label,
-    ]
+    return [client.name, client.phone, client.whatsapp, client.lastService, client.lastCut, getClientStatusMeta(client.status).label]
       .join(' ')
       .toLowerCase()
       .includes(term);
@@ -415,9 +410,10 @@ function renderClientAppointments(detailClient) {
 
   return `
     <div class="clients-history-list">
-      ${appointments.map((appointment) => {
-        const meta = getAppointmentStatusMeta(appointment.status);
-        return `
+      ${appointments
+        .map((appointment) => {
+          const meta = getAppointmentStatusMeta(appointment.status);
+          return `
           <div class="clients-history-row">
             <div class="clients-history-main">
               <div class="clients-history-title">${escapeHtml(getAppointmentServiceName(appointment))}</div>
@@ -434,15 +430,14 @@ function renderClientAppointments(detailClient) {
             </div>
           </div>
         `;
-      }).join('')}
+        })
+        .join('')}
     </div>
   `;
 }
 
 function renderClientConsumptions(subscription) {
-  const consumptions = Array.isArray(subscription?.raw?.subscription_consumptions)
-    ? [...subscription.raw.subscription_consumptions]
-    : [];
+  const consumptions = Array.isArray(subscription?.raw?.subscription_consumptions) ? [...subscription.raw.subscription_consumptions] : [];
 
   consumptions.sort((a, b) => {
     const aDate = new Date(a?.created_at || 0).getTime();
@@ -460,7 +455,10 @@ function renderClientConsumptions(subscription) {
 
   return `
     <div class="clients-history-list">
-      ${consumptions.slice(0, 6).map((consumption) => `
+      ${consumptions
+        .slice(0, 6)
+        .map(
+          (consumption) => `
         <div class="clients-history-row">
           <div class="clients-history-main">
             <div class="clients-history-title">${escapeHtml(consumption?.services?.name || consumption.consumed_type || 'Consumo')}</div>
@@ -471,15 +469,15 @@ function renderClientConsumptions(subscription) {
             </div>
           </div>
         </div>
-      `).join('')}
+      `
+        )
+        .join('')}
     </div>
   `;
 }
 
 function renderClientInvoices(subscription) {
-  const invoices = Array.isArray(subscription?.raw?.subscription_invoices)
-    ? [...subscription.raw.subscription_invoices]
-    : [];
+  const invoices = Array.isArray(subscription?.raw?.subscription_invoices) ? [...subscription.raw.subscription_invoices] : [];
 
   invoices.sort((a, b) => {
     const aDate = new Date(a?.created_at || a?.due_at || 0).getTime();
@@ -497,11 +495,12 @@ function renderClientInvoices(subscription) {
 
   return `
     <div class="clients-invoice-list">
-      ${invoices.map((invoice) => {
-        const invoiceMeta = getInvoiceStatusMeta(invoice.status);
-        const actionButtons = getInvoiceActionButtons(invoice);
+      ${invoices
+        .map((invoice) => {
+          const invoiceMeta = getInvoiceStatusMeta(invoice.status);
+          const actionButtons = getInvoiceActionButtons(invoice);
 
-        return `
+          return `
           <div class="clients-invoice-row">
             <div class="clients-invoice-main">
               <div class="clients-invoice-title">${escapeHtml(formatCurrency((invoice.amount_cents || 0) / 100))}</div>
@@ -511,9 +510,13 @@ function renderClientInvoices(subscription) {
                 · Gateway: ${escapeHtml(invoice.gateway_provider || '—')}
               </div>
 
-              ${actionButtons.length ? `
+              ${
+                actionButtons.length
+                  ? `
                 <div class="clients-action-grid clients-action-grid--nested">
-                  ${actionButtons.map((button) => `
+                  ${actionButtons
+                    .map(
+                      (button) => `
                     <button
                       type="button"
                       class="clients-action-btn clients-invoice-action"
@@ -522,9 +525,13 @@ function renderClientInvoices(subscription) {
                     >
                       ${escapeHtml(button.label)}
                     </button>
-                  `).join('')}
+                  `
+                    )
+                    .join('')}
                 </div>
-              ` : ''}
+              `
+                  : ''
+              }
             </div>
 
             <div class="clients-invoice-side">
@@ -534,7 +541,8 @@ function renderClientInvoices(subscription) {
             </div>
           </div>
         `;
-      }).join('')}
+        })
+        .join('')}
     </div>
   `;
 }
@@ -590,7 +598,9 @@ function renderClientSubscription(subscription) {
           actionButtons.length
             ? `
               <div class="clients-action-grid">
-                ${actionButtons.map((button) => `
+                ${actionButtons
+                  .map(
+                    (button) => `
                   <button
                     type="button"
                     class="clients-action-btn clients-subscription-action"
@@ -599,7 +609,9 @@ function renderClientSubscription(subscription) {
                   >
                     ${escapeHtml(button.label)}
                   </button>
-                `).join('')}
+                `
+                  )
+                  .join('')}
               </div>
             `
             : `
@@ -766,6 +778,16 @@ function renderClientModalLoading() {
         <div class="modal-title" style="margin:0;">Carregando cliente...</div>
         <div class="modal-sub" style="margin-top:4px;">Buscando ficha completa e assinatura.</div>
       </div>
+      <div class="clients-modal-grid">
+        <div class="mini-card"><div class="mini-lbl">Visitas</div><div class="mini-val">—</div></div>
+        <div class="mini-card"><div class="mini-lbl">Total gasto</div><div class="mini-val">—</div></div>
+        <div class="mini-card"><div class="mini-lbl">Último atendimento</div><div class="mini-val">—</div></div>
+        <div class="mini-card"><div class="mini-lbl">Status do cliente</div><div class="mini-val">—</div></div>
+      </div>
+      <div class="clients-modal-info">
+        <div class="clients-modal-info-row">Carregando dados do cliente...</div>
+        <div class="clients-modal-info-row">Carregando assinatura e cobranças...</div>
+      </div>
     </div>
   `;
 }
@@ -775,10 +797,7 @@ function setClientFormFeedback(message, variant = 'neutral') {
   if (!el) return;
 
   el.textContent = message || '';
-  el.style.color =
-    variant === 'error' ? '#ff8a8a' :
-    variant === 'success' ? '#00e676' :
-    '#5a6888';
+  el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
 function setClientDetailFeedback(message, variant = 'neutral') {
@@ -786,10 +805,7 @@ function setClientDetailFeedback(message, variant = 'neutral') {
   if (!el) return;
 
   el.textContent = message || '';
-  el.style.color =
-    variant === 'error' ? '#ff8a8a' :
-    variant === 'success' ? '#00e676' :
-    '#5a6888';
+  el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
 function updateCounter(inputId, counterId, maxLength) {
@@ -865,10 +881,7 @@ async function loadClientsData() {
 
 async function loadClientDetails(clientId) {
   try {
-    const [clientPayload, subscriptionsPayload] = await Promise.all([
-      getClientById(clientId),
-      getSubscriptions({ client_id: clientId }),
-    ]);
+    const [clientPayload, subscriptionsPayload] = await Promise.all([getClientById(clientId), getSubscriptions({ client_id: clientId })]);
 
     const detailClient = mapClientDetailFromApi(clientPayload);
 
@@ -883,6 +896,7 @@ async function loadClientDetails(clientId) {
 
     clientesState.detailClient = detailClient;
     clientesState.detailSubscription = detailSubscription;
+    clientesState.isDetailLoading = false;
     renderClientModal();
   } catch (error) {
     if (clientesState.activeClientId !== clientId) return;
@@ -896,6 +910,7 @@ async function loadClientDetails(clientId) {
         }
       : null;
     clientesState.detailSubscription = null;
+    clientesState.isDetailLoading = false;
     renderClientModal();
 
     const message = error instanceof Error ? error.message : 'Não foi possível carregar a ficha do cliente.';
@@ -909,6 +924,7 @@ function openClientModal(clientId) {
   clientesState.activeClientId = clientId;
   clientesState.detailClient = null;
   clientesState.detailSubscription = null;
+  clientesState.isDetailLoading = true;
   clientesState.modalMode = 'view';
   renderClientModal();
   loadClientDetails(clientId);
@@ -918,12 +934,14 @@ function openCreateClientModal() {
   clientesState.activeClientId = null;
   clientesState.detailClient = null;
   clientesState.detailSubscription = null;
+  clientesState.isDetailLoading = false;
   clientesState.modalMode = 'create';
   renderClientModal();
 }
 
 function openEditClientModal(clientId) {
   clientesState.activeClientId = clientId;
+  clientesState.isDetailLoading = false;
   clientesState.modalMode = 'edit';
   renderClientModal();
 }
@@ -937,6 +955,7 @@ function closeClientModal() {
   clientesState.activeClientId = null;
   clientesState.detailClient = null;
   clientesState.detailSubscription = null;
+  clientesState.isDetailLoading = false;
   modal.classList.remove('open');
   modal.style.display = 'none';
 
@@ -996,10 +1015,7 @@ async function handleClientFormSubmit(event) {
   };
 
   try {
-    setClientFormFeedback(
-      clientesState.modalMode === 'edit' ? 'Salvando alterações...' : 'Criando cliente...',
-      'neutral'
-    );
+    setClientFormFeedback(clientesState.modalMode === 'edit' ? 'Salvando alterações...' : 'Criando cliente...', 'neutral');
 
     if (clientesState.modalMode === 'create') {
       const createdClient = await createClient(payload);
@@ -1026,24 +1042,15 @@ async function handleSubscriptionAction(subscriptionId, action) {
     buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
     setClientDetailFeedback('Executando ação na assinatura...', 'neutral');
 
-    if (action === 'activate') {
-      await activateSubscription(subscriptionId);
-    }
-
-    if (action === 'pause') {
-      await pauseSubscription(subscriptionId);
-    }
-
-    if (action === 'reactivate') {
-      await reactivateSubscription(subscriptionId);
-    }
-
-    if (action === 'cancel') {
-      await cancelSubscription(subscriptionId);
-    }
+    if (action === 'activate') await activateSubscription(subscriptionId);
+    if (action === 'pause') await pauseSubscription(subscriptionId);
+    if (action === 'reactivate') await reactivateSubscription(subscriptionId);
+    if (action === 'cancel') await cancelSubscription(subscriptionId);
 
     if (!clientesState.activeClientId) return;
 
+    clientesState.isDetailLoading = true;
+    renderClientModal();
     await loadClientsData();
     await loadClientDetails(clientesState.activeClientId);
 
@@ -1052,6 +1059,8 @@ async function handleSubscriptionAction(subscriptionId, action) {
     }, 0);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Não foi possível atualizar a assinatura.';
+    clientesState.isDetailLoading = false;
+    renderClientModal();
     setClientDetailFeedback(message, 'error');
   } finally {
     buttons.forEach((button) => button.removeAttribute('disabled'));
@@ -1065,20 +1074,14 @@ async function handleInvoiceAction(invoiceId, action) {
     buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
     setClientDetailFeedback('Executando ação na cobrança...', 'neutral');
 
-    if (action === 'markPaid') {
-      await markInvoicePaid(invoiceId);
-    }
-
-    if (action === 'markFailed') {
-      await markInvoiceFailed(invoiceId);
-    }
-
-    if (action === 'cancel') {
-      await cancelInvoice(invoiceId);
-    }
+    if (action === 'markPaid') await markInvoicePaid(invoiceId);
+    if (action === 'markFailed') await markInvoiceFailed(invoiceId);
+    if (action === 'cancel') await cancelInvoice(invoiceId);
 
     if (!clientesState.activeClientId) return;
 
+    clientesState.isDetailLoading = true;
+    renderClientModal();
     await loadClientsData();
     await loadClientDetails(clientesState.activeClientId);
 
@@ -1087,6 +1090,8 @@ async function handleInvoiceAction(invoiceId, action) {
     }, 0);
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Não foi possível atualizar a cobrança.';
+    clientesState.isDetailLoading = false;
+    renderClientModal();
     setClientDetailFeedback(message, 'error');
   } finally {
     buttons.forEach((button) => button.removeAttribute('disabled'));
@@ -1109,9 +1114,11 @@ function renderClientModal() {
   const detailClient = clientesState.detailClient || summaryClient;
 
   if (clientesState.modalMode === 'view') {
-    content.innerHTML = detailClient
-      ? renderClientDetails(detailClient, clientesState.detailSubscription)
-      : renderClientModalLoading();
+    if (clientesState.isDetailLoading || !detailClient) {
+      content.innerHTML = renderClientModalLoading();
+    } else {
+      content.innerHTML = renderClientDetails(detailClient, clientesState.detailSubscription);
+    }
   }
 
   if (clientesState.modalMode === 'edit') {
