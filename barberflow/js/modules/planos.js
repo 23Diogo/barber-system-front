@@ -1,80 +1,20 @@
+import {
+  hasApiConfig,
+  hasAuthToken,
+  getPlans,
+  createPlan,
+  updatePlan,
+  getSubscriptions,
+  createSubscription,
+  getClients,
+} from '../services/api.js';
+
 const planosState = {
-  plans: [
-    {
-      id: 'black-mensal',
-      name: 'Plano Black Mensal',
-      description: '4 cortes por mês com prioridade no agendamento.',
-      priceCents: 8990,
-      billingInterval: 'Mensal',
-      includedHaircuts: 4,
-      includedBeards: 0,
-      signupFeeCents: 0,
-      graceDays: 3,
-      isActive: true,
-      subscribersCount: 12,
-    },
-    {
-      id: 'premium-completo',
-      name: 'Plano Premium Completo',
-      description: '4 cortes + 2 barbas por mês.',
-      priceCents: 12990,
-      billingInterval: 'Mensal',
-      includedHaircuts: 4,
-      includedBeards: 2,
-      signupFeeCents: 1990,
-      graceDays: 5,
-      isActive: true,
-      subscribersCount: 7,
-    },
-    {
-      id: 'essencial',
-      name: 'Plano Essencial',
-      description: '2 cortes por mês para clientes recorrentes.',
-      priceCents: 4990,
-      billingInterval: 'Mensal',
-      includedHaircuts: 2,
-      includedBeards: 0,
-      signupFeeCents: 0,
-      graceDays: 2,
-      isActive: false,
-      subscribersCount: 3,
-    },
-  ],
-  subscriptions: [
-    {
-      id: 'sub-rafael',
-      clientName: 'Rafael Souza',
-      planId: 'black-mensal',
-      status: 'active',
-      nextBillingAt: '20/04/2026',
-      paymentMethod: 'Pix',
-      remainingHaircuts: 3,
-      remainingBeards: 0,
-      lastInvoiceStatus: 'paid',
-    },
-    {
-      id: 'sub-carlos',
-      clientName: 'Carlos Mendes',
-      planId: 'premium-completo',
-      status: 'past_due',
-      nextBillingAt: '18/04/2026',
-      paymentMethod: 'Cartão',
-      remainingHaircuts: 1,
-      remainingBeards: 1,
-      lastInvoiceStatus: 'failed',
-    },
-    {
-      id: 'sub-bruno',
-      clientName: 'Bruno Alves',
-      planId: 'black-mensal',
-      status: 'active',
-      nextBillingAt: '25/04/2026',
-      paymentMethod: 'Pix',
-      remainingHaircuts: 2,
-      remainingBeards: 0,
-      lastInvoiceStatus: 'paid',
-    },
-  ],
+  plans: [],
+  subscriptions: [],
+  clients: [],
+  isLoaded: false,
+  isLoading: false,
   modalMode: 'closed', // closed | viewPlan | editPlan | createPlan | viewSubscription | createSubscription
   activePlanId: null,
   activeSubscriptionId: null,
@@ -102,27 +42,99 @@ function formatCompactCurrencyFromCents(cents) {
   return formatCurrencyFromCents(cents);
 }
 
-function normalizeId(value) {
-  const base = String(value || 'novo-item')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'novo-item';
+function formatDateDisplay(value) {
+  if (!value) return '—';
 
-  let candidate = base;
-  let counter = 2;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
 
-  while (
-    planosState.plans.some((item) => item.id === candidate) ||
-    planosState.subscriptions.some((item) => item.id === candidate)
-  ) {
-    candidate = `${base}-${counter}`;
-    counter += 1;
+  return date.toLocaleDateString('pt-BR');
+}
+
+function formatBillingInterval(interval, count) {
+  const safeCount = Number(count || 1);
+
+  if (interval === 'year') {
+    return safeCount > 1 ? `A cada ${safeCount} anos` : 'Anual';
   }
 
-  return candidate;
+  return safeCount > 1 ? `A cada ${safeCount} meses` : 'Mensal';
+}
+
+function getLatestCycle(subscription) {
+  const cycles = Array.isArray(subscription?.subscription_cycles)
+    ? [...subscription.subscription_cycles]
+    : [];
+
+  if (!cycles.length) return null;
+
+  cycles.sort((a, b) => {
+    const aCycle = Number(a?.cycle_number || 0);
+    const bCycle = Number(b?.cycle_number || 0);
+    return bCycle - aCycle;
+  });
+
+  return cycles[0] || null;
+}
+
+function getLatestInvoice(subscription) {
+  const invoices = Array.isArray(subscription?.subscription_invoices)
+    ? [...subscription.subscription_invoices]
+    : [];
+
+  if (!invoices.length) return null;
+
+  invoices.sort((a, b) => {
+    const aDate = new Date(a?.created_at || a?.due_at || 0).getTime();
+    const bDate = new Date(b?.created_at || b?.due_at || 0).getTime();
+    return bDate - aDate;
+  });
+
+  return invoices[0] || null;
+}
+
+function mapPlanFromApi(plan) {
+  return {
+    id: plan.id,
+    name: plan.name || 'Plano sem nome',
+    description: plan.description || 'Sem descrição.',
+    priceCents: Number(plan.price_cents || 0),
+    billingInterval: formatBillingInterval(plan.billing_interval, plan.billing_interval_count),
+    includedHaircuts: Number(plan.included_haircuts || 0),
+    includedBeards: Number(plan.included_beards || 0),
+    signupFeeCents: Number(plan.signup_fee_cents || 0),
+    graceDays: Number(plan.grace_days || 0),
+    isActive: Boolean(plan.is_active),
+    subscribersCount: 0,
+    raw: plan,
+  };
+}
+
+function mapSubscriptionFromApi(subscription) {
+  const latestCycle = getLatestCycle(subscription);
+  const latestInvoice = getLatestInvoice(subscription);
+
+  return {
+    id: subscription.id,
+    clientId: subscription.client_id || subscription.clients?.id || '',
+    clientName: subscription.clients?.name || 'Cliente',
+    planId: subscription.plan_id || subscription.plans?.id || '',
+    planName: subscription.plans?.name || 'Plano',
+    status: subscription.status || 'active',
+    nextBillingAt: formatDateDisplay(subscription.next_billing_at || subscription.current_period_end),
+    paymentMethod: subscription.payment_method_label || latestInvoice?.payment_method || '—',
+    remainingHaircuts: Number(latestCycle?.remaining_haircuts || 0),
+    remainingBeards: Number(latestCycle?.remaining_beards || 0),
+    lastInvoiceStatus: latestInvoice?.status || 'pending',
+    raw: subscription,
+  };
+}
+
+function applySubscriberCounts(plans, subscriptions) {
+  return plans.map((plan) => ({
+    ...plan,
+    subscribersCount: subscriptions.filter((subscription) => subscription.planId === plan.id).length,
+  }));
 }
 
 function getPlanById(planId) {
@@ -131,6 +143,10 @@ function getPlanById(planId) {
 
 function getSubscriptionById(subscriptionId) {
   return planosState.subscriptions.find((item) => item.id === subscriptionId) || null;
+}
+
+function getClientById(clientId) {
+  return planosState.clients.find((item) => item.id === clientId) || null;
 }
 
 function getSubscriptionStatusMeta(status) {
@@ -159,6 +175,18 @@ function getSubscriptionStatusMeta(status) {
       bg: 'rgba(90,104,136,.12)',
       border: 'rgba(90,104,136,.18)',
     },
+    pending_activation: {
+      label: 'Pendente',
+      color: '#4fc3f7',
+      bg: 'rgba(79,195,247,.1)',
+      border: 'rgba(79,195,247,.18)',
+    },
+    trialing: {
+      label: 'Trial',
+      color: '#9c6fff',
+      bg: 'rgba(156,111,255,.1)',
+      border: 'rgba(156,111,255,.18)',
+    },
   };
 
   return map[status] || map.active;
@@ -169,6 +197,9 @@ function getInvoiceStatusMeta(status) {
     paid: { label: 'Pago', color: '#00e676' },
     failed: { label: 'Falhou', color: '#ff1744' },
     pending: { label: 'Pendente', color: '#f97316' },
+    canceled: { label: 'Cancelado', color: '#5a6888' },
+    refunded: { label: 'Estornado', color: '#9c6fff' },
+    expired: { label: 'Expirado', color: '#f97316' },
   };
 
   return map[status] || map.pending;
@@ -226,6 +257,35 @@ function renderMetrics() {
   `;
 }
 
+function renderConfigHint(title, body, showAuthButton = false) {
+  return `
+    <div class="card">
+      <div class="card-header"><div class="card-title">Planos</div></div>
+      <div class="row-sub" style="padding:4px 4px 0;color:#c0cce8;font-size:11px;font-weight:600">${escapeHtml(title)}</div>
+      <div class="row-sub" style="padding:8px 4px 4px;color:#5a6888;line-height:1.6">${escapeHtml(body)}</div>
+      ${showAuthButton ? '<button class="dev-auth-inline-btn" type="button" data-open-auth-modal="true">Conectar API agora</button>' : ''}
+    </div>
+  `;
+}
+
+function renderLoadingState(title, body) {
+  return `
+    <div class="card">
+      <div class="card-header"><div class="card-title">${escapeHtml(title)}</div></div>
+      <div class="row-sub" style="padding:8px 4px;color:#5a6888;line-height:1.6">${escapeHtml(body)}</div>
+    </div>
+  `;
+}
+
+function renderEmptyState(title, body) {
+  return `
+    <div class="card">
+      <div class="card-header"><div class="card-title">${escapeHtml(title)}</div></div>
+      <div class="row-sub" style="padding:8px 4px;color:#5a6888;line-height:1.6">${escapeHtml(body)}</div>
+    </div>
+  `;
+}
+
 function renderPlanRow(plan) {
   const statusText = plan.isActive ? 'Ativo' : 'Inativo';
   const statusClass = plan.isActive ? 'planos-badge planos-badge--success' : 'planos-badge planos-badge--muted';
@@ -270,7 +330,7 @@ function renderSubscriptionRow(subscription) {
       <div class="planos-row">
         <div class="planos-row-main">
           <div class="planos-row-title">${escapeHtml(subscription.clientName)}</div>
-          <div class="planos-row-sub">${escapeHtml(plan?.name || 'Plano não encontrado')}</div>
+          <div class="planos-row-sub">${escapeHtml(plan?.name || subscription.planName || 'Plano não encontrado')}</div>
           <div class="planos-row-sub">
             ${escapeHtml(`Próxima cobrança ${subscription.nextBillingAt} · ${subscription.paymentMethod}`)}
           </div>
@@ -456,7 +516,7 @@ function renderSubscriptionDetails(subscription) {
       <div class="planos-modal-grid">
         <div class="mini-card">
           <div class="mini-lbl">Plano</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(plan?.name || '—')}</div>
+          <div class="mini-val" style="font-size:15px;">${escapeHtml(plan?.name || subscription.planName || '—')}</div>
         </div>
         <div class="mini-card">
           <div class="mini-lbl">Status</div>
@@ -499,36 +559,35 @@ function renderSubscriptionForm() {
     <div class="planos-modal-body">
       <div>
         <div class="modal-title" style="margin:0;">Nova assinatura</div>
-        <div class="modal-sub" style="margin-top:4px;">Preencha os dados para criar uma assinatura no painel do dono.</div>
+        <div class="modal-sub" style="margin-top:4px;">Preencha os dados para criar uma assinatura real no painel do dono.</div>
       </div>
 
       <form id="planos-subscription-form" class="planos-form">
         <div class="planos-form-grid">
           <div>
             <div class="color-section-label">Cliente</div>
-            <input class="modal-input" name="clientName" type="text" placeholder="Nome do cliente" />
+            <select class="modal-input" name="clientId">
+              <option value="">Selecione o cliente</option>
+              ${planosState.clients.map((client) => `<option value="${escapeHtml(client.id)}">${escapeHtml(client.name || 'Cliente')}</option>`).join('')}
+            </select>
           </div>
 
           <div>
             <div class="color-section-label">Plano</div>
             <select class="modal-input" name="planId">
+              <option value="">Selecione o plano</option>
               ${planosState.plans.map((plan) => `<option value="${escapeHtml(plan.id)}">${escapeHtml(plan.name)}</option>`).join('')}
             </select>
           </div>
 
           <div>
-            <div class="color-section-label">Status</div>
-            <select class="modal-input" name="status">
-              <option value="active">Ativa</option>
-              <option value="past_due">Inadimplente</option>
-              <option value="paused">Pausada</option>
-              <option value="canceled">Cancelada</option>
+            <div class="color-section-label">Gateway</div>
+            <select class="modal-input" name="gatewayProvider">
+              <option value="asaas">Asaas</option>
+              <option value="mercadopago">Mercado Pago</option>
+              <option value="stripe">Stripe</option>
+              <option value="gateway">Gateway</option>
             </select>
-          </div>
-
-          <div>
-            <div class="color-section-label">Próxima cobrança</div>
-            <input class="modal-input" name="nextBillingAt" type="text" placeholder="Ex.: 20/04/2026" />
           </div>
 
           <div>
@@ -541,22 +600,8 @@ function renderSubscriptionForm() {
           </div>
 
           <div>
-            <div class="color-section-label">Saldo de cortes</div>
-            <input class="modal-input" name="remainingHaircuts" type="number" min="0" value="0" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Saldo de barbas</div>
-            <input class="modal-input" name="remainingBeards" type="number" min="0" value="0" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Última cobrança</div>
-            <select class="modal-input" name="lastInvoiceStatus">
-              <option value="paid">Pago</option>
-              <option value="pending">Pendente</option>
-              <option value="failed">Falhou</option>
-            </select>
+            <div class="color-section-label">Vencimento</div>
+            <input class="modal-input" name="dueAt" type="date" />
           </div>
         </div>
 
@@ -593,6 +638,85 @@ function setSubscriptionFormFeedback(message, variant = 'neutral') {
     '#5a6888';
 }
 
+async function ensureClientsLoaded() {
+  if (Array.isArray(planosState.clients) && planosState.clients.length > 0) return;
+
+  const clients = await getClients();
+  planosState.clients = Array.isArray(clients) ? clients : [];
+}
+
+async function loadPlanosData() {
+  const metricsEl = document.getElementById('planos-metrics');
+  const plansListEl = document.getElementById('planos-list');
+  const subscriptionsListEl = document.getElementById('planos-subscriptions-list');
+
+  if (!metricsEl || !plansListEl || !subscriptionsListEl) return;
+
+  if (!hasApiConfig()) {
+    planosState.isLoaded = false;
+    metricsEl.innerHTML = '';
+    plansListEl.innerHTML = renderConfigHint(
+      'API não configurada',
+      'Abra o login dev e informe a URL pública do backend para carregar os planos reais.',
+      true,
+    );
+    subscriptionsListEl.innerHTML = renderEmptyState(
+      'Assinaturas',
+      'Aguardando configuração da API para exibir as assinaturas.',
+    );
+    return;
+  }
+
+  if (!hasAuthToken()) {
+    planosState.isLoaded = false;
+    metricsEl.innerHTML = '';
+    plansListEl.innerHTML = renderConfigHint(
+      'Login de desenvolvimento pendente',
+      'Faça o login dev com um usuário válido para liberar os módulos protegidos.',
+      true,
+    );
+    subscriptionsListEl.innerHTML = renderEmptyState(
+      'Assinaturas',
+      'Aguardando autenticação para exibir as assinaturas.',
+    );
+    return;
+  }
+
+  planosState.isLoading = true;
+  metricsEl.innerHTML = '';
+  plansListEl.innerHTML = renderLoadingState('Planos', 'Carregando planos...');
+  subscriptionsListEl.innerHTML = renderLoadingState('Assinaturas', 'Carregando assinaturas...');
+
+  try {
+    const [plansPayload, subscriptionsPayload] = await Promise.all([
+      getPlans(),
+      getSubscriptions(),
+    ]);
+
+    const mappedPlans = Array.isArray(plansPayload) ? plansPayload.map(mapPlanFromApi) : [];
+    const mappedSubscriptions = Array.isArray(subscriptionsPayload)
+      ? subscriptionsPayload.map(mapSubscriptionFromApi)
+      : [];
+
+    planosState.plans = applySubscriberCounts(mappedPlans, mappedSubscriptions);
+    planosState.subscriptions = mappedSubscriptions;
+    planosState.isLoaded = true;
+
+    rerenderPlanos();
+  } catch (error) {
+    planosState.isLoaded = false;
+    const message = error instanceof Error ? error.message : 'Não foi possível carregar os dados de planos.';
+    metricsEl.innerHTML = '';
+    plansListEl.innerHTML = renderConfigHint('Erro ao carregar planos', message, true);
+    subscriptionsListEl.innerHTML = renderEmptyState(
+      'Assinaturas',
+      'Sem dados por causa do erro de integração.',
+    );
+  } finally {
+    planosState.isLoading = false;
+  }
+}
+
 function openPlanModal(planId) {
   planosState.activePlanId = planId;
   planosState.activeSubscriptionId = null;
@@ -621,11 +745,17 @@ function openSubscriptionModal(subscriptionId) {
   renderPlanosModal();
 }
 
-function openCreateSubscriptionModal() {
-  planosState.activeSubscriptionId = null;
-  planosState.activePlanId = null;
-  planosState.modalMode = 'createSubscription';
-  renderPlanosModal();
+async function openCreateSubscriptionModal() {
+  try {
+    await ensureClientsLoaded();
+    planosState.activeSubscriptionId = null;
+    planosState.activePlanId = null;
+    planosState.modalMode = 'createSubscription';
+    renderPlanosModal();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível carregar os clientes.';
+    alert(message);
+  }
 }
 
 function closePlanosModal() {
@@ -659,7 +789,7 @@ function collectPlanFormData() {
   };
 }
 
-function handlePlanFormSubmit(event) {
+async function handlePlanFormSubmit(event) {
   event.preventDefault();
 
   const data = collectPlanFormData();
@@ -674,27 +804,44 @@ function handlePlanFormSubmit(event) {
     return;
   }
 
-  if (planosState.modalMode === 'createPlan') {
-    const newPlan = {
-      id: normalizeId(data.name),
-      ...data,
-      subscribersCount: 0,
-    };
+  const payload = {
+    name: data.name,
+    description: data.description,
+    price_cents: data.priceCents,
+    currency: 'BRL',
+    billing_interval: data.billingInterval === 'Anual' ? 'year' : 'month',
+    billing_interval_count: 1,
+    included_haircuts: data.includedHaircuts,
+    included_beards: data.includedBeards,
+    signup_fee_cents: data.signupFeeCents,
+    grace_days: data.graceDays,
+    is_active: data.isActive,
+    service_entitlements: [],
+  };
 
-    planosState.plans = [newPlan, ...planosState.plans];
-    rerenderPlanos();
-    openPlanModal(newPlan.id);
-    return;
-  }
+  try {
+    setPlanFormFeedback(planosState.modalMode === 'editPlan' ? 'Salvando alterações...' : 'Criando plano...');
 
-  if (planosState.modalMode === 'editPlan' && planosState.activePlanId) {
-    planosState.plans = planosState.plans.map((item) => {
-      if (item.id !== planosState.activePlanId) return item;
-      return { ...item, ...data };
-    });
+    if (planosState.modalMode === 'createPlan') {
+      const createdPlan = await createPlan(payload);
+      await loadPlanosData();
+      const createdId = createdPlan?.id || null;
+      if (createdId) {
+        openPlanModal(createdId);
+      } else {
+        closePlanosModal();
+      }
+      return;
+    }
 
-    rerenderPlanos();
-    openPlanModal(planosState.activePlanId);
+    if (planosState.modalMode === 'editPlan' && planosState.activePlanId) {
+      await updatePlan(planosState.activePlanId, payload);
+      await loadPlanosData();
+      openPlanModal(planosState.activePlanId);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível salvar o plano.';
+    setPlanFormFeedback(message, 'error');
   }
 }
 
@@ -703,24 +850,21 @@ function collectSubscriptionFormData() {
   const formData = new FormData(form);
 
   return {
-    clientName: String(formData.get('clientName') || '').trim(),
+    clientId: String(formData.get('clientId') || '').trim(),
     planId: String(formData.get('planId') || '').trim(),
-    status: String(formData.get('status') || 'active').trim(),
-    nextBillingAt: String(formData.get('nextBillingAt') || '').trim(),
+    gatewayProvider: String(formData.get('gatewayProvider') || 'asaas').trim(),
     paymentMethod: String(formData.get('paymentMethod') || 'Pix').trim(),
-    remainingHaircuts: Number(formData.get('remainingHaircuts') || 0),
-    remainingBeards: Number(formData.get('remainingBeards') || 0),
-    lastInvoiceStatus: String(formData.get('lastInvoiceStatus') || 'paid').trim(),
+    dueAt: String(formData.get('dueAt') || '').trim(),
   };
 }
 
-function handleSubscriptionFormSubmit(event) {
+async function handleSubscriptionFormSubmit(event) {
   event.preventDefault();
 
   const data = collectSubscriptionFormData();
 
-  if (!data.clientName) {
-    setSubscriptionFormFeedback('Informe o nome do cliente.', 'error');
+  if (!data.clientId) {
+    setSubscriptionFormFeedback('Selecione o cliente.', 'error');
     return;
   }
 
@@ -729,24 +873,36 @@ function handleSubscriptionFormSubmit(event) {
     return;
   }
 
-  if (!data.nextBillingAt) {
-    setSubscriptionFormFeedback('Informe a próxima cobrança.', 'error');
+  if (!data.dueAt) {
+    setSubscriptionFormFeedback('Informe a data de vencimento.', 'error');
     return;
   }
 
-  const newSubscription = {
-    id: normalizeId(`${data.clientName}-${data.planId}`),
-    ...data,
-  };
+  try {
+    setSubscriptionFormFeedback('Criando assinatura...');
 
-  planosState.subscriptions = [newSubscription, ...planosState.subscriptions];
-  planosState.plans = planosState.plans.map((plan) => {
-    if (plan.id !== data.planId) return plan;
-    return { ...plan, subscribersCount: plan.subscribersCount + 1 };
-  });
+    const payload = {
+      client_id: data.clientId,
+      plan_id: data.planId,
+      gateway_provider: data.gatewayProvider,
+      payment_method: data.paymentMethod,
+      due_at: new Date(`${data.dueAt}T12:00:00`).toISOString(),
+    };
 
-  rerenderPlanos();
-  openSubscriptionModal(newSubscription.id);
+    const createdSubscription = await createSubscription(payload);
+    await loadPlanosData();
+
+    const createdId = createdSubscription?.id || (Array.isArray(createdSubscription) ? createdSubscription[0]?.id : null);
+
+    if (createdId) {
+      openSubscriptionModal(createdId);
+    } else {
+      closePlanosModal();
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível criar a assinatura.';
+    setSubscriptionFormFeedback(message, 'error');
+  }
 }
 
 function renderPlanosModal() {
@@ -864,8 +1020,18 @@ function rerenderPlanos() {
   const subscriptionsList = document.getElementById('planos-subscriptions-list');
 
   if (metrics) metrics.innerHTML = renderMetrics();
-  if (plansList) plansList.innerHTML = planosState.plans.map(renderPlanRow).join('');
-  if (subscriptionsList) subscriptionsList.innerHTML = planosState.subscriptions.map(renderSubscriptionRow).join('');
+
+  if (plansList) {
+    plansList.innerHTML = planosState.plans.length
+      ? planosState.plans.map(renderPlanRow).join('')
+      : renderEmptyState('Planos', 'Nenhum plano cadastrado até o momento.');
+  }
+
+  if (subscriptionsList) {
+    subscriptionsList.innerHTML = planosState.subscriptions.length
+      ? planosState.subscriptions.map(renderSubscriptionRow).join('')
+      : renderEmptyState('Assinaturas', 'Nenhuma assinatura encontrada até o momento.');
+  }
 
   bindPlanEvents();
   bindSubscriptionEvents();
@@ -886,7 +1052,7 @@ export function renderPlanos() {
       </div>
 
       <div id="planos-list">
-        ${planosState.plans.map(renderPlanRow).join('')}
+        ${renderLoadingState('Planos', 'Carregando planos...')}
       </div>
     </div>
 
@@ -897,7 +1063,7 @@ export function renderPlanos() {
       </div>
 
       <div id="planos-subscriptions-list">
-        ${planosState.subscriptions.map(renderSubscriptionRow).join('')}
+        ${renderLoadingState('Assinaturas', 'Carregando assinaturas...')}
       </div>
     </div>
   </div>
@@ -915,4 +1081,5 @@ export function initPlanosPage() {
   bindPlanosStaticEvents();
   bindPlanEvents();
   bindSubscriptionEvents();
+  loadPlanosData();
 }
