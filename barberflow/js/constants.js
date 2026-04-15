@@ -6,6 +6,7 @@ export const pageTitles = {
   estoque: 'ESTOQUE',
   servicos: 'SERVIÇOS',
   barbeiros: 'BARBEIROS',
+  planos: 'Planos',
   whats: 'WHATSAPP BOT',
   mkt: 'MARKETING',
   fidel: 'FIDELIDADE',
