@@ -129,6 +129,24 @@ export async function getClients() {
   return apiFetch('/api/clients');
 }
 
+export async function getClientById(clientId) {
+  return apiFetch(`/api/clients/${clientId}`);
+}
+
+export async function createClient(payload) {
+  return apiFetch('/api/clients', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateClient(clientId, payload) {
+  return apiFetch(`/api/clients/${clientId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function getBarbers() {
   return apiFetch('/api/barbers');
 }
@@ -306,6 +324,10 @@ window.BarberFlowApi = {
   getMe,
   getAppointmentsByDate,
   getClients,
+  getClientById,
+  createClient,
+  updateClient,
+  
   getBarbers,
   getServices,
   createAppointment,
