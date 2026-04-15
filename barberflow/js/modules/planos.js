@@ -7,6 +7,13 @@ import {
   getSubscriptions,
   createSubscription,
   getClients,
+  activateSubscription,
+  pauseSubscription,
+  reactivateSubscription,
+  cancelSubscription,
+  markInvoicePaid,
+  markInvoiceFailed,
+  cancelInvoice,
 } from '../services/api.js';
 
 const PLAN_NAME_MAX_LENGTH = 100;
@@ -18,7 +25,7 @@ const planosState = {
   clients: [],
   isLoaded: false,
   isLoading: false,
-  modalMode: 'closed', // closed | viewPlan | editPlan | createPlan | viewSubscription | createSubscription
+  modalMode: 'closed',
   activePlanId: null,
   activeSubscriptionId: null,
 };
@@ -125,7 +132,6 @@ function parseMoneyInput(rawValue) {
 
   return {
     amount: Number(amount.toFixed(2)),
-    cents: Math.round(amount * 100),
     formatted: amount.toFixed(2).replace('.', ','),
   };
 }
@@ -187,11 +193,9 @@ function mapPlanFromApi(plan) {
       : null;
 
   const priceCents =
-    plan.price_cents != null
-      ? Number(plan.price_cents)
-      : numericPrice != null && Number.isFinite(numericPrice)
-        ? Math.round(numericPrice * 100)
-        : 0;
+    numericPrice != null && Number.isFinite(numericPrice)
+      ? Math.round(numericPrice * 100)
+      : Number(plan.price_cents || 0);
 
   return {
     id: plan.id,
@@ -637,10 +641,123 @@ function renderPlanForm(mode, plan = null) {
   `;
 }
 
+function getSubscriptionActionButtons(subscription) {
+  const buttons = [];
+
+  if (subscription.status === 'pending_activation') {
+    buttons.push({ action: 'activate', label: 'Ativar assinatura' });
+    buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
+  }
+
+  if (subscription.status === 'active' || subscription.status === 'trialing') {
+    buttons.push({ action: 'pause', label: 'Pausar assinatura' });
+    buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
+  }
+
+  if (subscription.status === 'paused') {
+    buttons.push({ action: 'reactivate', label: 'Reativar assinatura' });
+    buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
+  }
+
+  if (subscription.status === 'past_due') {
+    buttons.push({ action: 'activate', label: 'Marcar como ativa' });
+    buttons.push({ action: 'pause', label: 'Pausar assinatura' });
+    buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
+  }
+
+  return buttons;
+}
+
+function getInvoiceActionButtons(invoice) {
+  const buttons = [];
+
+  if (invoice.status === 'pending') {
+    buttons.push({ action: 'markPaid', label: 'Marcar paga' });
+    buttons.push({ action: 'markFailed', label: 'Marcar falha' });
+    buttons.push({ action: 'cancel', label: 'Cancelar' });
+  }
+
+  if (invoice.status === 'failed') {
+    buttons.push({ action: 'markPaid', label: 'Marcar paga' });
+    buttons.push({ action: 'cancel', label: 'Cancelar' });
+  }
+
+  return buttons;
+}
+
+function renderInvoicesList(subscription) {
+  const invoices = Array.isArray(subscription?.raw?.subscription_invoices)
+    ? [...subscription.raw.subscription_invoices]
+    : [];
+
+  invoices.sort((a, b) => {
+    const aTime = new Date(a?.created_at || a?.due_at || 0).getTime();
+    const bTime = new Date(b?.created_at || b?.due_at || 0).getTime();
+    return bTime - aTime;
+  });
+
+  if (!invoices.length) {
+    return `
+      <div class="planos-modal-info-row">
+        Nenhuma cobrança encontrada para esta assinatura.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="planos-invoice-list">
+      ${invoices.map((invoice) => {
+        const invoiceMeta = getInvoiceStatusMeta(invoice.status);
+        const actionButtons = getInvoiceActionButtons(invoice);
+
+        return `
+          <div class="planos-invoice-row">
+            <div class="planos-invoice-main">
+              <div class="planos-invoice-title">
+                ${escapeHtml(formatCurrencyFromCents(invoice.amount_cents || 0))}
+              </div>
+              <div class="planos-invoice-sub">
+                Vencimento: ${escapeHtml(formatDateDisplay(invoice.due_at))}
+                · Motivo: ${escapeHtml(invoice.billing_reason || '—')}
+                · Gateway: ${escapeHtml(invoice.gateway_provider || '—')}
+              </div>
+              ${actionButtons.length ? `
+                <div class="planos-invoice-actions">
+                  ${actionButtons.map((button) => `
+                    <button
+                      type="button"
+                      class="planos-action-btn planos-invoice-action"
+                      data-invoice-id="${escapeHtml(invoice.id)}"
+                      data-subscription-id="${escapeHtml(subscription.id)}"
+                      data-action="${escapeHtml(button.action)}"
+                    >
+                      ${escapeHtml(button.label)}
+                    </button>
+                  `).join('')}
+                </div>
+              ` : ''}
+            </div>
+
+            <div class="planos-invoice-side">
+              <div
+                class="planos-badge"
+                style="background:rgba(255,255,255,.04);color:${invoiceMeta.color};border:1px solid rgba(255,255,255,.08);"
+              >
+                ${escapeHtml(invoiceMeta.label)}
+              </div>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function renderSubscriptionDetails(subscription) {
   const plan = getPlanById(subscription.planId);
   const statusMeta = getSubscriptionStatusMeta(subscription.status);
   const invoiceMeta = getInvoiceStatusMeta(subscription.lastInvoiceStatus);
+  const actionButtons = getSubscriptionActionButtons(subscription);
 
   return `
     <div class="planos-modal-body">
@@ -682,6 +799,39 @@ function renderSubscriptionDetails(subscription) {
           <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
         </div>
       </div>
+
+      <div>
+        <div class="planos-section-title">Ações da assinatura</div>
+        ${
+          actionButtons.length
+            ? `
+              <div class="planos-actions-grid">
+                ${actionButtons.map((button) => `
+                  <button
+                    type="button"
+                    class="planos-action-btn planos-subscription-action"
+                    data-subscription-id="${escapeHtml(subscription.id)}"
+                    data-action="${escapeHtml(button.action)}"
+                  >
+                    ${escapeHtml(button.label)}
+                  </button>
+                `).join('')}
+              </div>
+            `
+            : `
+              <div class="planos-modal-info-row">
+                Nenhuma ação disponível para o status atual.
+              </div>
+            `
+        }
+      </div>
+
+      <div>
+        <div class="planos-section-title">Cobranças</div>
+        ${renderInvoicesList(subscription)}
+      </div>
+
+      <div id="planos-details-feedback" class="planos-detail-feedback"></div>
 
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="planos-modal-close">Fechar</button>
@@ -765,6 +915,17 @@ function setPlanFormFeedback(message, variant = 'neutral') {
 
 function setSubscriptionFormFeedback(message, variant = 'neutral') {
   const el = document.getElementById('planos-subscription-feedback');
+  if (!el) return;
+
+  el.textContent = message || '';
+  el.style.color =
+    variant === 'error' ? '#ff8a8a' :
+    variant === 'success' ? '#00e676' :
+    '#5a6888';
+}
+
+function setSubscriptionDetailsFeedback(message, variant = 'neutral') {
+  const el = document.getElementById('planos-details-feedback');
   if (!el) return;
 
   el.textContent = message || '';
@@ -1072,6 +1233,74 @@ async function handleSubscriptionFormSubmit(event) {
   }
 }
 
+async function handleSubscriptionAction(subscriptionId, action) {
+  const buttons = document.querySelectorAll('.planos-subscription-action');
+
+  try {
+    buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    setSubscriptionDetailsFeedback('Executando ação na assinatura...', 'neutral');
+
+    if (action === 'activate') {
+      await activateSubscription(subscriptionId);
+    }
+
+    if (action === 'pause') {
+      await pauseSubscription(subscriptionId);
+    }
+
+    if (action === 'reactivate') {
+      await reactivateSubscription(subscriptionId);
+    }
+
+    if (action === 'cancel') {
+      await cancelSubscription(subscriptionId);
+    }
+
+    await loadPlanosData();
+    openSubscriptionModal(subscriptionId);
+    setTimeout(() => {
+      setSubscriptionDetailsFeedback('Assinatura atualizada com sucesso.', 'success');
+    }, 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível atualizar a assinatura.';
+    setSubscriptionDetailsFeedback(message, 'error');
+  } finally {
+    buttons.forEach((button) => button.removeAttribute('disabled'));
+  }
+}
+
+async function handleInvoiceAction(invoiceId, subscriptionId, action) {
+  const buttons = document.querySelectorAll('.planos-invoice-action');
+
+  try {
+    buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    setSubscriptionDetailsFeedback('Executando ação na cobrança...', 'neutral');
+
+    if (action === 'markPaid') {
+      await markInvoicePaid(invoiceId);
+    }
+
+    if (action === 'markFailed') {
+      await markInvoiceFailed(invoiceId);
+    }
+
+    if (action === 'cancel') {
+      await cancelInvoice(invoiceId);
+    }
+
+    await loadPlanosData();
+    openSubscriptionModal(subscriptionId);
+    setTimeout(() => {
+      setSubscriptionDetailsFeedback('Cobrança atualizada com sucesso.', 'success');
+    }, 0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível atualizar a cobrança.';
+    setSubscriptionDetailsFeedback(message, 'error');
+  } finally {
+    buttons.forEach((button) => button.removeAttribute('disabled'));
+  }
+}
+
 function renderPlanosModal() {
   const modal = document.getElementById('planos-details-modal');
   const content = document.getElementById('planos-details-content');
@@ -1164,6 +1393,25 @@ function bindPlanosModalEvents() {
 
   document.getElementById('planos-subscription-cancel')?.addEventListener('click', closePlanosModal);
   document.getElementById('planos-subscription-form')?.addEventListener('submit', handleSubscriptionFormSubmit);
+
+  document.querySelectorAll('.planos-subscription-action').forEach((button) => {
+    button.addEventListener('click', () => {
+      const subscriptionId = button.dataset.subscriptionId;
+      const action = button.dataset.action;
+      if (!subscriptionId || !action) return;
+      handleSubscriptionAction(subscriptionId, action);
+    });
+  });
+
+  document.querySelectorAll('.planos-invoice-action').forEach((button) => {
+    button.addEventListener('click', () => {
+      const invoiceId = button.dataset.invoiceId;
+      const subscriptionId = button.dataset.subscriptionId;
+      const action = button.dataset.action;
+      if (!invoiceId || !subscriptionId || !action) return;
+      handleInvoiceAction(invoiceId, subscriptionId, action);
+    });
+  });
 }
 
 function bindPlanosStaticEvents() {
@@ -1237,7 +1485,7 @@ export function renderPlanos() {
   </div>
 
   <div id="planos-details-modal" class="modal-overlay" style="display:none;">
-    <div class="modal" style="width:min(92vw, 680px);">
+    <div class="modal" style="width:min(92vw, 760px);">
       <div id="planos-details-content"></div>
     </div>
   </div>
