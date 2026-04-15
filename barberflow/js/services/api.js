@@ -5,6 +5,18 @@ function sanitizeBaseUrl(url) {
   return String(url || '').trim().replace(/\/$/, '');
 }
 
+function buildQueryString(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    searchParams.set(key, String(value));
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
 export function getApiBaseUrl() {
   return sanitizeBaseUrl(window.BARBERFLOW_API_URL || localStorage.getItem(API_URL_STORAGE_KEY) || '');
 }
@@ -152,6 +164,87 @@ export async function updateAppointmentStatus(appointmentId, status) {
   }
 }
 
+/* =========================
+   PLANOS
+========================= */
+
+export async function getPlans(filters = {}) {
+  return apiFetch(`/api/plans${buildQueryString(filters)}`);
+}
+
+export async function getPlanById(planId) {
+  return apiFetch(`/api/plans/${planId}`);
+}
+
+export async function createPlan(payload) {
+  return apiFetch('/api/plans', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updatePlan(planId, payload) {
+  return apiFetch(`/api/plans/${planId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+/* =========================
+   ASSINATURAS
+========================= */
+
+export async function getSubscriptions(filters = {}) {
+  return apiFetch(`/api/subscriptions${buildQueryString(filters)}`);
+}
+
+export async function getSubscriptionById(subscriptionId) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}`);
+}
+
+export async function createSubscription(payload) {
+  return apiFetch('/api/subscriptions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateSubscription(subscriptionId, payload) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function generateNextSubscriptionCycle(subscriptionId, payload = {}) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/generate-next-cycle`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function consumeSubscriptionBenefit(subscriptionId, payload) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/consume`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/* =========================
+   COBRANÇAS / PAGAMENTOS
+========================= */
+
+export async function getSubscriptionInvoices(filters = {}) {
+  return apiFetch(`/api/payments/invoices${buildQueryString(filters)}`);
+}
+
+export async function createManualInvoice(payload) {
+  return apiFetch('/api/payments/invoices/manual', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 window.BarberFlowApi = {
   getApiBaseUrl,
   setApiBaseUrl,
@@ -159,6 +252,10 @@ window.BarberFlowApi = {
   getAuthToken,
   setAuthToken,
   clearAuthToken,
+  hasApiConfig,
+  hasAuthToken,
+  apiFetch,
+  formatDateForApi,
   loginWithEmail,
   getMe,
   getAppointmentsByDate,
@@ -167,5 +264,19 @@ window.BarberFlowApi = {
   getServices,
   createAppointment,
   updateAppointmentStatus,
-  formatDateForApi,
+
+  getPlans,
+  getPlanById,
+  createPlan,
+  updatePlan,
+
+  getSubscriptions,
+  getSubscriptionById,
+  createSubscription,
+  updateSubscription,
+  generateNextSubscriptionCycle,
+  consumeSubscriptionBenefit,
+
+  getSubscriptionInvoices,
+  createManualInvoice,
 };
