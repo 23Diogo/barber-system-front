@@ -1,32 +1,12 @@
-function isClientArea() {
-  const path = window.location.pathname;
-  return path === '/client' || path.startsWith('/client/');
-}
+import { bindSidebar } from './components/sidebar.js';
+import { initThemeToggle } from './components/theme-toggle.js';
+import { initModal } from './components/modal.js';
+import { initWidgets } from './components/widgets.js';
+import { initDevAuth } from './components/dev-auth.js';
+import { initDashboard } from './modules/dashboard.js';
+import { navigate, initRouter } from './router.js';
 
-async function initClientApp() {
-  const { initClientRouter } = await import('./client/client-router.js');
-  initClientRouter();
-}
-
-async function initAdminApp() {
-  const [
-    { bindSidebar },
-    { initThemeToggle },
-    { initModal },
-    { initWidgets },
-    { initDevAuth },
-    { initDashboard },
-    { navigate, initRouter },
-  ] = await Promise.all([
-    import('./components/sidebar.js'),
-    import('./components/theme-toggle.js'),
-    import('./components/modal.js'),
-    import('./components/widgets.js'),
-    import('./components/dev-auth.js'),
-    import('./modules/dashboard.js'),
-    import('./router.js'),
-  ]);
-
+function initAdminApp() {
   bindSidebar(navigate);
   initThemeToggle();
   initModal();
@@ -36,15 +16,4 @@ async function initAdminApp() {
   initDevAuth();
 }
 
-window.addEventListener('DOMContentLoaded', async () => {
-  try {
-    if (isClientArea()) {
-      await initClientApp();
-      return;
-    }
-
-    await initAdminApp();
-  } catch (error) {
-    console.error('Erro ao iniciar o BarberFlow:', error);
-  }
-});
+window.addEventListener('DOMContentLoaded', initAdminApp);
