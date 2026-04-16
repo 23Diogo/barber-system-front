@@ -13,6 +13,7 @@ import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
 import { renderConfiguracoes, initConfiguracoesPage } from './modules/configuracoes.js';
 import { renderPlanos, initPlanosPage } from './modules/planos.js';
+import { initClientView } from './modules/client-view.js';
 
 const ADMIN_BASE_PATH = '/app';
 
@@ -133,6 +134,7 @@ export function navigate(pageId, options = {}) {
 
 export function initRouter() {
   if (isClientPath()) {
+    initClientView();
     return;
   }
 
