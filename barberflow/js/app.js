@@ -5,8 +5,13 @@ import { initWidgets } from './components/widgets.js';
 import { initDevAuth } from './components/dev-auth.js';
 import { initDashboard } from './modules/dashboard.js';
 import { navigate, initRouter } from './router.js';
+import { initClientRouter } from './client/client-router.js';
 
-function initApp() {
+function isClientArea() {
+  return window.location.pathname.startsWith('/client');
+}
+
+function initAdminApp() {
   bindSidebar(navigate);
   initThemeToggle();
   initModal();
@@ -14,6 +19,15 @@ function initApp() {
   initWidgets();
   initRouter();
   initDevAuth();
+}
+
+function initApp() {
+  if (isClientArea()) {
+    initClientRouter();
+    return;
+  }
+
+  initAdminApp();
 }
 
 window.addEventListener('DOMContentLoaded', initApp);
