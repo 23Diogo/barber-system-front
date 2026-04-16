@@ -8,7 +8,8 @@ import { navigate, initRouter } from './router.js';
 import { initClientRouter } from './client/client-router.js';
 
 function isClientArea() {
-  return window.location.pathname.startsWith('/client');
+  const path = window.location.pathname;
+  return path === '/client' || path.startsWith('/client/');
 }
 
 function initAdminApp() {
