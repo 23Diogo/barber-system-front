@@ -1,26 +1,26 @@
-import { clientLogin } from '../services/client-auth.js';
+import { loginClient } from '/js/client-auth-api.js';
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-feedback');
   if (!el) return;
+
   el.textContent = message || '';
-  el.className = `client-feedback${variant !== 'neutral' ? ` is-${variant}` : ''}`;
+  el.className = `client-feedback ${variant === 'error' ? 'is-error' : variant === 'success' ? 'is-success' : ''}`;
 }
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
+document.getElementById('go-client-register')?.addEventListener('click', () => {
+  window.location.href = '/client/cadastro/';
+});
+
+document.getElementById('go-client-forgot')?.addEventListener('click', () => {
+  window.location.href = '/client/recuperar-senha/';
+});
 
 document.getElementById('client-login-form')?.addEventListener('submit', async (event) => {
   event.preventDefault();
 
   const identifier = document.getElementById('client-login-identifier')?.value?.trim() || '';
-  const password   = document.getElementById('client-login-password')?.value || '';
+  const password = document.getElementById('client-login-password')?.value || '';
 
   if (!identifier) {
     setFeedback('Informe seu WhatsApp ou e-mail.', 'error');
@@ -34,10 +34,17 @@ document.getElementById('client-login-form')?.addEventListener('submit', async (
 
   try {
     setFeedback('Entrando...', 'neutral');
-    const payload = await clientLogin({ identifier, password });
-    const customerName = payload?.client?.name || 'Cliente';
-    setFeedback(`Bem-vindo, ${escapeHtml(customerName)}.`, 'success');
-    window.location.href = '/client/home/';
+
+    const data = await loginClient({
+      identifier,
+      password,
+    });
+
+    setFeedback(`Bem-vindo, ${data?.client?.name || 'cliente'}.`, 'success');
+
+    setTimeout(() => {
+      window.location.href = '/client/home/';
+    }, 600);
   } catch (error) {
     setFeedback(error instanceof Error ? error.message : 'Não foi possível entrar.', 'error');
   }
