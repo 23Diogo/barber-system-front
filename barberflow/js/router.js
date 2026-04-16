@@ -13,7 +13,6 @@ import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
 import { renderConfiguracoes, initConfiguracoesPage } from './modules/configuracoes.js';
 import { renderPlanos, initPlanosPage } from './modules/planos.js';
-import { initClientRouter } from './client/client-router.js';
 
 const ADMIN_BASE_PATH = '/app';
 
@@ -48,10 +47,6 @@ const initializers = {
 
 const validPages = new Set(['dash', ...Object.keys(renderers)]);
 
-function isClientPath(pathname = window.location.pathname) {
-  return pathname === '/client' || pathname.startsWith('/client/');
-}
-
 function normalizePath(pathname = '/') {
   const trimmed = String(pathname || '/').replace(/\/+$/, '');
   return trimmed || '/';
@@ -73,8 +68,6 @@ function getPageFromPath(pathname = window.location.pathname) {
 }
 
 function shouldRedirectToAdmin(pathname = window.location.pathname) {
-  if (isClientPath(pathname)) return false;
-
   const normalized = normalizePath(pathname);
   return normalized === '/' || !normalized.startsWith(ADMIN_BASE_PATH);
 }
@@ -93,8 +86,6 @@ function renderPage(pageId) {
 }
 
 export function navigate(pageId, options = {}) {
-  if (isClientPath()) return;
-
   const { replace = false, skipHistory = false } = options;
   const safePageId = validPages.has(pageId) ? pageId : 'dash';
 
@@ -130,18 +121,12 @@ export function navigate(pageId, options = {}) {
 }
 
 export function initRouter() {
-  if (isClientPath()) {
-    initClientRouter();
-    return;
-  }
-
   const initialPage = getPageFromPath(window.location.pathname);
   const replace = shouldRedirectToAdmin(window.location.pathname);
 
   navigate(initialPage, { replace });
 
   window.addEventListener('popstate', () => {
-    if (isClientPath(window.location.pathname)) return;
     const pageFromUrl = getPageFromPath(window.location.pathname);
     navigate(pageFromUrl, { skipHistory: true });
   });
