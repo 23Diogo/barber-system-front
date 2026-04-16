@@ -247,10 +247,12 @@ function getInvoicePaymentUrl(invoice) {
 
 function getInvoiceGatewayReference(invoice) {
   return (
+    invoice?.external_invoice_id ||
     invoice?.gateway_reference ||
     invoice?.gateway_external_id ||
     invoice?.external_reference ||
     invoice?.payment_reference ||
+    invoice?.metadata?.external_reference ||
     invoice?.metadata?.preference_id ||
     ''
   );
@@ -291,7 +293,7 @@ function getSubscriptionDueDateIso(subscription) {
   return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 }
 
-function buildMercadoPagoInvoicePayloadVariants(subscription, preference) {
+function buildMercadoPagoInvoicePayloadVariants(subscription, preference, externalReference) {
   const amountCents = getSubscriptionAmountCents(subscription);
   const dueAt = getSubscriptionDueDateIso(subscription);
 
@@ -301,12 +303,14 @@ function buildMercadoPagoInvoicePayloadVariants(subscription, preference) {
     billing_reason: 'manual_charge',
     gateway_provider: 'mercadopago',
     status: 'pending',
-    gateway_reference: preference.preferenceId,
+    gateway_reference: externalReference,
+    external_invoice_id: externalReference,
     payment_url: preference.initPoint,
     sandbox_payment_url: preference.sandboxInitPoint,
     metadata: {
       provider: 'mercadopago',
       preference_id: preference.preferenceId,
+      external_reference: externalReference,
       init_point: preference.initPoint,
       sandbox_init_point: preference.sandboxInitPoint,
     },
@@ -329,8 +333,8 @@ function buildMercadoPagoInvoicePayloadVariants(subscription, preference) {
   ];
 }
 
-async function createMercadoPagoInvoice(subscription, preference) {
-  const variants = buildMercadoPagoInvoicePayloadVariants(subscription, preference);
+async function createMercadoPagoInvoice(subscription, preference, externalReference) {
+  const variants = buildMercadoPagoInvoicePayloadVariants(subscription, preference, externalReference);
   let lastError = null;
 
   for (const payload of variants) {
@@ -1279,7 +1283,9 @@ async function handleInvoiceAction(invoiceId, action) {
 }
 
 async function handleGenerateMercadoPagoCharge(subscriptionId) {
-  const triggerButtons = document.querySelectorAll('.clients-generate-charge-action, .clients-invoice-action, .clients-invoice-copy-link');
+  const triggerButtons = document.querySelectorAll(
+    '.clients-generate-charge-action, .clients-invoice-action, .clients-invoice-copy-link'
+  );
 
   try {
     triggerButtons.forEach((button) => button.setAttribute('disabled', 'disabled'));
@@ -1297,13 +1303,16 @@ async function handleGenerateMercadoPagoCharge(subscriptionId) {
     }
 
     const customerName = clientesState.detailClient?.name || 'Cliente';
+    const externalReference = `sub_${subscription.id}_${Date.now()}`;
+
     const preference = await createMercadoPagoPreference({
       title: `${subscription.planName} - ${customerName}`,
       quantity: 1,
       unitPrice: Number((amountCents / 100).toFixed(2)),
+      externalReference,
     });
 
-    await createMercadoPagoInvoice(subscription, preference);
+    await createMercadoPagoInvoice(subscription, preference, externalReference);
 
     if (!clientesState.activeClientId) return;
 
@@ -1316,7 +1325,8 @@ async function handleGenerateMercadoPagoCharge(subscriptionId) {
       setClientDetailFeedback('Cobrança Mercado Pago gerada com sucesso.', 'success');
     }, 0);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível gerar a cobrança Mercado Pago.';
+    const message =
+      error instanceof Error ? error.message : 'Não foi possível gerar a cobrança Mercado Pago.';
     clientesState.isDetailLoading = false;
     renderClientModal();
     setClientDetailFeedback(message, 'error');
