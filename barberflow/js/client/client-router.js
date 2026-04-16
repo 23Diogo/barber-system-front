@@ -1,30 +1,35 @@
-import { renderLogin, initLoginPage } from './modules/login.js';
-import { renderCadastro, initCadastroPage } from './modules/cadastro.js';
-import { renderHome, initHomePage } from './modules/home.js';
-import { renderRecuperarSenha, initRecuperarSenhaPage } from './modules/recuperar-senha.js';
+import { renderClientLogin, initClientLoginPage } from './modules/login.js';
+import { renderClientRegister, initClientRegisterPage } from './modules/cadastro.js';
+import { renderClientHome, initClientHomePage } from './modules/home.js';
+import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
+import { renderClientLayout } from './client-layout.js';
 
 const CLIENT_BASE = '/client';
 
 const routes = {
   login: {
     path: '/client/login',
-    render: renderLogin,
-    init: initLoginPage,
+    render: renderClientLogin,
+    init: (nav) => initClientLoginPage({ navigate: nav }),
+    layoutOptions: { title: 'Entrar', subtitle: 'Acesse sua conta' },
   },
   cadastro: {
     path: '/client/cadastro',
-    render: renderCadastro,
-    init: initCadastroPage,
+    render: renderClientRegister,
+    init: (nav) => initClientRegisterPage({ navigate: nav }),
+    layoutOptions: { title: 'Criar conta', subtitle: 'Preencha seus dados para começar' },
   },
   home: {
     path: '/client/home',
-    render: renderHome,
-    init: initHomePage,
+    render: renderClientHome,
+    init: () => initClientHomePage(),
+    layoutOptions: { title: 'Minha área', subtitle: 'Bem-vindo de volta', showLogout: true },
   },
   'recuperar-senha': {
     path: '/client/recuperar-senha',
-    render: renderRecuperarSenha,
-    init: initRecuperarSenhaPage,
+    render: renderClientForgotPassword,
+    init: (nav) => initClientForgotPasswordPage({ navigate: nav }),
+    layoutOptions: { title: 'Recuperar senha', subtitle: 'Enviaremos as instruções para você', showBack: true },
   },
 };
 
@@ -52,12 +57,23 @@ function getPathForRoute(route) {
 
 function renderClientPage(route) {
   const safeRoute = validRoutes.has(route) ? route : 'login';
-  const { render, init } = routes[safeRoute];
+  const { render, init, layoutOptions } = routes[safeRoute];
 
   document.body.className = 'client-area';
-  document.body.innerHTML = render();
+  document.body.innerHTML = renderClientLayout(render(), layoutOptions);
 
-  if (init) queueMicrotask(() => init());
+  if (init) queueMicrotask(() => init(navigateClient));
+
+  // botão Voltar do layout
+  document.getElementById('client-back-btn')?.addEventListener('click', () => {
+    navigateClient('login');
+  });
+
+  // botão Sair do layout
+  document.getElementById('client-logout-btn')?.addEventListener('click', () => {
+    // limpar token/sessão aqui quando tiver auth
+    navigateClient('login');
+  });
 }
 
 export function navigateClient(route, options = {}) {
