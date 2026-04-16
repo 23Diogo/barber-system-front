@@ -1,32 +1,3 @@
-import { renderClientLayout } from './client-layout.js';
-import { renderClientLogin, initClientLoginPage } from './modules/login.js';
-import { renderClientRegister, initClientRegisterPage } from './modules/cadastro.js';
-import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
-import { renderClientHome, initClientHomePage } from './modules/home.js';
-import {
-  hasClientToken,
-  logoutClient,
-  getClientProfile,
-} from '../services/client-auth.js';
-
-const CLIENT_BASE_PATH = '/client';
-
-const renderers = {
-  login: renderClientLogin,
-  cadastro: renderClientRegister,
-  'recuperar-senha': renderClientForgotPassword,
-  home: renderClientHome,
-};
-
-const initializers = {
-  login: initClientLoginPage,
-  cadastro: initClientRegisterPage,
-  'recuperar-senha': initClientForgotPasswordPage,
-  home: initClientHomePage,
-};
-
-const publicRoutes = new Set(['login', 'cadastro', 'recuperar-senha']);
-
 function normalizePath(pathname = '/') {
   const trimmed = String(pathname || '/').replace(/\/+$/, '');
   return trimmed || '/';
@@ -35,83 +6,83 @@ function normalizePath(pathname = '/') {
 function getClientRouteFromPath(pathname = window.location.pathname) {
   const normalized = normalizePath(pathname);
 
-  if (normalized === CLIENT_BASE_PATH) return 'home';
-  if (normalized === `${CLIENT_BASE_PATH}/login`) return 'login';
-  if (normalized === `${CLIENT_BASE_PATH}/cadastro`) return 'cadastro';
-  if (normalized === `${CLIENT_BASE_PATH}/recuperar-senha`) return 'recuperar-senha';
+  if (normalized === '/client' || normalized === '/client/login') return 'login';
+  if (normalized === '/client/cadastro') return 'cadastro';
 
   return 'login';
 }
 
-function getPathForClientRoute(routeName) {
-  if (routeName === 'home') return CLIENT_BASE_PATH;
-  return `${CLIENT_BASE_PATH}/${routeName}`;
+function getPathForRoute(route) {
+  if (route === 'cadastro') return '/client/cadastro';
+  return '/client/login';
 }
 
-function isPublicRoute(routeName) {
-  return publicRoutes.has(routeName);
-}
+function renderClientPage(route) {
+  const title = route === 'cadastro' ? 'Cadastro do Cliente' : 'Login do Cliente';
+  const description =
+    route === 'cadastro'
+      ? 'Página de cadastro carregada com sucesso.'
+      : 'Página de login carregada com sucesso.';
 
-export function navigateClient(routeName, options = {}) {
-  const { replace = false, skipHistory = false } = options;
+  document.body.className = 'client-area';
+  document.body.innerHTML = `
+    <div style="min-height:100vh;display:flex;align-items:center;justify-content:center;background:#090d1d;color:#fff;font-family:DM Sans, sans-serif;padding:20px;">
+      <div style="width:min(100%,480px);background:#0a0c1a;border:1px solid #1e2345;border-radius:20px;padding:24px;box-shadow:0 18px 45px rgba(0,0,0,.28);">
+        <div style="display:flex;align-items:center;gap:12px;margin-bottom:18px;">
+          <div style="width:42px;height:42px;border-radius:14px;display:grid;place-items:center;font-weight:900;background:linear-gradient(135deg,#4fc3f7,#0066ff);">B</div>
+          <div>
+            <div style="font-size:16px;font-weight:800;">BarberFlow</div>
+            <div style="font-size:12px;color:#7e8db4;">Portal do Cliente</div>
+          </div>
+        </div>
 
-  const safeRoute = renderers[routeName] ? routeName : 'login';
-  const authenticated = hasClientToken();
-  const finalRoute = !authenticated && !isPublicRoute(safeRoute) ? 'login' : safeRoute;
+        <h1 style="margin:0 0 8px;font-size:24px;">${title}</h1>
+        <p style="margin:0 0 18px;color:#7e8db4;line-height:1.6;">${description}</p>
 
-  const profile = getClientProfile();
-  const content = renderers[finalRoute]();
+        <div style="display:grid;gap:10px;">
+          <button id="go-login" style="min-height:46px;border:0;border-radius:12px;background:linear-gradient(135deg,#4fc3f7,#0066ff);color:#fff;font-weight:800;cursor:pointer;">
+            Ir para Login
+          </button>
 
-  const layout = renderClientLayout(content, {
-    title:
-      finalRoute === 'login'
-        ? 'Entrar'
-        : finalRoute === 'cadastro'
-        ? 'Criar conta'
-        : finalRoute === 'recuperar-senha'
-        ? 'Recuperar senha'
-        : 'Minha área',
-    subtitle:
-      finalRoute === 'home'
-        ? 'Acesse seus agendamentos, plano e pagamentos'
-        : 'Use seus dados para continuar',
-    showBack: finalRoute !== 'home',
-    showLogout: authenticated && finalRoute === 'home',
-    customerName: authenticated ? profile?.name || '' : '',
+          <button id="go-register" style="min-height:46px;border-radius:12px;border:1px solid #1e2345;background:rgba(255,255,255,.05);color:#fff;font-weight:800;cursor:pointer;">
+            Ir para Cadastro
+          </button>
+        </div>
+
+        <div style="margin-top:18px;font-size:12px;color:#00e676;">
+          Rota atual: ${window.location.pathname}
+        </div>
+      </div>
+    </div>
+  `;
+
+  document.getElementById('go-login')?.addEventListener('click', () => {
+    navigateClient('login');
   });
 
-  document.body.classList.add('client-area');
-  document.body.innerHTML = layout;
+  document.getElementById('go-register')?.addEventListener('click', () => {
+    navigateClient('cadastro');
+  });
+}
 
-  const nextPath = getPathForClientRoute(finalRoute);
-  const currentPath = normalizePath(window.location.pathname);
+export function navigateClient(route, options = {}) {
+  const { replace = false, skipHistory = false } = options;
+  const safeRoute = route === 'cadastro' ? 'cadastro' : 'login';
+  const nextPath = getPathForRoute(safeRoute);
 
-  if (!skipHistory && currentPath !== nextPath) {
+  if (!skipHistory && window.location.pathname !== nextPath) {
     const method = replace ? 'replaceState' : 'pushState';
-    window.history[method]({ clientRoute: finalRoute }, '', nextPath);
+    window.history[method]({ clientRoute: safeRoute }, '', nextPath);
   }
 
-  document.getElementById('client-back-btn')?.addEventListener('click', () => {
-    window.history.back();
-  });
-
-  document.getElementById('client-logout-btn')?.addEventListener('click', () => {
-    logoutClient();
-    navigateClient('login', { replace: true });
-  });
-
-  const initializer = initializers[finalRoute];
-  if (initializer) queueMicrotask(() => initializer({ navigate: navigateClient }));
+  renderClientPage(safeRoute);
 }
 
 export function initClientRouter() {
-  const initialRoute = getClientRouteFromPath(window.location.pathname);
+  console.log('[CLIENT] client-router inicializado');
 
-  if (!hasClientToken() && initialRoute === 'home') {
-    navigateClient('login', { replace: true });
-  } else {
-    navigateClient(initialRoute, { replace: false });
-  }
+  const initialRoute = getClientRouteFromPath(window.location.pathname);
+  navigateClient(initialRoute, { replace: false });
 
   window.addEventListener('popstate', () => {
     const route = getClientRouteFromPath(window.location.pathname);
