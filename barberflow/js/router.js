@@ -11,10 +11,10 @@ import { renderWhatsApp } from './modules/whatsapp.js';
 import { renderMarketing, initMarketingPage } from './modules/marketing.js';
 import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
-import { renderConfiguracoes,initConfiguracoesPage } from './modules/configuracoes.js';
+import { renderConfiguracoes, initConfiguracoesPage } from './modules/configuracoes.js';
 import { renderPlanos, initPlanosPage } from './modules/planos.js';
 
-
+const ADMIN_BASE_PATH = '/app';
 
 const renderers = {
   agenda: renderAgenda,
@@ -41,9 +41,41 @@ const initializers = {
   mkt: initMarketingPage,
   fidel: initFidelidadePage,
   aval: initAvaliacoesPage,
-  config: initAvaliacoesPage,
+  config: initConfiguracoesPage,
   planos: initPlanosPage,
 };
+
+const validPages = new Set(['dash', ...Object.keys(renderers)]);
+
+function normalizePath(pathname = '/') {
+  const trimmed = String(pathname || '/').replace(/\/+$/, '');
+  return trimmed || '/';
+}
+
+function getPathForPage(pageId) {
+  if (pageId === 'dash') return ADMIN_BASE_PATH;
+  return `${ADMIN_BASE_PATH}/${pageId}`;
+}
+
+function getPageFromPath(pathname = window.location.pathname) {
+  const normalized = normalizePath(pathname);
+
+  if (normalized === '/' || normalized === ADMIN_BASE_PATH) {
+    return 'dash';
+  }
+
+  if (!normalized.startsWith(`${ADMIN_BASE_PATH}/`)) {
+    return 'dash';
+  }
+
+  const pageId = normalized.slice(`${ADMIN_BASE_PATH}/`.length);
+  return validPages.has(pageId) ? pageId : 'dash';
+}
+
+function shouldRedirectToAdmin(pathname = window.location.pathname) {
+  const normalized = normalizePath(pathname);
+  return normalized === '/' || !normalized.startsWith(ADMIN_BASE_PATH);
+}
 
 function renderPage(pageId) {
   const container = document.getElementById('pages');
@@ -56,18 +88,30 @@ function renderPage(pageId) {
   if (initializer) queueMicrotask(() => initializer());
 }
 
-export function navigate(pageId) {
-  updateActiveNav(pageId);
+export function navigate(pageId, options = {}) {
+  const { replace = false, skipHistory = false } = options;
+
+  const safePageId = validPages.has(pageId) ? pageId : 'dash';
+
+  updateActiveNav(safePageId);
 
   const title = document.getElementById('pageTitle');
-  if (title) title.textContent = pageTitles[pageId] || pageId.toUpperCase();
+  if (title) title.textContent = pageTitles[safePageId] || safePageId.toUpperCase();
 
-  setCurrentPage(pageId);
+  setCurrentPage(safePageId);
+
+  const nextPath = getPathForPage(safePageId);
+  const currentPath = normalizePath(window.location.pathname);
+
+  if (!skipHistory && currentPath !== nextPath) {
+    const method = replace ? 'replaceState' : 'pushState';
+    window.history[method]({ pageId: safePageId }, '', nextPath);
+  }
 
   const hero = document.getElementById('hero');
   const pages = document.getElementById('pages');
 
-  if (pageId === 'dash') {
+  if (safePageId === 'dash') {
     if (hero) hero.style.display = 'block';
     if (pages) pages.style.display = 'none';
     return;
@@ -76,8 +120,20 @@ export function navigate(pageId) {
   if (hero) hero.style.display = 'none';
   if (pages) {
     pages.style.display = 'block';
-    renderPage(pageId);
+    renderPage(safePageId);
   }
+}
+
+export function initRouter() {
+  const initialPage = getPageFromPath(window.location.pathname);
+  const replace = shouldRedirectToAdmin(window.location.pathname);
+
+  navigate(initialPage, { replace });
+
+  window.addEventListener('popstate', () => {
+    const pageFromUrl = getPageFromPath(window.location.pathname);
+    navigate(pageFromUrl, { skipHistory: true });
+  });
 }
 
 export function refreshCurrentPage() {
