@@ -1,0 +1,7 @@
+name = "barber-system-front"
+compatibility_date = "2026-04-15"
+main = "./worker.js"
+
+[assets]
+directory = "./"
+binding = "ASSETS"
