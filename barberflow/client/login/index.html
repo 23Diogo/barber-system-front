@@ -19,15 +19,11 @@
       --input-border: rgba(79, 195, 247, 0.12);
       --blue-1: #4fc3f7;
       --blue-2: #2f8cff;
-      --blue-3: #8ddcff;
-      --purple: #9c6fff;
       --orange-1: #ff5a1f;
       --orange-2: #ff7a1a;
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     html, body {
       margin: 0;
@@ -57,55 +53,12 @@
 
     .page {
       min-height: 100vh;
-      position: relative;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center; /* ← adiciona essa linha */
+      justify-content: center;
       padding: 34px 20px 48px;
-    }
-
-    .top-mini-brand {
-      width: min(100%, 1180px);
-      display: flex;
-      align-items: center;
-      justify-content: flex-start;
-      margin-bottom: 10px;
-      opacity: 0.92;
-    }
-
-    .top-mini-brand .mark {
-      width: 42px;
-      height: 42px;
-      border-radius: 14px;
-      display: grid;
-      place-items: center;
-      font-family: 'Orbitron', sans-serif;
-      font-weight: 900;
-      font-size: 19px;
-      color: #fff;
-      background: linear-gradient(135deg, var(--orange-1), var(--orange-2));
-      box-shadow:
-        0 0 0 1px rgba(255, 122, 26, 0.18),
-        0 0 20px rgba(255, 90, 31, 0.28);
-      margin-right: 12px;
-    }
-
-    .top-mini-brand .text {
-      display: flex;
-      flex-direction: column;
-      gap: 2px;
-    }
-
-    .top-mini-brand .title {
-      font-size: 15px;
-      font-weight: 700;
-      color: #fff;
-    }
-
-    .top-mini-brand .sub {
-      font-size: 11px;
-      color: var(--muted);
+      position: relative;
     }
 
     .hero {
@@ -113,7 +66,6 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      margin-top: 8px;
       margin-bottom: 28px;
       position: relative;
       z-index: 1;
@@ -127,7 +79,6 @@
       flex-wrap: wrap;
       text-align: center;
       margin-bottom: 10px;
-      position: relative;
     }
 
     .hero-b {
@@ -139,9 +90,6 @@
       -webkit-background-clip: text;
       background-clip: text;
       color: transparent;
-      text-shadow:
-        0 0 18px rgba(255, 90, 31, 0.22),
-        0 0 38px rgba(255, 90, 31, 0.16);
       animation: pulseB 2.2s ease-in-out infinite;
       position: relative;
       z-index: 2;
@@ -167,14 +115,11 @@
       line-height: 1;
       letter-spacing: -0.02em;
       color: #f5f9ff;
-      text-shadow: 0 0 18px rgba(255,255,255,.04);
     }
 
     .hero-name .flow {
       color: var(--blue-1);
-      text-shadow:
-        0 0 16px rgba(79, 195, 247, 0.22),
-        0 0 34px rgba(79, 195, 247, 0.12);
+      text-shadow: 0 0 16px rgba(79, 195, 247, 0.22), 0 0 34px rgba(79, 195, 247, 0.12);
     }
 
     .hero-subtitle {
@@ -192,9 +137,7 @@
       border-radius: 999px;
       border: 1px solid rgba(79, 195, 247, 0.28);
       background: radial-gradient(circle at center, rgba(79, 195, 247, 0.14), transparent 70%);
-      box-shadow:
-        0 0 18px rgba(79, 195, 247, 0.12),
-        inset 0 0 20px rgba(79, 195, 247, 0.05);
+      box-shadow: 0 0 18px rgba(79, 195, 247, 0.12), inset 0 0 20px rgba(79, 195, 247, 0.05);
     }
 
     .login-card {
@@ -203,9 +146,7 @@
       border: 1px solid var(--border);
       border-radius: 22px;
       padding: 26px;
-      box-shadow:
-        0 18px 45px rgba(0, 0, 0, 0.34),
-        inset 0 1px 0 rgba(255,255,255,0.02);
+      box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34), inset 0 1px 0 rgba(255,255,255,0.02);
       backdrop-filter: blur(18px);
       position: relative;
       z-index: 1;
@@ -241,13 +182,8 @@
       color: var(--muted);
     }
 
-    .client-feedback.is-error {
-      color: #ff9aa9;
-    }
-
-    .client-feedback.is-success {
-      color: #00e676;
-    }
+    .client-feedback.is-error { color: #ff9aa9; }
+    .client-feedback.is-success { color: #00e676; }
 
     .client-form {
       display: grid;
@@ -280,9 +216,7 @@
       transition: .18s ease;
     }
 
-    .client-input::placeholder {
-      color: #516384;
-    }
+    .client-input::placeholder { color: #516384; }
 
     .client-input:focus {
       border-color: rgba(79, 195, 247, 0.42);
@@ -298,17 +232,13 @@
       color: #fff;
       cursor: pointer;
       background: linear-gradient(135deg, #5dc8ff 0%, #2f8cff 55%, #1468ff 100%);
-      box-shadow:
-        0 14px 30px rgba(47, 140, 255, 0.22),
-        inset 0 1px 0 rgba(255,255,255,0.12);
+      box-shadow: 0 14px 30px rgba(47, 140, 255, 0.22), inset 0 1px 0 rgba(255,255,255,0.12);
       transition: transform .16s ease, box-shadow .16s ease;
     }
 
     .client-primary-btn:hover {
       transform: translateY(-1px);
-      box-shadow:
-        0 18px 32px rgba(47, 140, 255, 0.28),
-        inset 0 1px 0 rgba(255,255,255,0.14);
+      box-shadow: 0 18px 32px rgba(47, 140, 255, 0.28), inset 0 1px 0 rgba(255,255,255,0.14);
     }
 
     .client-links {
@@ -329,48 +259,22 @@
       transition: opacity .16s ease;
     }
 
-    .client-link-btn:hover {
-      opacity: 0.84;
-    }
+    .client-link-btn:hover { opacity: 0.84; }
 
     @keyframes pulseB {
-      0%, 100% {
-        transform: scale(1);
-        filter: brightness(1);
-      }
-      50% {
-        transform: scale(1.04);
-        filter: brightness(1.12);
-      }
+      0%, 100% { transform: scale(1); filter: brightness(1); }
+      50% { transform: scale(1.04); filter: brightness(1.12); }
     }
 
     @media (max-width: 720px) {
-      .page {
-        padding-top: 22px;
-      }
-
-      .top-mini-brand {
-        justify-content: center;
-        margin-bottom: 16px;
-      }
-
-      .card-title {
-        font-size: 28px;
-      }
-
-      .login-card {
-        padding: 22px 18px;
-      }
-
-      .client-links {
-        flex-direction: column;
-        align-items: flex-start;
-      }
+      .card-title { font-size: 28px; }
+      .login-card { padding: 22px 18px; }
+      .client-links { flex-direction: column; align-items: flex-start; }
     }
   </style>
 </head>
 <body>
-  
+  <div class="page">
 
     <section class="hero">
       <div class="hero-logo">
@@ -406,6 +310,7 @@
         </div>
       </form>
     </section>
+
   </div>
 
   <script src="/js/client-login.js" type="module"></script>
