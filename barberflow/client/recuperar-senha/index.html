@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BarberFlow — Recuperar Senha</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="/styles/client/recuperar-senha.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="page">
+
+    <section class="hero">
+      <div class="hero-logo">
+        <div class="hero-b">B</div>
+        <div class="hero-name">Barber<span class="flow">Flow</span></div>
+      </div>
+      <div class="hero-subtitle">Portal do Cliente</div>
+      <div class="hero-ring"></div>
+    </section>
+
+    <section class="login-card">
+      <h1 class="card-title">Recuperar senha</h1>
+      <p class="card-subtitle">Informe seu WhatsApp ou e-mail cadastrado e enviaremos as instruções para redefinir sua senha.</p>
+
+      <div id="client-feedback" class="client-feedback"></div>
+
+      <form id="client-forgot-form" class="client-form">
+        <div class="client-field">
+          <label class="client-label">WhatsApp ou e-mail</label>
+          <input
+            class="client-input"
+            id="client-forgot-identifier"
+            type="text"
+            placeholder="(11) 99999-9999 ou email@dominio.com"
+          />
+        </div>
+
+        <button type="submit" class="client-primary-btn">Enviar instruções</button>
+
+        <div class="client-links">
+          <a class="client-link-btn" href="/client/login/">Voltar para o login</a>
+        </div>
+      </form>
+    </section>
+
+  </div>
+
+  <script src="/js/client/recuperar-senha.js" type="module"></script>
+</body>
+</html>
