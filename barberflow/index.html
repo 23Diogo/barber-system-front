@@ -348,15 +348,6 @@ body.auth-locked #modal { display: none !important; }
 </div>
 </div>
 
-<script type="module">
-  const path = window.location.pathname;
-  const isClientArea = path === '/client' || path.startsWith('/client/');
-
-  if (isClientArea) {
-    import('/js/client-entry.js?v=client-bootstrap-2');
-  } else {
-    import('/js/app.js?v=admin-bootstrap-2');
-  }
-</script>
+<script src="/js/app.js" type="module"></script>
 </body>
 </html>
