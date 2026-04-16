@@ -7,11 +7,6 @@ import { initDashboard } from './modules/dashboard.js';
 import { navigate, initRouter } from './router.js';
 
 function initAdminApp() {
-  if (window.location.pathname.startsWith('/client')) {
-    initRouter();
-    return;
-  }
-
   bindSidebar(navigate);
   initThemeToggle();
   initModal();
