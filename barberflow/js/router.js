@@ -13,7 +13,7 @@ import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
 import { renderConfiguracoes, initConfiguracoesPage } from './modules/configuracoes.js';
 import { renderPlanos, initPlanosPage } from './modules/planos.js';
-import { initClientView } from './modules/client-view.js';
+import { initClientRouter } from './client/client-router.js';
 
 const ADMIN_BASE_PATH = '/app';
 
@@ -65,13 +65,8 @@ function getPathForPage(pageId) {
 function getPageFromPath(pathname = window.location.pathname) {
   const normalized = normalizePath(pathname);
 
-  if (normalized === '/' || normalized === ADMIN_BASE_PATH) {
-    return 'dash';
-  }
-
-  if (!normalized.startsWith(`${ADMIN_BASE_PATH}/`)) {
-    return 'dash';
-  }
+  if (normalized === '/' || normalized === ADMIN_BASE_PATH) return 'dash';
+  if (!normalized.startsWith(`${ADMIN_BASE_PATH}/`)) return 'dash';
 
   const pageId = normalized.slice(`${ADMIN_BASE_PATH}/`.length);
   return validPages.has(pageId) ? pageId : 'dash';
@@ -89,7 +84,9 @@ function renderPage(pageId) {
   if (!container) return;
 
   const renderer = renderers[pageId];
-  container.innerHTML = renderer ? `<div class="page active" id="page-${pageId}">${renderer()}</div>` : '';
+  container.innerHTML = renderer
+    ? `<div class="page active" id="page-${pageId}">${renderer()}</div>`
+    : '';
 
   const initializer = initializers[pageId];
   if (initializer) queueMicrotask(() => initializer());
@@ -134,7 +131,7 @@ export function navigate(pageId, options = {}) {
 
 export function initRouter() {
   if (isClientPath()) {
-    initClientView();
+    initClientRouter();
     return;
   }
 
