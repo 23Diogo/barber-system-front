@@ -136,24 +136,31 @@ function resolveReturnFeedback() {
     ''
   ).trim();
 
-  const hasReturnParams = params.has('collection_status') || params.has('collection_id') || params.has('payment_id');
+  const hasReturnParams =
+    params.has('collection_status') ||
+    params.has('collection_id') ||
+    params.has('payment_id') ||
+    params.has('status');
 
-  const cleanUrl = '/client/assinatura';
-  window.history.replaceState({ clientRoute: 'assinatura' }, '', cleanUrl);
+  window.history.replaceState({ clientRoute: 'assinatura' }, '', '/client/assinatura');
 
   if (!hasReturnParams) return null;
 
   if (collectionStatus === 'approved') {
     return {
-      message: 'Pagamento aprovado com sucesso. Estamos atualizando seu plano.',
+      message: 'Pagamento aprovado. Estamos confirmando seu plano automaticamente.',
       variant: 'success',
+      shouldPoll: true,
+      expectedStatus: 'approved',
     };
   }
 
   if (['pending', 'in_process', 'authorized'].includes(collectionStatus)) {
     return {
-      message: 'Seu pagamento está pendente de confirmação. Você pode acompanhar a cobrança abaixo.',
+      message: 'Seu pagamento está pendente de confirmação. Vamos atualizar o status automaticamente.',
       variant: 'neutral',
+      shouldPoll: true,
+      expectedStatus: 'pending',
     };
   }
 
@@ -161,6 +168,8 @@ function resolveReturnFeedback() {
     return {
       message: 'O pagamento não foi concluído. Você pode tentar novamente ou cancelar a contratação.',
       variant: 'error',
+      shouldPoll: false,
+      expectedStatus: 'failed',
     };
   }
 
@@ -168,10 +177,20 @@ function resolveReturnFeedback() {
     return {
       message: 'O pagamento ainda não foi concluído. Você pode tentar novamente ou cancelar a contratação.',
       variant: 'error',
+      shouldPoll: false,
+      expectedStatus: 'unknown',
     };
   }
 
   return null;
+}
+
+async function fetchSubscriptionState() {
+  const payload = await getClientPortalSubscription();
+
+  state.subscription = payload?.subscription || null;
+  state.currentCycle = payload?.currentCycle || null;
+  state.latestInvoice = payload?.latestInvoice || null;
 }
 
 function renderTopActions() {
@@ -181,8 +200,9 @@ function renderTopActions() {
   const subscription = state.subscription;
   const pendingInvoice = getPendingInvoice();
   const canCancel = isPendingSubscriptionStatus(subscription?.status);
+  const canRefresh = Boolean(subscription);
 
-  if (!pendingInvoice && !canCancel) {
+  if (!pendingInvoice && !canCancel && !canRefresh) {
     container.innerHTML = '';
     return;
   }
@@ -211,6 +231,30 @@ function renderTopActions() {
             >
               Pagar agora
             </a>
+          `
+          : ''
+      }
+
+      ${
+        canRefresh
+          ? `
+            <button
+              type="button"
+              id="client-refresh-subscription-btn"
+              style="
+                min-height:46px;
+                padding:0 16px;
+                border-radius:12px;
+                border:1px solid rgba(79,195,247,.20);
+                background:rgba(79,195,247,.08);
+                color:#7dd3fc;
+                font:inherit;
+                font-weight:800;
+                cursor:pointer;
+              "
+            >
+              Atualizar status
+            </button>
           `
           : ''
       }
@@ -483,30 +527,71 @@ function renderContent() {
   renderInvoices();
 }
 
-async function loadSubscription() {
-  const payload = await getClientPortalSubscription();
-
-  state.subscription = payload?.subscription || null;
-  state.currentCycle = payload?.currentCycle || null;
-  state.latestInvoice = payload?.latestInvoice || null;
+async function loadSubscription({ preserveMessage = true } = {}) {
+  await fetchSubscriptionState();
 
   if (!state.subscription) {
     renderEmptyState();
-    if (state.returnFeedback) {
-      setFeedback(state.returnFeedback.message, state.returnFeedback.variant);
+    if (!preserveMessage) {
+      setFeedback('Nenhuma assinatura encontrada.', 'neutral');
     }
     return;
   }
 
   renderContent();
 
-  if (state.returnFeedback) {
-    setFeedback(state.returnFeedback.message, state.returnFeedback.variant);
-  } else {
+  if (!preserveMessage) {
     setFeedback('Sua assinatura foi carregada.', 'neutral');
   }
 
   bindActions();
+}
+
+async function refreshSubscriptionStatusWithFeedback() {
+  try {
+    setFeedback('Atualizando status do pagamento...', 'neutral');
+    await loadSubscription();
+    setFeedback('Status atualizado.', 'success');
+  } catch (error) {
+    setFeedback(
+      error instanceof Error ? error.message : 'Não foi possível atualizar o status.',
+      'error'
+    );
+  }
+}
+
+async function pollAfterMercadoPagoReturn() {
+  if (!state.returnFeedback?.shouldPoll) return;
+
+  const maxAttempts = 15;
+  const delayMs = 3000;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    await loadSubscription();
+
+    const subStatus = String(state.subscription?.status || '').toLowerCase();
+    const latestStatus = String(state.latestInvoice?.status || '').toLowerCase();
+
+    if (subStatus === 'active' || latestStatus === 'paid') {
+      setFeedback('Pagamento confirmado e plano ativado com sucesso.', 'success');
+      return;
+    }
+
+    if (['failed', 'canceled', 'cancelled'].includes(latestStatus) || subStatus === 'canceled') {
+      setFeedback('O pagamento não foi concluído. Você pode tentar novamente ou cancelar a contratação.', 'error');
+      return;
+    }
+
+    if (attempt < maxAttempts - 1) {
+      setFeedback('Aguardando confirmação do pagamento...', 'neutral');
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+
+  setFeedback(
+    'Ainda estamos aguardando a confirmação do pagamento. Você pode atualizar o status manualmente em instantes.',
+    'neutral'
+  );
 }
 
 async function handleCancelPendingSubscription() {
@@ -547,6 +632,10 @@ async function handleCancelPendingSubscription() {
 function bindActions() {
   document.getElementById('client-cancel-pending-subscription-btn')?.addEventListener('click', () => {
     handleCancelPendingSubscription();
+  });
+
+  document.getElementById('client-refresh-subscription-btn')?.addEventListener('click', () => {
+    refreshSubscriptionStatusWithFeedback();
   });
 }
 
@@ -604,11 +693,19 @@ export function initClientAssinaturaPage() {
 
   (async () => {
     try {
-      if (!state.returnFeedback) {
+      if (state.returnFeedback) {
+        setFeedback(state.returnFeedback.message, state.returnFeedback.variant);
+      } else {
         setFeedback('Carregando sua assinatura...', 'neutral');
       }
 
       await loadSubscription();
+
+      if (state.returnFeedback?.shouldPoll) {
+        await pollAfterMercadoPagoReturn();
+      } else if (!state.returnFeedback) {
+        setFeedback('Sua assinatura foi carregada.', 'neutral');
+      }
     } catch (error) {
       renderEmptyState();
       setFeedback(
