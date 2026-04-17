@@ -4,6 +4,8 @@ import { renderClientHome, initClientHomePage } from './modules/home.js';
 import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
 import { renderClientLayout } from './client-layout.js';
 import { getClientProfile, logoutClient } from '../services/client-auth.js';
+import { renderClientAgendar, initClientAgendarPage } from './modules/agendar.js';
+import { renderClientAgendamentos, initClientAgendamentosPage } from './modules/agendamentos.js';
 
 const CLIENT_BASE = '/client';
 
@@ -358,7 +360,8 @@ const routes = {
   },
   agendar: {
     path: '/client/agendar',
-    render: renderAgendarPage,
+    render: renderClientAgendar,
+    init: (navigate) => initClientAgendarPage({ navigate }),
     protected: true,
     layoutOptions: {
       variant: 'dashboard',
@@ -367,7 +370,8 @@ const routes = {
   },
   agendamentos: {
     path: '/client/agendamentos',
-    render: renderAgendamentosPage,
+    render: renderClientAgendamentos,
+    init: () => initClientAgendamentosPage(),
     protected: true,
     layoutOptions: {
       variant: 'dashboard',
