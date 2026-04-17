@@ -243,25 +243,30 @@ export function renderClientLayout(content, options = {}) {
     `;
   }
 
+  const shouldShowAuthHeader =
+    currentRoute !== 'login' || showBack || showLogout;
+
   return `
     <div class="client-shell">
       <div class="client-bg-orb client-bg-orb--one"></div>
       <div class="client-bg-orb client-bg-orb--two"></div>
 
-      <header class="client-header">
-        <div class="client-brand">
-          <div class="client-brand-mark">B</div>
-          <div>
-            <div class="client-brand-title">BarberFlow</div>
-            <div class="client-brand-sub">Portal do Cliente</div>
+      ${shouldShowAuthHeader ? `
+        <header class="client-header">
+          <div class="client-brand">
+            <div class="client-brand-mark">B</div>
+            <div>
+              <div class="client-brand-title">BarberFlow</div>
+              <div class="client-brand-sub">Portal do Cliente</div>
+            </div>
           </div>
-        </div>
 
-        <div class="client-header-actions">
-          ${showBack ? '<button type="button" class="client-header-btn" id="client-back-btn">Voltar</button>' : ''}
-          ${showLogout ? '<button type="button" class="client-header-btn client-header-btn--danger" id="client-logout-btn">Sair</button>' : ''}
-        </div>
-      </header>
+          <div class="client-header-actions">
+            ${showBack ? '<button type="button" class="client-header-btn" id="client-back-btn">Voltar</button>' : ''}
+            ${showLogout ? '<button type="button" class="client-header-btn client-header-btn--danger" id="client-logout-btn">Sair</button>' : ''}
+          </div>
+        </header>
+      ` : ''}
 
       <main class="client-main">
         <section class="client-card">
