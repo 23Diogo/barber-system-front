@@ -7,14 +7,23 @@ function sanitizeBaseUrl(url) {
   return String(url || '').trim().replace(/\/$/, '');
 }
 
+function getClientApiBaseUrl() {
+  return sanitizeBaseUrl(getApiBaseUrl());
+}
+
 export function getClientToken() {
   return String(localStorage.getItem(CLIENT_TOKEN_STORAGE_KEY) || '').trim();
 }
 
 export function setClientToken(token) {
   const value = String(token || '').trim();
-  if (value) localStorage.setItem(CLIENT_TOKEN_STORAGE_KEY, value);
-  else localStorage.removeItem(CLIENT_TOKEN_STORAGE_KEY);
+
+  if (value) {
+    localStorage.setItem(CLIENT_TOKEN_STORAGE_KEY, value);
+  } else {
+    localStorage.removeItem(CLIENT_TOKEN_STORAGE_KEY);
+  }
+
   return value;
 }
 
@@ -53,11 +62,16 @@ export function logoutClient() {
 }
 
 async function clientFetch(path, options = {}, requireAuth = false) {
-  const baseUrl = sanitizeBaseUrl(getApiBaseUrl());
-  if (!baseUrl) throw new Error('URL da API não configurada.');
+  const baseUrl = getClientApiBaseUrl();
+
+  if (!baseUrl) {
+    throw new Error('URL da API não configurada.');
+  }
 
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
 
   const hasBody = options.body !== undefined && options.body !== null;
   if (hasBody && !headers.has('Content-Type')) {
@@ -66,7 +80,11 @@ async function clientFetch(path, options = {}, requireAuth = false) {
 
   if (requireAuth) {
     const token = getClientToken();
-    if (!token) throw new Error('Sessão do cliente não encontrada.');
+
+    if (!token) {
+      throw new Error('Sessão do cliente não encontrada.');
+    }
+
     headers.set('Authorization', `Bearer ${token}`);
   }
 
@@ -87,49 +105,77 @@ async function clientFetch(path, options = {}, requireAuth = false) {
   }
 
   if (!response.ok) {
-    const message = payload?.error || payload?.message || `Erro HTTP ${response.status}`;
+    const message =
+      payload?.error ||
+      payload?.message ||
+      `Erro HTTP ${response.status}`;
+
     throw new Error(message);
   }
 
   return payload;
 }
 
-export async function clientLogin({ identifier, password }) {
-  const payload = await clientFetch('/api/client-auth/login', {
+export async function registerClient(payload) {
+  const data = await clientFetch('/api/client-auth/register', {
     method: 'POST',
-    body: JSON.stringify({ identifier, password }),
+    body: JSON.stringify(payload),
   });
 
-  if (payload?.token) setClientToken(payload.token);
-  if (payload?.client) setClientProfile(payload.client);
+  if (data?.token) {
+    setClientToken(data.token);
+  }
 
-  return payload;
+  if (data?.client) {
+    setClientProfile(data.client);
+  }
+
+  return data;
 }
 
-export async function clientRegister({ name, whatsapp, email, password }) {
-  const payload = await clientFetch('/api/client-auth/register', {
+export async function loginClient(payload) {
+  const data = await clientFetch('/api/client-auth/login', {
     method: 'POST',
-    body: JSON.stringify({ name, whatsapp, email, password }),
+    body: JSON.stringify(payload),
   });
 
-  if (payload?.token) setClientToken(payload.token);
-  if (payload?.client) setClientProfile(payload.client);
+  if (data?.token) {
+    setClientToken(data.token);
+  }
 
-  return payload;
+  if (data?.client) {
+    setClientProfile(data.client);
+  }
+
+  return data;
 }
 
-export async function getClientMe() {
-  const payload = await clientFetch('/api/client-auth/me', {
-    method: 'GET',
-  }, true);
+export async function meClient() {
+  const data = await clientFetch('/api/client-auth/me', { method: 'GET' }, true);
 
-  if (payload?.client) setClientProfile(payload.client);
-  return payload;
+  if (data?.client) {
+    setClientProfile(data.client);
+  }
+
+  return data;
 }
 
-export async function requestClientPasswordReset({ identifier }) {
+export async function forgotPasswordClient(payload) {
   return clientFetch('/api/client-auth/forgot-password', {
     method: 'POST',
-    body: JSON.stringify({ identifier }),
+    body: JSON.stringify(payload),
   });
 }
+
+export async function resetPasswordClient(payload) {
+  return clientFetch('/api/client-auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+/* aliases temporários */
+export const clientRegister = registerClient;
+export const clientLogin = loginClient;
+export const getClientMe = meClient;
+export const requestClientPasswordReset = forgotPasswordClient;
