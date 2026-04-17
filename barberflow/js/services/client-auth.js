@@ -254,6 +254,24 @@ export async function cancelClientPortalPendingSubscription(reason = '') {
   }, true);
 }
 
+export async function getClientPortalProfile() {
+  return clientFetch('/api/client-portal/profile', { method: 'GET' }, true);
+}
+
+export async function updateClientPortalProfile(payload) {
+  return clientFetch('/api/client-portal/profile', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  }, true);
+}
+
+export async function changeClientPortalPassword(payload) {
+  return clientFetch('/api/client-portal/change-password', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, true);
+}
+
 /* aliases temporários */
 export const clientRegister = registerClient;
 export const clientLogin = loginClient;
