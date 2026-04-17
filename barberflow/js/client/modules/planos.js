@@ -60,22 +60,22 @@ function renderPlanBenefits(plan) {
   const rows = [];
 
   if (Number(plan?.included_haircuts || 0) > 0) {
-    rows.push(`<li>${escapeHtml(String(plan.included_haircuts))} corte(s) incluído(s)</li>`);
+    rows.push(`<li style="overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(String(plan.included_haircuts))} corte(s) incluído(s)</li>`);
   }
 
   if (Number(plan?.included_beards || 0) > 0) {
-    rows.push(`<li>${escapeHtml(String(plan.included_beards))} barba(s) incluída(s)</li>`);
+    rows.push(`<li style="overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(String(plan.included_beards))} barba(s) incluída(s)</li>`);
   }
 
   entitlements.forEach((item) => {
     const service = Array.isArray(item?.services) ? item.services[0] : item?.services;
     rows.push(
-      `<li>${escapeHtml(String(item?.included_quantity || 0))}x ${escapeHtml(service?.name || 'Serviço')}</li>`
+      `<li style="overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(String(item?.included_quantity || 0))}x ${escapeHtml(service?.name || 'Serviço')}</li>`
     );
   });
 
   if (!rows.length) {
-    rows.push('<li>Plano sem benefícios configurados.</li>');
+    rows.push('<li style="overflow-wrap:anywhere;word-break:break-word;">Plano sem benefícios configurados.</li>');
   }
 
   return rows.join('');
@@ -99,42 +99,82 @@ function renderPlanCard(plan) {
         border-radius:20px;
         background:rgba(255,255,255,.03);
         padding:18px;
-        display:grid;
+        display:flex;
+        flex-direction:column;
         gap:14px;
+        min-width:0;
+        height:100%;
+        overflow:hidden;
       "
     >
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
-        <div>
-          <div style="font-size:20px;font-weight:800;color:#fff;">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;min-width:0;">
+        <div style="min-width:0;flex:1;">
+          <div
+            style="
+              font-size:20px;
+              font-weight:800;
+              color:#fff;
+              line-height:1.2;
+              overflow-wrap:anywhere;
+              word-break:break-word;
+            "
+          >
             ${escapeHtml(plan?.name || 'Plano')}
           </div>
-          <div style="margin-top:6px;color:#8fa3c7;">
+
+          <div
+            style="
+              margin-top:6px;
+              color:#8fa3c7;
+              line-height:1.55;
+              overflow-wrap:anywhere;
+              word-break:break-word;
+            "
+          >
             ${escapeHtml(plan?.description || 'Sem descrição')}
           </div>
         </div>
 
-        <span class="pill">${escapeHtml(formatInterval(plan))}</span>
+        <span class="pill" style="flex-shrink:0;">${escapeHtml(formatInterval(plan))}</span>
       </div>
 
-      <div style="display:flex;align-items:flex-end;gap:8px;">
-        <div style="font-size:28px;font-weight:900;color:#7dd3fc;">
+      <div style="display:flex;align-items:flex-end;gap:8px;flex-wrap:wrap;min-width:0;">
+        <div
+          style="
+            font-size:28px;
+            font-weight:900;
+            color:#7dd3fc;
+            line-height:1.1;
+            overflow-wrap:anywhere;
+            word-break:break-word;
+          "
+        >
           ${escapeHtml(formatCurrency(plan?.price))}
         </div>
-        <div style="color:#8fa3c7;padding-bottom:4px;">
+        <div style="color:#8fa3c7;padding-bottom:4px;flex-shrink:0;">
           ${escapeHtml(formatInterval(plan))}
         </div>
       </div>
 
-      <div style="display:grid;gap:10px;">
+      <div style="display:grid;gap:10px;min-width:0;">
         <div class="cfg-row">
-          <div>
+          <div style="min-width:0;">
             <div class="cfg-label">Benefícios</div>
             <div class="cfg-sub">O que entra neste plano</div>
           </div>
           <span class="pill">Plano</span>
         </div>
 
-        <ul style="margin:0;padding-left:18px;color:#dce8ff;display:grid;gap:6px;">
+        <ul
+          style="
+            margin:0;
+            padding-left:18px;
+            color:#dce8ff;
+            display:grid;
+            gap:6px;
+            min-width:0;
+          "
+        >
           ${renderPlanBenefits(plan)}
         </ul>
       </div>
@@ -143,7 +183,7 @@ function renderPlanCard(plan) {
         Number(plan?.signup_fee_cents || 0) > 0
           ? `
             <div class="cfg-row">
-              <div>
+              <div style="min-width:0;">
                 <div class="cfg-label">Taxa de adesão</div>
                 <div class="cfg-sub">${escapeHtml(formatCurrency(Number(plan.signup_fee_cents) / 100))}</div>
               </div>
@@ -153,27 +193,29 @@ function renderPlanCard(plan) {
           : ''
       }
 
-      <button
-        type="button"
-        data-plan-checkout-id="${escapeHtml(plan?.id)}"
-        ${disabled ? 'disabled' : ''}
-        style="
-          min-height:50px;
-          border-radius:14px;
-          border:${disabled ? '1px solid rgba(255,255,255,.10)' : '0'};
-          background:${disabled ? 'rgba(255,255,255,.05)' : 'linear-gradient(135deg,#5dc8ff 0%,#2f8cff 55%,#1468ff 100%)'};
-          color:${disabled ? '#8fa3c7' : '#fff'};
-          font:inherit;
-          font-weight:800;
-          cursor:${disabled ? 'not-allowed' : 'pointer'};
-        "
-      >
-        ${escapeHtml(btnLabel)}
-      </button>
+      <div style="margin-top:auto;display:flex;">
+        <button
+          type="button"
+          data-plan-checkout-id="${escapeHtml(plan?.id)}"
+          ${disabled ? 'disabled' : ''}
+          style="
+            width:100%;
+            min-height:50px;
+            border-radius:14px;
+            border:${disabled ? '1px solid rgba(255,255,255,.10)' : '0'};
+            background:${disabled ? 'rgba(255,255,255,.05)' : 'linear-gradient(135deg,#5dc8ff 0%,#2f8cff 55%,#1468ff 100%)'};
+            color:${disabled ? '#8fa3c7' : '#fff'};
+            font:inherit;
+            font-weight:800;
+            cursor:${disabled ? 'not-allowed' : 'pointer'};
+          "
+        >
+          ${escapeHtml(btnLabel)}
+        </button>
+      </div>
     </div>
   `;
 }
-
 function renderHeader() {
   const meta = document.getElementById('client-planos-meta');
   if (!meta) return;
@@ -221,7 +263,14 @@ function renderPlans() {
   }
 
   list.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+    <div
+      style="
+        display:grid;
+        grid-template-columns:repeat(auto-fit,minmax(320px,1fr));
+        gap:16px;
+        align-items:stretch;
+      "
+    >
       ${state.plans.map(renderPlanCard).join('')}
     </div>
   `;
@@ -261,7 +310,6 @@ function renderPlans() {
     });
   });
 }
-
 export function renderClientPlanos() {
   return `
     <div id="pages" style="display:block">
