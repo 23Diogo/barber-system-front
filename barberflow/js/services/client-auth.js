@@ -11,6 +11,18 @@ function getClientApiBaseUrl() {
   return sanitizeBaseUrl(getApiBaseUrl());
 }
 
+function buildQueryString(params = {}) {
+  const searchParams = new URLSearchParams();
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    searchParams.set(key, String(value));
+  });
+
+  const query = searchParams.toString();
+  return query ? `?${query}` : '';
+}
+
 export function getClientToken() {
   return String(localStorage.getItem(CLIENT_TOKEN_STORAGE_KEY) || '').trim();
 }
@@ -172,6 +184,52 @@ export async function resetPasswordClient(payload) {
     method: 'POST',
     body: JSON.stringify(payload),
   });
+}
+
+/* =========================
+   CLIENT PORTAL
+========================= */
+
+export async function getClientPortalContext() {
+  return clientFetch('/api/client-portal/context', { method: 'GET' }, true);
+}
+
+export async function getClientPortalServices() {
+  return clientFetch('/api/client-portal/services', { method: 'GET' }, true);
+}
+
+export async function getClientPortalBarbers(params = {}) {
+  return clientFetch(
+    `/api/client-portal/barbers${buildQueryString(params)}`,
+    { method: 'GET' },
+    true
+  );
+}
+
+export async function getClientPortalAvailableSlots(params = {}) {
+  return clientFetch(
+    `/api/client-portal/available-slots${buildQueryString(params)}`,
+    { method: 'GET' },
+    true
+  );
+}
+
+export async function createClientPortalAppointment(payload) {
+  return clientFetch('/api/client-portal/appointments', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, true);
+}
+
+export async function getClientPortalAppointments() {
+  return clientFetch('/api/client-portal/appointments', { method: 'GET' }, true);
+}
+
+export async function cancelClientPortalAppointment(appointmentId, reason = '') {
+  return clientFetch(`/api/client-portal/appointments/${appointmentId}/cancel`, {
+    method: 'PATCH',
+    body: JSON.stringify({ reason }),
+  }, true);
 }
 
 /* aliases temporários */
