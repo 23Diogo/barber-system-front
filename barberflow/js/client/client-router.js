@@ -3,8 +3,7 @@ import { renderClientRegister, initClientRegisterPage } from './modules/cadastro
 import { renderClientHome, initClientHomePage } from './modules/home.js';
 import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
 import { renderClientLayout } from './client-layout.js';
-import { getClientProfile } from '../services/client-auth.js';
-import { logoutClient } from '../services/client-auth.js';
+import { getClientProfile, logoutClient } from '../services/client-auth.js';
 
 const CLIENT_BASE = '/client';
 
@@ -503,11 +502,15 @@ function renderClientPage(route) {
   }
 
   const routeConfig = routes[safeRoute];
+  const isDashboardVariant = routeConfig.layoutOptions?.variant === 'dashboard';
+
   const layoutOptions = {
     ...routeConfig.layoutOptions,
     currentRoute: safeRoute,
-    customerName: profile?.name || '',
-    activeBarbershopName: getActiveBarbershopName(profile),
+    customerName: isDashboardVariant ? profile?.name || '' : '',
+    activeBarbershopName: isDashboardVariant
+      ? getActiveBarbershopName(profile)
+      : 'Nenhuma barbearia selecionada',
   };
 
   document.body.className = 'client-area';
