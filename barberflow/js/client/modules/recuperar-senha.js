@@ -5,7 +5,48 @@ function setFeedback(message, variant = 'neutral') {
   if (!el) return;
 
   el.textContent = message || '';
-  el.className = `client-feedback ${variant === 'error' ? 'is-error' : variant === 'success' ? 'is-success' : ''}`;
+  el.className = `client-feedback ${
+    variant === 'error'
+      ? 'is-error'
+      : variant === 'success'
+        ? 'is-success'
+        : ''
+  }`;
+}
+
+export function renderClientForgotPassword() {
+  return `
+    <form id="client-forgot-form" class="client-form">
+      <div class="client-form-grid">
+        <div class="client-form-field">
+          <label class="client-form-label" for="client-forgot-identifier">
+            WhatsApp ou e-mail
+          </label>
+          <input
+            id="client-forgot-identifier"
+            class="client-form-input"
+            type="text"
+            placeholder="Digite seu WhatsApp ou e-mail"
+            autocomplete="username"
+          />
+        </div>
+      </div>
+
+      <div class="client-form-actions">
+        <button type="submit" class="btn-primary-gradient">
+          Enviar instruções
+        </button>
+
+        <button
+          type="button"
+          class="btn-cancel"
+          id="go-client-login-back"
+        >
+          Voltar para login
+        </button>
+      </div>
+    </form>
+  `;
 }
 
 export function initClientForgotPasswordPage({ navigate }) {
@@ -16,7 +57,8 @@ export function initClientForgotPasswordPage({ navigate }) {
   document.getElementById('client-forgot-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const identifier = document.getElementById('client-forgot-identifier')?.value?.trim() || '';
+    const identifier =
+      document.getElementById('client-forgot-identifier')?.value?.trim() || '';
 
     if (!identifier) {
       setFeedback('Informe seu WhatsApp ou e-mail.', 'error');
@@ -38,7 +80,12 @@ export function initClientForgotPasswordPage({ navigate }) {
         'success'
       );
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Não foi possível iniciar a recuperação.', 'error');
+      setFeedback(
+        error instanceof Error
+          ? error.message
+          : 'Não foi possível iniciar a recuperação.',
+        'error'
+      );
     }
   });
 }
