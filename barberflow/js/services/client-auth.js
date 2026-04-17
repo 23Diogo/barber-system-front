@@ -232,6 +232,21 @@ export async function cancelClientPortalAppointment(appointmentId, reason = '') 
   }, true);
 }
 
+export async function getClientPortalPlans() {
+  return clientFetch('/api/client-portal/plans', { method: 'GET' }, true);
+}
+
+export async function getClientPortalSubscription() {
+  return clientFetch('/api/client-portal/subscription', { method: 'GET' }, true);
+}
+
+export async function createClientPortalSubscriptionCheckout(payload) {
+  return clientFetch('/api/client-portal/subscriptions/checkout', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, true);
+}
+
 /* aliases temporários */
 export const clientRegister = registerClient;
 export const clientLogin = loginClient;
