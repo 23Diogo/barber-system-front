@@ -8,6 +8,7 @@ import { renderClientAgendar, initClientAgendarPage } from './modules/agendar.js
 import { renderClientAgendamentos, initClientAgendamentosPage } from './modules/agendamentos.js';
 import { renderClientPlanos, initClientPlanosPage } from './modules/planos.js';
 import { renderClientAssinatura, initClientAssinaturaPage } from './modules/assinatura.js';
+import { renderClientDados, initClientDadosPage } from './modules/dados.js';
 
 const CLIENT_BASE = '/client';
 
@@ -411,7 +412,8 @@ const routes = {
   },
   dados: {
     path: '/client/dados',
-    render: () => renderDadosPage(getClientProfile()),
+    render: renderClientDados,
+    init: () => initClientDadosPage(),
     protected: true,
     layoutOptions: {
       variant: 'dashboard',
