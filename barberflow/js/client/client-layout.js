@@ -243,7 +243,7 @@ export function renderClientLayout(content, options = {}) {
     `;
   }
 
-  const authBrandRoutes = new Set(['login', 'cadastro', 'recuperar-senha']); 
+  const authBrandRoutes = new Set(['login', 'cadastro', 'recuperar-senha']);
   const shouldShowAuthHero = authBrandRoutes.has(currentRoute);
   const shouldShowAuthHeader = showBack || showLogout;
 
@@ -253,15 +253,7 @@ export function renderClientLayout(content, options = {}) {
       <div class="client-bg-orb client-bg-orb--two"></div>
 
       ${shouldShowAuthHeader ? `
-        <header class="client-header">
-          <div class="client-brand">
-            <div class="client-brand-mark">B</div>
-            <div>
-              <div class="client-brand-title">BarberFlow</div>
-              <div class="client-brand-sub">Portal do Cliente</div>
-            </div>
-          </div>
-
+        <header class="client-header client-header--auth-actions-only">
           <div class="client-header-actions">
             ${showBack ? '<button type="button" class="client-header-btn" id="client-back-btn">Voltar</button>' : ''}
             ${showLogout ? '<button type="button" class="client-header-btn client-header-btn--danger" id="client-logout-btn">Sair</button>' : ''}
@@ -279,7 +271,7 @@ export function renderClientLayout(content, options = {}) {
               </div>
             </div>
           ` : ''}
-        
+
           <div class="client-card-top ${shouldShowAuthHero ? 'client-card-top--login' : ''}">
             <div>
               <h1 class="client-title">${escapeHtml(title)}</h1>
