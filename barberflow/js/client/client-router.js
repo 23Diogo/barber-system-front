@@ -6,6 +6,8 @@ import { renderClientLayout } from './client-layout.js';
 import { getClientProfile, logoutClient } from '../services/client-auth.js';
 import { renderClientAgendar, initClientAgendarPage } from './modules/agendar.js';
 import { renderClientAgendamentos, initClientAgendamentosPage } from './modules/agendamentos.js';
+import { renderClientPlanos, initClientPlanosPage } from './modules/planos.js';
+import { renderClientAssinatura, initClientAssinaturaPage } from './modules/assinatura.js';
 
 const CLIENT_BASE = '/client';
 
@@ -380,7 +382,8 @@ const routes = {
   },
   planos: {
     path: '/client/planos',
-    render: renderPlanosPage,
+    render: renderClientPlanos,
+    init: () => initClientPlanosPage(),
     protected: true,
     layoutOptions: {
       variant: 'dashboard',
@@ -389,7 +392,8 @@ const routes = {
   },
   assinatura: {
     path: '/client/assinatura',
-    render: () => renderAssinaturaPage(getClientProfile()),
+    render: renderClientAssinatura,
+    init: () => initClientAssinaturaPage(),
     protected: true,
     layoutOptions: {
       variant: 'dashboard',
