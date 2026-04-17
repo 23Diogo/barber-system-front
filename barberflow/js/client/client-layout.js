@@ -1,264 +1,283 @@
-body.client-area {
-  margin: 0;
-  min-height: 100vh;
-  font-family: 'DM Sans', sans-serif;
-  color: #e8f0fe;
-  background:
-    radial-gradient(circle at 50% 18%, rgba(255, 90, 31, 0.14), transparent 16%),
-    radial-gradient(circle at 50% 18%, rgba(79, 195, 247, 0.08), transparent 28%),
-    radial-gradient(circle at 0% 0%, rgba(79, 195, 247, 0.16), transparent 22%),
-    radial-gradient(circle at 100% 100%, rgba(156, 111, 255, 0.18), transparent 24%),
-    linear-gradient(180deg, #050816 0%, #090d1d 100%);
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
-body.client-area::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  background-image:
-    linear-gradient(rgba(79, 195, 247, 0.06) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(79, 195, 247, 0.06) 1px, transparent 1px);
-  background-size: 52px 52px;
-  opacity: 0.22;
+function getInitials(name = '') {
+  const parts = String(name || '')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  if (!parts.length) return 'CL';
+
+  return parts
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
 }
 
-.client-shell {
-  position: relative;
-  min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
+function renderClientNavItem({ route, label, icon, isActive = false, badge = '' }) {
+  return `
+    <div
+      class="nav-item ${isActive ? 'active' : ''}"
+      data-client-route="${escapeHtml(route)}"
+      role="button"
+      tabindex="0"
+      aria-label="${escapeHtml(label)}"
+    >
+      ${icon}
+      ${escapeHtml(label)}
+      ${badge ? `<span class="nav-badge">${escapeHtml(badge)}</span>` : ''}
+    </div>
+  `;
 }
 
-.client-bg-orb {
-  position: fixed;
-  border-radius: 999px;
-  filter: blur(90px);
-  opacity: 0.22;
-  pointer-events: none;
-}
+export function renderClientLayout(content, options = {}) {
+  const {
+    variant = 'auth',
+    title = 'Portal do Cliente',
+    subtitle = 'Acesse sua conta',
+    showBack = false,
+    showLogout = false,
+    customerName = '',
+    currentRoute = 'login',
+    activeBarbershopName = 'Nenhuma barbearia selecionada',
+  } = options;
 
-.client-bg-orb--one {
-  width: 320px;
-  height: 320px;
-  top: -80px;
-  left: -60px;
-  background: rgba(79, 195, 247, 0.5);
-}
+  const safeCustomerName = escapeHtml(customerName);
+  const initials = getInitials(customerName);
 
-.client-bg-orb--two {
-  width: 360px;
-  height: 360px;
-  right: -100px;
-  bottom: -120px;
-  background: rgba(156, 111, 255, 0.42);
-}
+  if (variant === 'dashboard') {
+    return `
+      <div class="app">
+        <div class="sidebar">
+          <div class="logo-area">
+            <div class="logo-mark">
+              <span class="logo-mark-text">B</span>
+            </div>
 
-.client-header {
-  position: relative;
-  z-index: 2;
-  width: min(1120px, calc(100% - 32px));
-  margin: 24px auto 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-}
+            <div class="logo-info">
+              <div class="name">BarberFlow</div>
+              <div class="shop">Área do Cliente</div>
+              <div class="badge">CLIENT</div>
+            </div>
+          </div>
 
-.client-brand {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
+          <nav class="nav">
+            <div class="nav-group-label">Principal</div>
 
-.client-brand-mark {
-  width: 56px;
-  height: 56px;
-  border-radius: 18px;
-  display: grid;
-  place-items: center;
-  font-family: 'Orbitron', sans-serif;
-  font-size: 30px;
-  font-weight: 900;
-  color: #fff;
-  background: linear-gradient(180deg, #ff8a3d 0%, #ff5a1f 55%, #db3d00 100%);
-  box-shadow:
-    0 0 22px rgba(255, 90, 31, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12);
-  animation: clientBrandPulse 2.2s ease-in-out infinite;
-}
+            ${renderClientNavItem({
+              route: 'home',
+              label: 'Início',
+              isActive: currentRoute === 'home',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <rect x="3" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="14" y="3" width="7" height="7" rx="1"></rect>
+                  <rect x="3" y="14" width="7" height="7" rx="1"></rect>
+                  <rect x="14" y="14" width="7" height="7" rx="1"></rect>
+                </svg>
+              `,
+            })}
 
-@keyframes clientBrandPulse {
-  0%, 100% {
-    transform: translateY(0);
-    box-shadow:
-      0 0 22px rgba(255, 90, 31, 0.28),
-      inset 0 1px 0 rgba(255, 255, 255, 0.12);
+            ${renderClientNavItem({
+              route: 'agendar',
+              label: 'Agendar horário',
+              isActive: currentRoute === 'agendar',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="18" rx="2"></rect>
+                  <line x1="16" y1="2" x2="16" y2="6"></line>
+                  <line x1="8" y1="2" x2="8" y2="6"></line>
+                  <line x1="3" y1="10" x2="21" y2="10"></line>
+                </svg>
+              `,
+            })}
+
+            ${renderClientNavItem({
+              route: 'agendamentos',
+              label: 'Meus agendamentos',
+              isActive: currentRoute === 'agendamentos',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M8 6h13"></path>
+                  <path d="M8 12h13"></path>
+                  <path d="M8 18h13"></path>
+                  <path d="M3 6h.01"></path>
+                  <path d="M3 12h.01"></path>
+                  <path d="M3 18h.01"></path>
+                </svg>
+              `,
+            })}
+
+            <div class="nav-group-label">Planos</div>
+
+            ${renderClientNavItem({
+              route: 'planos',
+              label: 'Contratar plano',
+              isActive: currentRoute === 'planos',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M12 1v22"></path>
+                  <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                </svg>
+              `,
+            })}
+
+            ${renderClientNavItem({
+              route: 'assinatura',
+              label: 'Meu plano',
+              isActive: currentRoute === 'assinatura',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+              `,
+            })}
+
+            <div class="nav-group-label">Conta</div>
+
+            ${renderClientNavItem({
+              route: 'barbearias',
+              label: 'Minhas barbearias',
+              isActive: currentRoute === 'barbearias',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M3 21h18"></path>
+                  <path d="M5 21V7l7-4 7 4v14"></path>
+                  <path d="M9 9h6"></path>
+                </svg>
+              `,
+            })}
+
+            ${renderClientNavItem({
+              route: 'dados',
+              label: 'Meus dados',
+              isActive: currentRoute === 'dados',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                  <circle cx="12" cy="7" r="4"></circle>
+                </svg>
+              `,
+            })}
+
+            ${renderClientNavItem({
+              route: 'pagamentos',
+              label: 'Pagamentos',
+              isActive: currentRoute === 'pagamentos',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <rect x="2" y="5" width="20" height="14" rx="2"></rect>
+                  <line x1="2" y1="10" x2="22" y2="10"></line>
+                </svg>
+              `,
+            })}
+
+            ${renderClientNavItem({
+              route: 'suporte',
+              label: 'Suporte',
+              isActive: currentRoute === 'suporte',
+              icon: `
+                <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+              `,
+            })}
+          </nav>
+
+          <div class="sidebar-footer">
+            <div class="user-card">
+              <div class="avatar">${escapeHtml(initials)}</div>
+              <div>
+                <div style="font-size:11px;font-weight:600">${safeCustomerName || 'Cliente'}</div>
+                <div style="font-size:9px;color:#3a4568">Portal do cliente</div>
+              </div>
+            </div>
+
+            <div
+              class="theme-btn"
+              id="client-logout-btn"
+              role="button"
+              tabindex="0"
+              aria-label="Sair da conta"
+            >
+              <span>🚪 Sair da conta</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="main">
+          <div class="topbar">
+            <div class="topbar-title" id="pageTitle">${escapeHtml(title)}</div>
+
+            <div class="search-box">
+              <svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" width="12">
+                <circle cx="11" cy="11" r="8"></circle>
+                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+              </svg>
+              Barbearia atual: ${escapeHtml(activeBarbershopName)}
+            </div>
+
+            <div class="notif-btn" title="Notificações">
+              <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+              </svg>
+              <div class="notif-dot"></div>
+            </div>
+
+            <div class="avatar">${escapeHtml(initials)}</div>
+          </div>
+
+          <div class="content">
+            ${content}
+          </div>
+        </div>
+      </div>
+    `;
   }
 
-  50% {
-    transform: translateY(-2px);
-    box-shadow:
-      0 0 34px rgba(255, 90, 31, 0.38),
-      0 0 55px rgba(79, 195, 247, 0.12),
-      inset 0 1px 0 rgba(255, 255, 255, 0.16);
-  }
-}
+  return `
+    <div class="client-shell">
+      <div class="client-bg-orb client-bg-orb--one"></div>
+      <div class="client-bg-orb client-bg-orb--two"></div>
 
-.client-brand-title {
-  font-family: 'Orbitron', sans-serif;
-  font-size: 24px;
-  font-weight: 900;
-  color: #f5f9ff;
-  line-height: 1;
-}
+      <header class="client-header">
+        <div class="client-brand">
+          <div class="client-brand-mark">B</div>
+          <div>
+            <div class="client-brand-title">BarberFlow</div>
+            <div class="client-brand-sub">Portal do Cliente</div>
+          </div>
+        </div>
 
-.client-brand-sub {
-  margin-top: 4px;
-  font-size: 12px;
-  color: #8fa3c7;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
+        <div class="client-header-actions">
+          ${showBack ? '<button type="button" class="client-header-btn" id="client-back-btn">Voltar</button>' : ''}
+          ${showLogout ? '<button type="button" class="client-header-btn client-header-btn--danger" id="client-logout-btn">Sair</button>' : ''}
+        </div>
+      </header>
 
-.client-header-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
+      <main class="client-main">
+        <section class="client-card">
+          <div class="client-card-top">
+            <div>
+              <h1 class="client-title">${escapeHtml(title)}</h1>
+              <p class="client-subtitle">${escapeHtml(subtitle)}</p>
+            </div>
+            ${customerName ? `<div class="client-user-badge">${safeCustomerName}</div>` : ''}
+          </div>
 
-.client-header-btn {
-  min-height: 42px;
-  padding: 0 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(79, 195, 247, 0.18);
-  background: rgba(255, 255, 255, 0.04);
-  color: #dce8ff;
-  font: inherit;
-  font-size: 13px;
-  font-weight: 700;
-  cursor: pointer;
-  transition: 0.18s ease;
-}
+          <div id="client-feedback" class="client-feedback"></div>
 
-.client-header-btn:hover {
-  border-color: rgba(79, 195, 247, 0.36);
-  background: rgba(79, 195, 247, 0.08);
-}
-
-.client-header-btn--danger:hover {
-  border-color: rgba(255, 99, 132, 0.35);
-  background: rgba(255, 23, 68, 0.1);
-}
-
-.client-main {
-  position: relative;
-  z-index: 2;
-  flex: 1;
-  width: min(1120px, calc(100% - 32px));
-  margin: 0 auto;
-  display: grid;
-  place-items: center;
-  padding: 40px 0 56px;
-}
-
-.client-card {
-  width: min(560px, 100%);
-  background: rgba(7, 10, 25, 0.88);
-  border: 1px solid rgba(79, 195, 247, 0.12);
-  border-radius: 24px;
-  padding: 28px;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34);
-  backdrop-filter: blur(18px);
-}
-
-.client-card-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 18px;
-}
-
-.client-title {
-  margin: 0;
-  font-size: 38px;
-  font-weight: 800;
-  color: #fff;
-  line-height: 1.05;
-}
-
-.client-subtitle {
-  margin: 10px 0 0;
-  color: #8fa3c7;
-  line-height: 1.6;
-  font-size: 15px;
-}
-
-.client-user-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 34px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(79, 195, 247, 0.1);
-  border: 1px solid rgba(79, 195, 247, 0.16);
-  color: #7dd3fc;
-  font-size: 12px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.client-feedback {
-  min-height: 22px;
-  margin-bottom: 16px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: #7f92b6;
-}
-
-.client-feedback.is-success {
-  color: #00e676;
-}
-
-.client-feedback.is-error {
-  color: #ff7b91;
-}
-
-@media (max-width: 720px) {
-  .client-header {
-    width: calc(100% - 24px);
-    margin-top: 18px;
-  }
-
-  .client-main {
-    width: calc(100% - 24px);
-    padding: 24px 0 36px;
-  }
-
-  .client-card {
-    padding: 22px 18px;
-    border-radius: 20px;
-  }
-
-  .client-card-top {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .client-title {
-    font-size: 30px;
-  }
-
-  .client-brand-title {
-    font-size: 20px;
-  }
-
-  .client-brand-mark {
-    width: 50px;
-    height: 50px;
-    font-size: 26px;
-  }
+          ${content}
+        </section>
+      </main>
+    </div>
+  `;
 }
