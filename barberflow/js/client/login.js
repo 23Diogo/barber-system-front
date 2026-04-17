@@ -5,7 +5,72 @@ function setFeedback(message, variant = 'neutral') {
   if (!el) return;
 
   el.textContent = message || '';
-  el.className = `client-feedback ${variant === 'error' ? 'is-error' : variant === 'success' ? 'is-success' : ''}`;
+  el.className = `client-feedback ${
+    variant === 'error'
+      ? 'is-error'
+      : variant === 'success'
+        ? 'is-success'
+        : ''
+  }`;
+}
+
+export function renderClientLogin() {
+  return `
+    <form id="client-login-form" class="client-form">
+      <div class="client-form-grid">
+        <div class="client-form-field">
+          <label class="client-form-label" for="client-login-identifier">
+            WhatsApp ou e-mail
+          </label>
+          <input
+            id="client-login-identifier"
+            class="client-form-input"
+            type="text"
+            placeholder="Digite seu WhatsApp ou e-mail"
+            autocomplete="username"
+          />
+        </div>
+
+        <div class="client-form-field">
+          <label class="client-form-label" for="client-login-password">
+            Senha
+          </label>
+          <input
+            id="client-login-password"
+            class="client-form-input"
+            type="password"
+            placeholder="Digite sua senha"
+            autocomplete="current-password"
+          />
+        </div>
+      </div>
+
+      <div class="client-form-actions">
+        <button type="submit" class="btn-primary-gradient">
+          Entrar
+        </button>
+
+        <button
+          type="button"
+          class="btn-cancel"
+          id="go-client-forgot"
+        >
+          Esqueci minha senha
+        </button>
+      </div>
+
+      <div class="client-form-footer">
+        <span>Ainda não tem conta?</span>
+        <button
+          type="button"
+          class="client-link-btn"
+          id="go-client-register"
+        >
+          Criar conta
+        </button>
+      </div>
+    </form>
+  `;
 }
 
 export function initClientLoginPage({ navigate }) {
@@ -20,8 +85,10 @@ export function initClientLoginPage({ navigate }) {
   document.getElementById('client-login-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const identifier = document.getElementById('client-login-identifier')?.value?.trim() || '';
-    const password = document.getElementById('client-login-password')?.value || '';
+    const identifier =
+      document.getElementById('client-login-identifier')?.value?.trim() || '';
+    const password =
+      document.getElementById('client-login-password')?.value || '';
 
     if (!identifier) {
       setFeedback('Informe seu WhatsApp ou e-mail.', 'error');
@@ -47,7 +114,10 @@ export function initClientLoginPage({ navigate }) {
         navigate('home');
       }, 600);
     } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Não foi possível entrar.', 'error');
+      setFeedback(
+        error instanceof Error ? error.message : 'Não foi possível entrar.',
+        'error'
+      );
     }
   });
 }
