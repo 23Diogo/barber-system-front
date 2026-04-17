@@ -243,9 +243,9 @@ export function renderClientLayout(content, options = {}) {
     `;
   }
 
-    const isLoginRoute = currentRoute === 'login';
-  const shouldShowAuthHeader =
-    currentRoute !== 'login' || showBack || showLogout;
+  const authBrandRoutes = new Set(['login', 'cadastro', 'recuperar-senha']); 
+  const shouldShowAuthHero = authBrandRoutes.has(currentRoute);
+  const shouldShowAuthHeader = showBack || showLogout;
 
   return `
     <div class="client-shell">
@@ -270,8 +270,8 @@ export function renderClientLayout(content, options = {}) {
       ` : ''}
 
       <main class="client-main">
-        <section class="client-card ${isLoginRoute ? 'client-card--login' : ''}">
-          ${isLoginRoute ? `
+        <section class="client-card ${shouldShowAuthHero ? 'client-card--login' : ''}">
+          ${shouldShowAuthHero ? `
             <div class="client-login-brand-hero" aria-label="BarberFlow">
               <div class="client-login-brand-mark">B</div>
               <div class="client-login-brand-wordmark">
@@ -279,8 +279,8 @@ export function renderClientLayout(content, options = {}) {
               </div>
             </div>
           ` : ''}
-
-          <div class="client-card-top ${isLoginRoute ? 'client-card-top--login' : ''}">
+        
+          <div class="client-card-top ${shouldShowAuthHero ? 'client-card-top--login' : ''}">
             <div>
               <h1 class="client-title">${escapeHtml(title)}</h1>
               <p class="client-subtitle">${escapeHtml(subtitle)}</p>
