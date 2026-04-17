@@ -1,4 +1,4 @@
-import { loginClient } from '/js/client-auth-api.js';
+import { loginClient } from '../../services/client-auth.js';
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-feedback');
