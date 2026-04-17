@@ -247,6 +247,13 @@ export async function createClientPortalSubscriptionCheckout(payload) {
   }, true);
 }
 
+export async function cancelClientPortalPendingSubscription(reason = '') {
+  return clientFetch('/api/client-portal/subscription/cancel', {
+    method: 'PATCH',
+    body: JSON.stringify({ reason }),
+  }, true);
+}
+
 /* aliases temporários */
 export const clientRegister = registerClient;
 export const clientLogin = loginClient;
