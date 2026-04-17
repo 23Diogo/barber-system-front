@@ -1,4 +1,4 @@
-import { forgotPasswordClient } from '/js/client-auth-api.js';
+import { forgotPasswordClient } from '../../services/client-auth.js';
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-feedback');
