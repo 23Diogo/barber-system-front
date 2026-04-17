@@ -1,37 +1,15 @@
-import { requestClientPasswordReset } from '../../services/client-auth.js';
+import { forgotPasswordClient } from '/js/client-auth-api.js';
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-feedback');
   if (!el) return;
 
   el.textContent = message || '';
-  el.className = `client-feedback is-${variant}`;
-}
-
-export function renderClientForgotPassword() {
-  return `
-    <form id="client-forgot-form" class="client-form">
-      <div class="client-field">
-        <label class="client-label">WhatsApp ou e-mail</label>
-        <input
-          class="client-input"
-          id="client-forgot-identifier"
-          type="text"
-          placeholder="Informe seu WhatsApp ou e-mail"
-        />
-      </div>
-
-      <button type="submit" class="client-primary-btn">Enviar instruções</button>
-
-      <div class="client-links">
-        <button type="button" class="client-link-btn" id="go-client-login-from-forgot">Voltar para login</button>
-      </div>
-    </form>
-  `;
+  el.className = `client-feedback ${variant === 'error' ? 'is-error' : variant === 'success' ? 'is-success' : ''}`;
 }
 
 export function initClientForgotPasswordPage({ navigate }) {
-  document.getElementById('go-client-login-from-forgot')?.addEventListener('click', () => {
+  document.getElementById('go-client-login-back')?.addEventListener('click', () => {
     navigate('login');
   });
 
@@ -47,8 +25,18 @@ export function initClientForgotPasswordPage({ navigate }) {
 
     try {
       setFeedback('Enviando instruções...', 'neutral');
-      await requestClientPasswordReset({ identifier });
-      setFeedback('Se os dados estiverem corretos, você receberá as instruções para redefinir sua senha.', 'success');
+
+      const data = await forgotPasswordClient({ identifier });
+
+      if (data?.debugResetToken) {
+        setFeedback(`Modo debug ativo. Token de reset: ${data.debugResetToken}`, 'success');
+        return;
+      }
+
+      setFeedback(
+        'Se os dados estiverem corretos, você receberá as instruções para redefinir sua senha.',
+        'success'
+      );
     } catch (error) {
       setFeedback(error instanceof Error ? error.message : 'Não foi possível iniciar a recuperação.', 'error');
     }
