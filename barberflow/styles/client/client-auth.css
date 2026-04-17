@@ -1,1 +1,120 @@
-//teste
+.client-form {
+  display: grid;
+  gap: 18px;
+}
+
+.client-form-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.client-form-field {
+  display: grid;
+  gap: 8px;
+}
+
+.client-form-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #dbe7ff;
+  letter-spacing: 0.02em;
+}
+
+.client-form-input {
+  width: 100%;
+  min-height: 52px;
+  border: 1px solid rgba(79, 195, 247, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  color: #f5f9ff;
+  padding: 0 16px;
+  font: inherit;
+  font-size: 14px;
+  outline: none;
+  transition: 0.18s ease;
+  box-sizing: border-box;
+}
+
+.client-form-input::placeholder {
+  color: #6f84a9;
+}
+
+.client-form-input:focus {
+  border-color: rgba(79, 195, 247, 0.42);
+  box-shadow: 0 0 0 4px rgba(79, 195, 247, 0.08);
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.client-form-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.btn-primary-gradient,
+.btn-cancel {
+  min-height: 50px;
+  border-radius: 14px;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: 0.18s ease;
+}
+
+.btn-primary-gradient {
+  border: 0;
+  color: #fff;
+  background: linear-gradient(135deg, #5dc8ff 0%, #2f8cff 55%, #1468ff 100%);
+  box-shadow: 0 10px 24px rgba(20, 104, 255, 0.24);
+}
+
+.btn-primary-gradient:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(20, 104, 255, 0.28);
+}
+
+.btn-cancel {
+  border: 1px solid rgba(79, 195, 247, 0.14);
+  color: #d8e6ff;
+  background: rgba(255, 255, 255, 0.04);
+}
+
+.btn-cancel:hover {
+  border-color: rgba(79, 195, 247, 0.28);
+  background: rgba(79, 195, 247, 0.08);
+}
+
+.client-form-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  color: #93a4c7;
+  font-size: 14px;
+}
+
+.client-link-btn,
+a.client-link-btn {
+  border: 0;
+  background: transparent;
+  color: #7dd3fc;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: underline;
+}
+
+.client-link-btn:hover,
+a.client-link-btn:hover {
+  color: #b8ecff;
+}
+
+@media (max-width: 640px) {
+  .client-form-actions {
+    grid-template-columns: 1fr;
+  }
+}
