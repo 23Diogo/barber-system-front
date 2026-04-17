@@ -4,7 +4,7 @@ import { renderClientHome, initClientHomePage } from './modules/home.js';
 import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
 import { renderClientLayout } from './client-layout.js';
 import { getClientProfile } from '../services/client-auth.js';
-import { logoutClient } from '/js/client-auth-api.js';
+import { logoutClient } from '../services/client-auth.js';
 
 const CLIENT_BASE = '/client';
 
