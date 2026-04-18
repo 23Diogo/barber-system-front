@@ -3,6 +3,8 @@ body.client-area {
   min-height: 100vh;
   font-family: 'DM Sans', sans-serif;
   color: #e8f0fe;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     radial-gradient(circle at 50% 18%, rgba(255, 90, 31, 0.14), transparent 16%),
     radial-gradient(circle at 50% 18%, rgba(79, 195, 247, 0.08), transparent 28%),
@@ -168,12 +170,14 @@ body.client-area::before {
 
 .client-card {
   width: min(560px, 100%);
+  margin-bottom: 24px;
   background: rgba(7, 10, 25, 0.88);
   border: 1px solid rgba(79, 195, 247, 0.12);
   border-radius: 24px;
   padding: 28px;
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.34);
   backdrop-filter: blur(18px);
+  box-sizing: border-box;
 }
 
 .client-card-top {
@@ -340,11 +344,14 @@ body.client-area::before {
 
   .client-main {
     width: calc(100% - 24px);
-    padding: 24px 0 36px;
+    padding: 20px 0 32px;
+    align-items: flex-start;
   }
 
   .client-card {
+    width: 100%;
     padding: 22px 18px;
+    margin-bottom: 20px;
     border-radius: 20px;
   }
 
@@ -390,32 +397,5 @@ body.client-area::before {
 
   .client-card-top--login .client-title {
     font-size: 32px;
-  }
-}
-
-body.client-area {
-  overflow-x: hidden;
-  overflow-y: auto;
-}
-
-.client-card {
-  margin-bottom: 24px;
-}
-
-@media (max-width: 720px) {
-  .client-shell {
-    overflow-x: hidden;
-    overflow-y: auto;
-  }
-
-  .client-main {
-    width: calc(100% - 24px);
-    padding: 20px 0 32px;
-    align-items: flex-start;
-  }
-
-  .client-card {
-    width: 100%;
-    margin-bottom: 20px;
   }
 }
