@@ -239,7 +239,7 @@
   #hero::after {
     content: '';
     display: block;
-    height: 32px;
+    height: 200px;
     flex-shrink: 0;
   }
 }
