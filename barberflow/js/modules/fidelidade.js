@@ -1,92 +1,18 @@
+import { apiFetch } from '../services/api.js';
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
 const fidelidadeState = {
-  retentionRate: 78,
-  retentionTrend: '↑ 5%',
-  clients: [
-    {
-      id: 'rafael-souza',
-      initials: 'RS',
-      avatarGradient: 'linear-gradient(135deg,#ffd700,#ff8c00)',
-      avatarColor: '#000',
-      name: 'Rafael Souza 🥇',
-      points: 480,
-      visits: 24,
-      tier: 'Gold',
-      joinedAt: 'Jan/2025',
-      notes: 'Cliente mais ativo do programa.',
-    },
-    {
-      id: 'pedro-costa',
-      initials: 'PC',
-      avatarGradient: 'linear-gradient(135deg,#6b6880,#3a3a4a)',
-      avatarColor: '#fff',
-      name: 'Pedro Costa 🥈',
-      points: 360,
-      visits: 18,
-      tier: 'Silver',
-      joinedAt: 'Fev/2025',
-      notes: 'Alta recorrência em serviços premium.',
-    },
-    {
-      id: 'carlos-mendes',
-      initials: 'CM',
-      avatarGradient: 'linear-gradient(135deg,#3b82f6,#1d4ed8)',
-      avatarColor: '#fff',
-      name: 'Carlos Mendes 🥉',
-      points: 300,
-      visits: 15,
-      tier: 'Silver',
-      joinedAt: 'Mar/2025',
-      notes: 'Participa com boa frequência das campanhas.',
-    },
-    {
-      id: 'bruno-alves',
-      initials: 'BA',
-      avatarGradient: 'linear-gradient(135deg,#00b4ff,#6c3fff)',
-      avatarColor: '#fff',
-      name: 'Bruno Alves',
-      points: 240,
-      visits: 12,
-      tier: 'Bronze',
-      joinedAt: 'Mar/2025',
-      notes: 'Em crescimento dentro do programa.',
-    },
-  ],
-  rewards: [
-    {
-      id: 'corte-gratis',
-      icon: '✂️',
-      title: '1 Corte Grátis',
-      requiredPoints: 500,
-      highlight: 'info',
-      redemptions: 6,
-      active: true,
-      notes: 'Recompensa premium para clientes recorrentes.',
-    },
-    {
-      id: 'desconto-20',
-      icon: '🎯',
-      title: '20% de desconto',
-      requiredPoints: 200,
-      highlight: 'purple',
-      redemptions: 5,
-      active: true,
-      notes: 'Aplicável em qualquer serviço da casa.',
-    },
-    {
-      id: 'barba-gratis',
-      icon: '🪒',
-      title: 'Barba grátis',
-      requiredPoints: 300,
-      highlight: 'success',
-      redemptions: 3,
-      active: true,
-      notes: 'Muito usada em campanhas de reativação.',
-    },
-  ],
+  program: null,
+  rewards: [],
+  topClients: [],
+  isLoading: false,
   modalMode: 'closed', // closed | viewClient | viewReward | editReward | createReward
   activeClientId: null,
   activeRewardId: null,
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -97,190 +23,156 @@ function escapeHtml(value) {
     .replace(/'/g, '&#039;');
 }
 
-function getClientById(clientId) {
-  return fidelidadeState.clients.find((item) => item.id === clientId) || null;
+function setFeedback(id, message, variant = 'neutral') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color =
+    variant === 'error' ? '#ff8a8a' :
+    variant === 'success' ? '#00e676' :
+    '#5a6888';
 }
 
-function getRewardById(rewardId) {
-  return fidelidadeState.rewards.find((item) => item.id === rewardId) || null;
+function getRewardById(id) {
+  return fidelidadeState.rewards.find(r => r.id === id) || null;
 }
 
-function normalizeRewardId(title) {
-  const base = String(title || 'nova-recompensa')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'nova-recompensa';
-
-  let candidate = base;
-  let counter = 2;
-
-  while (fidelidadeState.rewards.some((item) => item.id === candidate)) {
-    candidate = `${base}-${counter}`;
-    counter += 1;
-  }
-
-  return candidate;
-}
-
-function getRewardMeta(highlight) {
-  const map = {
-    info: { color: '#4fc3f7', border: '#4fc3f7' },
-    purple: { color: '#9c6fff', border: '#9c6fff' },
-    success: { color: '#00e676', border: '#00e676' },
-    warning: { color: '#f97316', border: '#f97316' },
-  };
-
-  return map[highlight] || map.info;
-}
-
-function getMetrics() {
-  const members = fidelidadeState.clients.length + 83;
-  const distributedPoints = fidelidadeState.clients.reduce((sum, item) => sum + Number(item.points || 0), 0) + 3060;
-  const redemptions = fidelidadeState.rewards.reduce((sum, item) => sum + Number(item.redemptions || 0), 0);
-
-  return {
-    members,
-    distributedPoints,
-    redemptions,
-    retentionRate: fidelidadeState.retentionRate,
-  };
+function getTopClientById(id) {
+  return fidelidadeState.topClients.find(c => c.id === id) || null;
 }
 
 function formatPoints(value) {
-  const num = Number(value || 0);
-  if (num >= 1000) {
-    return `${(num / 1000).toFixed(1)}k`;
-  }
-  return String(num);
+  const n = Number(value || 0);
+  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 }
 
+const clientThemes = [
+  { gradient: 'linear-gradient(135deg,#ffd700,#ff8c00)', color: '#000' },
+  { gradient: 'linear-gradient(135deg,#6b6880,#3a3a4a)', color: '#fff' },
+  { gradient: 'linear-gradient(135deg,#3b82f6,#1d4ed8)', color: '#fff' },
+  { gradient: 'linear-gradient(135deg,#00b4ff,#6c3fff)', color: '#fff' },
+  { gradient: 'linear-gradient(135deg,#00e676,#00b248)', color: '#001b0b' },
+];
+
+function getClientTheme(index) {
+  return clientThemes[index % clientThemes.length];
+}
+
+function getInitials(name) {
+  return String(name || 'C').trim().split(/\s+/).slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('') || 'C';
+}
+
+// ─── Metrics ──────────────────────────────────────────────────────────────────
+
 function renderMetrics() {
-  const metrics = getMetrics();
+  const members = fidelidadeState.topClients.length;
+  const totalPoints = fidelidadeState.topClients.reduce((s, c) => s + Number(c.loyalty_points || 0), 0);
+  const activeRewards = fidelidadeState.rewards.filter(r => r.is_active).length;
+  const pointsPerVisit = fidelidadeState.program?.points_per_visit || 0;
 
   return `
     <div class="grid-4 fidelidade-metrics-grid">
       <div class="metric-card">
         <div class="metric-label">No programa</div>
-        <div class="metric-value">${escapeHtml(metrics.members)}</div>
-        <div class="metric-sub color-up">↑ 12 este mês</div>
+        <div class="metric-value">${escapeHtml(members)}</div>
+        <div class="metric-sub color-nt">clientes com pontos</div>
       </div>
-
       <div class="metric-card">
-        <div class="metric-label">Pontos distribuídos</div>
-        <div class="metric-value">${escapeHtml(formatPoints(metrics.distributedPoints))}k</div>
-        <div class="metric-sub color-nt">este mês</div>
+        <div class="metric-label">Pontos em circulação</div>
+        <div class="metric-value">${escapeHtml(formatPoints(totalPoints))}</div>
+        <div class="metric-sub color-nt">total acumulado</div>
       </div>
-
       <div class="metric-card">
-        <div class="metric-label">Resgates</div>
-        <div class="metric-value">${escapeHtml(metrics.redemptions)}</div>
-        <div class="metric-sub color-up">↑ 3 vs anterior</div>
+        <div class="metric-label">Recompensas ativas</div>
+        <div class="metric-value">${escapeHtml(activeRewards)}</div>
+        <div class="metric-sub color-nt">disponíveis para resgate</div>
       </div>
-
       <div class="metric-card">
-        <div class="metric-label">Retenção</div>
-        <div class="metric-value" style="color:#00e676">${escapeHtml(`${metrics.retentionRate}%`)}</div>
-        <div class="metric-sub color-up">${escapeHtml(fidelidadeState.retentionTrend)}</div>
+        <div class="metric-label">Pontos por visita</div>
+        <div class="metric-value" style="color:#00e676">${escapeHtml(pointsPerVisit || '—')}</div>
+        <div class="metric-sub color-nt">configurado no programa</div>
       </div>
     </div>
   `;
 }
 
-function renderTopClientRow(client, index, maxPoints) {
-  const width = Math.max((client.points / maxPoints) * 100, 15);
+// ─── Render rows ──────────────────────────────────────────────────────────────
+
+function renderTopClientRow(client, index) {
+  const theme = getClientTheme(index);
+  const points = Number(client.loyalty_points || 0);
+  const maxPoints = Math.max(...fidelidadeState.topClients.map(c => Number(c.loyalty_points || 0)), 1);
+  const width = Math.max((points / maxPoints) * 100, 12);
+  const medals = ['🥇', '🥈', '🥉'];
 
   return `
-    <button
-      type="button"
-      class="fidelidade-row-button"
+    <button type="button" class="fidelidade-row-button"
       data-client-id="${escapeHtml(client.id)}"
-      title="Ver detalhes de ${escapeHtml(client.name)}"
-    >
+      title="Ver detalhes de ${escapeHtml(client.name)}">
       <div class="row-item fidelidade-row-item">
-        <div class="row-avatar" style="background:${client.avatarGradient};color:${client.avatarColor};">
-          ${escapeHtml(client.initials)}
+        <div class="row-avatar" style="background:${theme.gradient};color:${theme.color};">
+          ${escapeHtml(getInitials(client.name))}
         </div>
         <div class="row-info">
-          <div class="row-name">${escapeHtml(client.name)}</div>
-          <div class="row-sub">${escapeHtml(`${client.points} pts · ${client.visits} visitas`)}</div>
+          <div class="row-name">${escapeHtml(client.name)} ${medals[index] || ''}</div>
+          <div class="row-sub">${escapeHtml(`${points} pts`)}</div>
           <div class="row-prog"><div class="row-fill" style="width:${width}%"></div></div>
         </div>
-        <div class="row-value">${escapeHtml(`${client.points} pts`)}</div>
+        <div class="row-value">${escapeHtml(`${points} pts`)}</div>
       </div>
     </button>
   `;
-}
-
-function renderTopClientsList() {
-  const topClients = [...fidelidadeState.clients]
-    .sort((a, b) => b.points - a.points)
-    .slice(0, 3);
-
-  const maxPoints = Math.max(...topClients.map((item) => item.points), 1);
-  return topClients.map((client, index) => renderTopClientRow(client, index, maxPoints)).join('');
 }
 
 function renderRewardRow(reward) {
-  const meta = getRewardMeta(reward.highlight);
+  const colors = { info: '#4fc3f7', purple: '#9c6fff', success: '#00e676', warning: '#f97316' };
+  const color = colors[reward.highlight] || '#4fc3f7';
 
   return `
-    <button
-      type="button"
-      class="fidelidade-row-button"
+    <button type="button" class="fidelidade-row-button"
       data-reward-id="${escapeHtml(reward.id)}"
-      title="Ver detalhes de ${escapeHtml(reward.title)}"
-    >
-      <div class="fin-row" style="border-color:${meta.border}">
-        <div class="fin-icon">${escapeHtml(reward.icon)}</div>
+      title="Ver detalhes de ${escapeHtml(reward.title || reward.name)}">
+      <div class="fin-row" style="border-color:${color}">
+        <div class="fin-icon">${escapeHtml(reward.icon || '🎁')}</div>
         <div class="fin-info">
-          <div class="fin-title">${escapeHtml(reward.title)}</div>
-          <div class="fin-date">${escapeHtml(`${reward.requiredPoints} pontos necessários`)}</div>
+          <div class="fin-title">${escapeHtml(reward.title || reward.name)}</div>
+          <div class="fin-date">${escapeHtml(`${reward.points_required || reward.required_points || 0} pontos necessários`)}</div>
         </div>
-        <div class="fin-val" style="color:${meta.color}">${escapeHtml(`${reward.requiredPoints} pts`)}</div>
+        <div class="fin-val" style="color:${color}">${escapeHtml(`${reward.points_required || reward.required_points || 0} pts`)}</div>
       </div>
     </button>
   `;
 }
 
-function renderRewardList() {
-  return fidelidadeState.rewards.map(renderRewardRow).join('');
-}
+// ─── Modal renders ────────────────────────────────────────────────────────────
 
 function renderClientDetails(client) {
+  const theme = getClientTheme(fidelidadeState.topClients.indexOf(client));
+
   return `
     <div class="fidelidade-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">${escapeHtml(client.name)}</div>
-        <div class="modal-sub" style="margin-top:4px;">Detalhes do cliente no programa</div>
+      <div class="fidelidade-modal-header" style="display:flex;align-items:center;gap:14px;margin-bottom:16px;">
+        <div class="row-avatar" style="width:52px;height:52px;border-radius:16px;background:${theme.gradient};color:${theme.color};display:grid;place-items:center;font-weight:900;font-size:18px;">
+          ${escapeHtml(getInitials(client.name))}
+        </div>
+        <div>
+          <div class="modal-title" style="margin:0;">${escapeHtml(client.name)}</div>
+          <div class="modal-sub" style="margin-top:4px;">Programa de fidelidade</div>
+        </div>
       </div>
 
       <div class="fidelidade-modal-grid">
         <div class="mini-card">
           <div class="mini-lbl">Pontos</div>
-          <div class="mini-val" style="color:#4fc3f7">${escapeHtml(client.points)}</div>
+          <div class="mini-val" style="color:#4fc3f7">${escapeHtml(client.loyalty_points || 0)}</div>
         </div>
         <div class="mini-card">
           <div class="mini-lbl">Visitas</div>
-          <div class="mini-val" style="color:#00e676">${escapeHtml(client.visits)}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Nível</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(client.tier)}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Entrada</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(client.joinedAt)}</div>
+          <div class="mini-val" style="color:#00e676">${escapeHtml(client.total_visits || client.completed_appointments_count || 0)}</div>
         </div>
       </div>
 
-      <div class="fidelidade-modal-info">
-        <div class="fidelidade-modal-info-row">
-          <strong>Observações:</strong> ${escapeHtml(client.notes || '—')}
-        </div>
-      </div>
+      <div id="fidelidade-modal-feedback" class="fidelidade-form-feedback"></div>
 
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="fidelidade-modal-close">Fechar</button>
@@ -290,38 +182,43 @@ function renderClientDetails(client) {
 }
 
 function renderRewardDetails(reward) {
-  const meta = getRewardMeta(reward.highlight);
+  const colors = { info: '#4fc3f7', purple: '#9c6fff', success: '#00e676', warning: '#f97316' };
+  const color = colors[reward.highlight] || '#4fc3f7';
+  const points = reward.points_required || reward.required_points || 0;
 
   return `
     <div class="fidelidade-modal-body">
       <div>
-        <div class="modal-title" style="margin:0;">${escapeHtml(reward.title)}</div>
+        <div class="modal-title" style="margin:0;">${escapeHtml(reward.title || reward.name)}</div>
         <div class="modal-sub" style="margin-top:4px;">Detalhes da recompensa</div>
       </div>
 
       <div class="fidelidade-modal-grid">
         <div class="mini-card">
           <div class="mini-lbl">Pontos necessários</div>
-          <div class="mini-val" style="color:${meta.color}">${escapeHtml(reward.requiredPoints)}</div>
+          <div class="mini-val" style="color:${color}">${escapeHtml(points)}</div>
         </div>
         <div class="mini-card">
-          <div class="mini-lbl">Resgates</div>
-          <div class="mini-val" style="color:#00e676">${escapeHtml(reward.redemptions)}</div>
+          <div class="mini-lbl">Status</div>
+          <div class="mini-val" style="font-size:14px;color:${reward.is_active ? '#00e676' : '#5a6888'}">
+            ${reward.is_active ? 'Ativa' : 'Inativa'}
+          </div>
         </div>
       </div>
 
-      <div class="fidelidade-modal-info">
-        <div class="fidelidade-modal-info-row">
-          <strong>Status:</strong> ${escapeHtml(reward.active ? 'Ativa' : 'Inativa')}
+      ${reward.description ? `
+        <div class="fidelidade-modal-info">
+          <div class="fidelidade-modal-info-row"><strong>Descrição:</strong> ${escapeHtml(reward.description)}</div>
         </div>
-        <div class="fidelidade-modal-info-row">
-          <strong>Observações:</strong> ${escapeHtml(reward.notes || '—')}
-        </div>
-      </div>
+      ` : ''}
+
+      <div id="fidelidade-modal-feedback" class="fidelidade-form-feedback"></div>
 
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="fidelidade-modal-close">Fechar</button>
-        <button type="button" class="btn-save" id="fidelidade-edit-reward" data-reward-id="${escapeHtml(reward.id)}">Editar recompensa</button>
+        <button type="button" class="btn-save" id="fidelidade-edit-reward" data-reward-id="${escapeHtml(reward.id)}">
+          Editar recompensa
+        </button>
       </div>
     </div>
   `;
@@ -329,69 +226,46 @@ function renderRewardDetails(reward) {
 
 function renderRewardForm(mode, reward = null) {
   const isEdit = mode === 'editReward';
-  const safeReward = reward || {
-    title: '',
-    icon: '🎁',
-    requiredPoints: 200,
-    highlight: 'info',
-    redemptions: 0,
-    active: true,
-    notes: '',
-  };
+  const r = reward || {};
+  const points = r.points_required || r.required_points || 200;
 
   return `
     <div class="fidelidade-modal-body">
       <div>
         <div class="modal-title" style="margin:0;">${isEdit ? 'Editar recompensa' : 'Nova recompensa'}</div>
-        <div class="modal-sub" style="margin-top:4px;">
-          ${isEdit ? 'Atualize os dados da recompensa.' : 'Preencha os dados para criar uma nova recompensa.'}
-        </div>
+        <div class="modal-sub" style="margin-top:4px;">${isEdit ? 'Atualize os dados.' : 'Preencha para criar uma recompensa.'}</div>
       </div>
 
       <form id="fidelidade-form" class="fidelidade-form">
         <div class="fidelidade-form-grid">
           <div>
-            <div class="color-section-label">Título</div>
-            <input class="modal-input" name="title" type="text" value="${escapeHtml(safeReward.title)}" placeholder="Nome da recompensa" />
+            <div class="color-section-label">Nome da recompensa</div>
+            <input class="modal-input" name="name" type="text"
+              value="${escapeHtml(r.title || r.name || '')}" placeholder="Ex: 1 Corte Grátis" />
           </div>
-
           <div>
             <div class="color-section-label">Ícone</div>
-            <input class="modal-input" name="icon" type="text" value="${escapeHtml(safeReward.icon)}" placeholder="Ex.: 🎁" />
+            <input class="modal-input" name="icon" type="text"
+              value="${escapeHtml(r.icon || '🎁')}" placeholder="Ex: 🎁" />
           </div>
-
           <div>
             <div class="color-section-label">Pontos necessários</div>
-            <input class="modal-input" name="requiredPoints" type="number" min="1" value="${escapeHtml(safeReward.requiredPoints)}" />
+            <input class="modal-input" name="points_required" type="number" min="1"
+              value="${escapeHtml(points)}" />
           </div>
-
-          <div>
-            <div class="color-section-label">Resgates</div>
-            <input class="modal-input" name="redemptions" type="number" min="0" value="${escapeHtml(safeReward.redemptions)}" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Cor destaque</div>
-            <select class="modal-input" name="highlight">
-              <option value="info" ${safeReward.highlight === 'info' ? 'selected' : ''}>Azul</option>
-              <option value="purple" ${safeReward.highlight === 'purple' ? 'selected' : ''}>Roxo</option>
-              <option value="success" ${safeReward.highlight === 'success' ? 'selected' : ''}>Verde</option>
-              <option value="warning" ${safeReward.highlight === 'warning' ? 'selected' : ''}>Laranja</option>
-            </select>
-          </div>
-
           <div>
             <div class="color-section-label">Status</div>
-            <select class="modal-input" name="active">
-              <option value="true" ${safeReward.active ? 'selected' : ''}>Ativa</option>
-              <option value="false" ${!safeReward.active ? 'selected' : ''}>Inativa</option>
+            <select class="modal-input" name="is_active">
+              <option value="true" ${r.is_active !== false ? 'selected' : ''}>Ativa</option>
+              <option value="false" ${r.is_active === false ? 'selected' : ''}>Inativa</option>
             </select>
           </div>
         </div>
 
         <div>
-          <div class="color-section-label">Observações</div>
-          <textarea class="modal-input fidelidade-textarea" name="notes" placeholder="Observações da recompensa">${escapeHtml(safeReward.notes || '')}</textarea>
+          <div class="color-section-label">Descrição</div>
+          <textarea class="modal-input fidelidade-textarea" name="description"
+            placeholder="Descrição da recompensa">${escapeHtml(r.description || '')}</textarea>
         </div>
 
         <div id="fidelidade-form-feedback" class="fidelidade-form-feedback"></div>
@@ -400,35 +274,24 @@ function renderRewardForm(mode, reward = null) {
           <button type="button" class="btn-cancel" id="${isEdit ? 'fidelidade-form-back' : 'fidelidade-form-cancel'}">
             ${isEdit ? 'Voltar' : 'Cancelar'}
           </button>
-          <button type="submit" class="btn-save">
-            ${isEdit ? 'Salvar alterações' : 'Criar recompensa'}
-          </button>
+          <button type="submit" class="btn-save">${isEdit ? 'Salvar' : 'Criar recompensa'}</button>
         </div>
       </form>
     </div>
   `;
 }
 
-function setFidelidadeFormFeedback(message, variant = 'neutral') {
-  const el = document.getElementById('fidelidade-form-feedback');
-  if (!el) return;
+// ─── Modal control ────────────────────────────────────────────────────────────
 
-  el.textContent = message || '';
-  el.style.color =
-    variant === 'error' ? '#ff8a8a' :
-    variant === 'success' ? '#00e676' :
-    '#5a6888';
-}
-
-function openClientModal(clientId) {
-  fidelidadeState.activeClientId = clientId;
+function openClientModal(id) {
+  fidelidadeState.activeClientId = id;
   fidelidadeState.activeRewardId = null;
   fidelidadeState.modalMode = 'viewClient';
   renderFidelidadeModal();
 }
 
-function openRewardModal(rewardId) {
-  fidelidadeState.activeRewardId = rewardId;
+function openRewardModal(id) {
+  fidelidadeState.activeRewardId = id;
   fidelidadeState.activeClientId = null;
   fidelidadeState.modalMode = 'viewReward';
   renderFidelidadeModal();
@@ -441,8 +304,8 @@ function openCreateRewardModal() {
   renderFidelidadeModal();
 }
 
-function openEditRewardModal(rewardId) {
-  fidelidadeState.activeRewardId = rewardId;
+function openEditRewardModal(id) {
+  fidelidadeState.activeRewardId = id;
   fidelidadeState.activeClientId = null;
   fidelidadeState.modalMode = 'editReward';
   renderFidelidadeModal();
@@ -458,61 +321,7 @@ function closeFidelidadeModal() {
   fidelidadeState.activeRewardId = null;
   modal.classList.remove('open');
   modal.style.display = 'none';
-
   if (content) content.innerHTML = '';
-}
-
-function collectRewardFormData() {
-  const form = document.getElementById('fidelidade-form');
-  const formData = new FormData(form);
-
-  return {
-    title: String(formData.get('title') || '').trim(),
-    icon: String(formData.get('icon') || '🎁').trim() || '🎁',
-    requiredPoints: Number(formData.get('requiredPoints') || 0),
-    redemptions: Number(formData.get('redemptions') || 0),
-    highlight: String(formData.get('highlight') || 'info').trim(),
-    active: String(formData.get('active') || 'true') === 'true',
-    notes: String(formData.get('notes') || '').trim(),
-  };
-}
-
-function handleRewardFormSubmit(event) {
-  event.preventDefault();
-
-  const data = collectRewardFormData();
-
-  if (!data.title) {
-    setFidelidadeFormFeedback('Informe o título da recompensa.', 'error');
-    return;
-  }
-
-  if (data.requiredPoints <= 0) {
-    setFidelidadeFormFeedback('Informe uma quantidade válida de pontos.', 'error');
-    return;
-  }
-
-  if (fidelidadeState.modalMode === 'createReward') {
-    const newReward = {
-      id: normalizeRewardId(data.title),
-      ...data,
-    };
-
-    fidelidadeState.rewards = [newReward, ...fidelidadeState.rewards];
-    rerenderFidelidade();
-    openRewardModal(newReward.id);
-    return;
-  }
-
-  if (fidelidadeState.modalMode === 'editReward' && fidelidadeState.activeRewardId) {
-    fidelidadeState.rewards = fidelidadeState.rewards.map((item) => {
-      if (item.id !== fidelidadeState.activeRewardId) return item;
-      return { ...item, ...data };
-    });
-
-    rerenderFidelidade();
-    openRewardModal(fidelidadeState.activeRewardId);
-  }
 }
 
 function renderFidelidadeModal() {
@@ -521,34 +330,27 @@ function renderFidelidadeModal() {
   if (!modal || !content) return;
 
   if (fidelidadeState.modalMode === 'closed') {
-    modal.classList.remove('open');
     modal.style.display = 'none';
+    modal.classList.remove('open');
     content.innerHTML = '';
     return;
   }
 
-  const client = fidelidadeState.activeClientId ? getClientById(fidelidadeState.activeClientId) : null;
+  const client = fidelidadeState.activeClientId ? getTopClientById(fidelidadeState.activeClientId) : null;
   const reward = fidelidadeState.activeRewardId ? getRewardById(fidelidadeState.activeRewardId) : null;
 
-  if (fidelidadeState.modalMode === 'viewClient' && !client) {
-    closeFidelidadeModal();
-    return;
-  }
-
-  if ((fidelidadeState.modalMode === 'viewReward' || fidelidadeState.modalMode === 'editReward') && !reward) {
-    closeFidelidadeModal();
-    return;
-  }
-
   if (fidelidadeState.modalMode === 'viewClient') {
+    if (!client) { closeFidelidadeModal(); return; }
     content.innerHTML = renderClientDetails(client);
   }
 
   if (fidelidadeState.modalMode === 'viewReward') {
+    if (!reward) { closeFidelidadeModal(); return; }
     content.innerHTML = renderRewardDetails(reward);
   }
 
   if (fidelidadeState.modalMode === 'editReward') {
+    if (!reward) { closeFidelidadeModal(); return; }
     content.innerHTML = renderRewardForm('editReward', reward);
   }
 
@@ -558,51 +360,110 @@ function renderFidelidadeModal() {
 
   modal.style.display = 'flex';
   modal.classList.add('open');
-
   bindFidelidadeModalEvents();
 }
 
-function bindTopClientsEvents() {
-  document.querySelectorAll('.fidelidade-row-button[data-client-id]').forEach((button) => {
-    button.addEventListener('click', () => {
-      openClientModal(button.dataset.clientId);
+// ─── API calls ────────────────────────────────────────────────────────────────
+
+async function loadFidelidadeData() {
+  fidelidadeState.isLoading = true;
+  rerenderFidelidade();
+
+  try {
+    const [program, rewards, clients] = await Promise.all([
+      apiFetch('/api/loyalty/program').catch(() => null),
+      apiFetch('/api/loyalty/rewards'),
+      apiFetch('/api/clients'),
+    ]);
+
+    fidelidadeState.program = program || null;
+    fidelidadeState.rewards = Array.isArray(rewards) ? rewards : [];
+
+    // Top clientes por loyalty_points
+    const allClients = Array.isArray(clients) ? clients : [];
+    fidelidadeState.topClients = allClients
+      .filter(c => Number(c.loyalty_points || 0) > 0)
+      .sort((a, b) => Number(b.loyalty_points || 0) - Number(a.loyalty_points || 0))
+      .slice(0, 5);
+
+  } catch (error) {
+    console.error('Erro ao carregar fidelidade:', error);
+  } finally {
+    fidelidadeState.isLoading = false;
+    rerenderFidelidade();
+  }
+}
+
+async function handleCreateReward(event) {
+  event.preventDefault();
+  const form = document.getElementById('fidelidade-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+
+  const name = String(formData.get('name') || '').trim();
+  const points = Number(formData.get('points_required') || 0);
+
+  if (!name) { setFeedback('fidelidade-form-feedback', 'Informe o nome da recompensa.', 'error'); return; }
+  if (points <= 0) { setFeedback('fidelidade-form-feedback', 'Informe os pontos necessários.', 'error'); return; }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('fidelidade-form-feedback', 'Salvando...', 'neutral');
+
+    await apiFetch('/api/loyalty/rewards', {
+      method: 'POST',
+      body: JSON.stringify({
+        title: name,
+        name,
+        icon: String(formData.get('icon') || '🎁').trim() || '🎁',
+        points_required: points,
+        description: String(formData.get('description') || '').trim() || null,
+        is_active: String(formData.get('is_active')) === 'true',
+      }),
     });
+
+    closeFidelidadeModal();
+    await loadFidelidadeData();
+  } catch (error) {
+    setFeedback('fidelidade-form-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+function bindFidelidadeModalEvents() {
+  document.getElementById('fidelidade-modal-close')?.addEventListener('click', closeFidelidadeModal);
+  document.getElementById('fidelidade-form-cancel')?.addEventListener('click', closeFidelidadeModal);
+
+  document.getElementById('fidelidade-form-back')?.addEventListener('click', () => {
+    if (fidelidadeState.activeRewardId) openRewardModal(fidelidadeState.activeRewardId);
+  });
+
+  document.getElementById('fidelidade-edit-reward')?.addEventListener('click', (e) => {
+    const id = e.currentTarget.dataset.rewardId;
+    if (id) openEditRewardModal(id);
+  });
+
+  document.getElementById('fidelidade-form')?.addEventListener('submit', handleCreateReward);
+}
+
+function bindTopClientsEvents() {
+  document.querySelectorAll('.fidelidade-row-button[data-client-id]').forEach(btn => {
+    btn.addEventListener('click', () => openClientModal(btn.dataset.clientId));
   });
 }
 
 function bindRewardsEvents() {
-  document.querySelectorAll('.fidelidade-row-button[data-reward-id]').forEach((button) => {
-    button.addEventListener('click', () => {
-      openRewardModal(button.dataset.rewardId);
-    });
+  document.querySelectorAll('.fidelidade-row-button[data-reward-id]').forEach(btn => {
+    btn.addEventListener('click', () => openRewardModal(btn.dataset.rewardId));
   });
-}
-
-function bindFidelidadeModalEvents() {
-  document.getElementById('fidelidade-modal-close')?.addEventListener('click', closeFidelidadeModal);
-
-  document.getElementById('fidelidade-edit-reward')?.addEventListener('click', () => {
-    const button = document.getElementById('fidelidade-edit-reward');
-    if (!button?.dataset.rewardId) return;
-    openEditRewardModal(button.dataset.rewardId);
-  });
-
-  document.getElementById('fidelidade-form-back')?.addEventListener('click', () => {
-    if (!fidelidadeState.activeRewardId) return;
-    openRewardModal(fidelidadeState.activeRewardId);
-  });
-
-  document.getElementById('fidelidade-form-cancel')?.addEventListener('click', closeFidelidadeModal);
-  document.getElementById('fidelidade-form')?.addEventListener('submit', handleRewardFormSubmit);
 }
 
 function bindFidelidadeStaticEvents() {
   document.getElementById('fidelidade-new-reward-button')?.addEventListener('click', openCreateRewardModal);
-
-  document.getElementById('fidelidade-details-modal')?.addEventListener('click', (event) => {
-    if (event.target?.id === 'fidelidade-details-modal') {
-      closeFidelidadeModal();
-    }
+  document.getElementById('fidelidade-details-modal')?.addEventListener('click', (e) => {
+    if (e.target?.id === 'fidelidade-details-modal') closeFidelidadeModal();
   });
 }
 
@@ -611,9 +472,25 @@ function rerenderFidelidade() {
   const clients = document.getElementById('fidelidade-top-clients');
   const rewards = document.getElementById('fidelidade-rewards-list');
 
+  if (fidelidadeState.isLoading) {
+    if (clients) clients.innerHTML = `<div class="finance-empty">Carregando...</div>`;
+    if (rewards) rewards.innerHTML = `<div class="finance-empty">Carregando...</div>`;
+    return;
+  }
+
   if (metrics) metrics.innerHTML = renderMetrics();
-  if (clients) clients.innerHTML = renderTopClientsList();
-  if (rewards) rewards.innerHTML = renderRewardList();
+
+  if (clients) {
+    clients.innerHTML = fidelidadeState.topClients.length
+      ? fidelidadeState.topClients.map((c, i) => renderTopClientRow(c, i)).join('')
+      : `<div class="finance-empty">Nenhum cliente com pontos ainda.</div>`;
+  }
+
+  if (rewards) {
+    rewards.innerHTML = fidelidadeState.rewards.length
+      ? fidelidadeState.rewards.map(renderRewardRow).join('')
+      : `<div class="finance-empty">Nenhuma recompensa cadastrada.</div>`;
+  }
 
   bindTopClientsEvents();
   bindRewardsEvents();
@@ -632,7 +509,7 @@ export function renderFidelidade() {
         <div class="card-title">🏆 Top Clientes</div>
       </div>
       <div id="fidelidade-top-clients">
-        ${renderTopClientsList()}
+        <div class="finance-empty">Carregando...</div>
       </div>
     </div>
 
@@ -642,7 +519,7 @@ export function renderFidelidade() {
         <button type="button" class="btn-primary-gradient" id="fidelidade-new-reward-button">+ Criar</button>
       </div>
       <div id="fidelidade-rewards-list">
-        ${renderRewardList()}
+        <div class="finance-empty">Carregando...</div>
       </div>
     </div>
   </div>
@@ -658,6 +535,5 @@ export function renderFidelidade() {
 
 export function initFidelidadePage() {
   bindFidelidadeStaticEvents();
-  bindTopClientsEvents();
-  bindRewardsEvents();
+  loadFidelidadeData();
 }
