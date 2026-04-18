@@ -226,3 +226,10 @@
     display: none;
   }
 }
+
+/* ─── Padding bottom no hero para o último widget não cortar ─── */
+@media (max-width: 768px) {
+  #hero {
+    padding-bottom: 24px !important;
+  }
+}
