@@ -302,3 +302,66 @@
     background: rgba(15,23,42,.45);
   }
 }
+
+/* ═══════════════════════════════════════════
+   DASHBOARD HERO — MOBILE
+   Override do position:absolute do dashboard.css
+═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+
+  #hero {
+    position: relative !important;
+    inset: auto !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: auto !important;
+    width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+    padding: 10px !important;
+  }
+
+  .chair-wrap, .orbit, .orbit-2,
+  .hero-logo, .hero-B, .hero-name,
+  .hero-actions, .chair-glow, .chair-ring,
+  .restore-widgets-btn {
+    display: none !important;
+  }
+
+  .analytics-card,
+  .analytics-card.pos-tl,
+  .analytics-card.pos-tr,
+  .analytics-card.pos-bl,
+  .analytics-card.pos-br,
+  .analytics-card.pos-ml,
+  .analytics-card.pos-mr {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 100% !important;
+    margin: 0 0 8px 0 !important;
+  }
+
+  .content {
+    position: relative !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  #pages {
+    position: relative !important;
+    inset: auto !important;
+    overflow-x: hidden !important;
+    overflow-y: visible !important;
+    height: auto !important;
+    display: block !important;
+    padding: 10px !important;
+  }
+}
