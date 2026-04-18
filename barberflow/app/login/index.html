@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BarberFlow — Entrar</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="/styles/app/onboarding.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="page">
+
+    <section class="hero">
+      <div class="hero-logo">
+        <div class="hero-b">B</div>
+        <div class="hero-name">Barber<span class="flow">Flow</span></div>
+      </div>
+      <div class="hero-subtitle">Painel do Proprietário</div>
+      <div class="hero-ring"></div>
+    </section>
+
+    <section class="login-card">
+      <h1 class="card-title">Entrar</h1>
+      <p class="card-subtitle">Acesse o painel para gerenciar sua barbearia.</p>
+
+      <div id="app-feedback" class="ob-feedback"></div>
+
+      <form id="app-login-form" class="ob-form">
+        <div class="ob-field">
+          <label class="ob-label">E-mail</label>
+          <input
+            class="ob-input"
+            id="app-login-email"
+            type="email"
+            placeholder="seu@email.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <div class="ob-field">
+          <label class="ob-label">Senha</label>
+          <input
+            class="ob-input"
+            id="app-login-password"
+            type="password"
+            placeholder="Sua senha"
+            autocomplete="current-password"
+          />
+        </div>
+
+        <button type="submit" class="ob-primary-btn">Entrar no painel</button>
+
+        <div class="ob-links">
+          <span class="ob-muted">Ainda não tem conta?</span>
+          <a class="ob-link-btn" href="/cadastro/">Criar barbearia grátis</a>
+        </div>
+      </form>
+    </section>
+
+  </div>
+
+  <script src="/js/app/login.js" type="module"></script>
+</body>
+</html>
