@@ -2,24 +2,38 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // Tenta servir arquivo estático primeiro
+    if (!env?.ASSETS || typeof env.ASSETS.fetch !== 'function') {
+      return new Response(
+        'ASSETS binding não disponível neste ambiente do Worker.',
+        {
+          status: 500,
+          headers: {
+            'content-type': 'text/plain; charset=UTF-8',
+          },
+        }
+      );
+    }
+
     const assetResponse = await env.ASSETS.fetch(request);
+
     if (assetResponse.status !== 404) {
       return assetResponse;
     }
 
-    // Rota do cliente → client.html
     if (url.pathname === '/client' || url.pathname.startsWith('/client/')) {
       const clientUrl = new URL('/client.html', url.origin);
       return env.ASSETS.fetch(new Request(clientUrl.toString(), request));
     }
 
-    // Rota do admin → index.html
-    if (url.pathname === '/' || url.pathname.startsWith('/app')) {
+    if (
+      url.pathname === '/' ||
+      url.pathname === '/app' ||
+      url.pathname.startsWith('/app/')
+    ) {
       const indexUrl = new URL('/index.html', url.origin);
       return env.ASSETS.fetch(new Request(indexUrl.toString(), request));
     }
 
-    return assetResponse;
+    return new Response('Not Found', { status: 404 });
   },
 };
