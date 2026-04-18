@@ -233,3 +233,13 @@
     padding-bottom: 24px !important;
   }
 }
+
+/* ─── Fix padding-bottom em overflow:auto no mobile (bug Safari/Chrome) ─── */
+@media (max-width: 768px) {
+  #hero::after {
+    content: '';
+    display: block;
+    height: 32px;
+    flex-shrink: 0;
+  }
+}
