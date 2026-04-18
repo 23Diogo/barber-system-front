@@ -215,3 +215,14 @@
     background: rgba(15,23,42,.45);
   }
 }
+
+/* ─── Oculta scrollbar no hero (mobile scroll via toque) ─── */
+@media (max-width: 768px) {
+  #hero {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+  #hero::-webkit-scrollbar {
+    display: none;
+  }
+}
