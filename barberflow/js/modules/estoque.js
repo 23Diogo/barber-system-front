@@ -1,54 +1,16 @@
+import { apiFetch } from '../services/api.js';
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
 const estoqueState = {
-  summaryBase: {
-    otherProductsCount: 20,
-    otherNormalCount: 17,
-    otherStockValue: 1681,
-  },
-  products: [
-    {
-      id: 'pomada-dapper-dan',
-      icon: '🍯',
-      title: 'Pomada Dapper Dan',
-      quantity: 2,
-      minLevel: 10,
-      unit: 'un',
-      avgCost: 32,
-      notes: 'Produto de maior saída no acabamento.',
-    },
-    {
-      id: 'lamina-gillette-fusion',
-      icon: '🪒',
-      title: 'Lâmina Gillette Fusion',
-      quantity: 8,
-      minLevel: 20,
-      unit: 'un',
-      avgCost: 15,
-      notes: 'Usada nos atendimentos premium.',
-    },
-    {
-      id: 'shampoo-profissional',
-      icon: '🧴',
-      title: 'Shampoo Profissional',
-      quantity: 1.5,
-      minLevel: 5,
-      unit: 'L',
-      avgCost: 90,
-      notes: 'Produto de uso contínuo na lavagem.',
-    },
-    {
-      id: 'tesoura-kamisori',
-      icon: '✂️',
-      title: 'Tesoura Kamisori',
-      quantity: 4,
-      minLevel: 2,
-      unit: 'un',
-      avgCost: 100,
-      notes: 'Equipamento em nível saudável.',
-    },
-  ],
-  modalMode: 'closed', // closed | view | edit | create
+  products: [],
+  isLoading: false,
+  isLoaded: false,
+  modalMode: 'closed', // closed | view | edit | create | movement
   activeProductId: null,
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -76,153 +38,128 @@ function formatCurrency(value) {
 
 function formatCompactCurrency(value) {
   const abs = Math.abs(Number(value || 0));
-  if (abs >= 1000) {
-    return `R$${(abs / 1000).toFixed(1)}k`;
-  }
+  if (abs >= 1000) return `R$${(abs / 1000).toFixed(1)}k`;
   return formatCurrency(abs);
 }
 
-function formatStockAmount(value, unit) {
-  return `${formatNumber(value)} ${unit}`;
+function setFeedback(id, message, variant = 'neutral') {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.textContent = message || '';
+  el.style.color =
+    variant === 'error' ? '#ff8a8a' :
+    variant === 'success' ? '#00e676' :
+    '#5a6888';
 }
 
-function getProductById(productId) {
-  return estoqueState.products.find((item) => item.id === productId) || null;
-}
-
-function normalizeProductId(title) {
-  const base = String(title || 'novo-produto')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'novo-produto';
-
-  let candidate = base;
-  let counter = 2;
-
-  while (estoqueState.products.some((item) => item.id === candidate)) {
-    candidate = `${base}-${counter}`;
-    counter += 1;
-  }
-
-  return candidate;
+function getProductById(id) {
+  return estoqueState.products.find(p => p.id === id) || null;
 }
 
 function getProductMeta(product) {
-  const quantity = Number(product.quantity || 0);
-  const minLevel = Math.max(Number(product.minLevel || 0), 1);
+  const current = Number(product.current_stock || 0);
+  const min = Math.max(Number(product.min_stock || 0), 1);
 
-  if (quantity < minLevel * 0.3) {
-    return { color: '#ff1744', border: '#ff1744', label: 'Crítico' };
-  }
-
-  if (quantity < minLevel) {
-    return { color: '#f97316', border: '#f97316', label: 'Baixo' };
-  }
-
-  return { color: '#00e676', border: '#00e676', label: 'Normal' };
-}
-
-function getInventorySummary() {
-  const belowMinimum = estoqueState.products.filter((item) => Number(item.quantity || 0) < Number(item.minLevel || 0)).length;
-  const normalVisible = estoqueState.products.filter((item) => Number(item.quantity || 0) >= Number(item.minLevel || 0)).length;
-  const visibleValue = estoqueState.products.reduce((sum, item) => sum + (Number(item.quantity || 0) * Number(item.avgCost || 0)), 0);
-
-  return {
-    totalProducts: estoqueState.summaryBase.otherProductsCount + estoqueState.products.length,
-    belowMinimum,
-    stockValue: estoqueState.summaryBase.otherStockValue + visibleValue,
-    normalLevel: estoqueState.summaryBase.otherNormalCount + normalVisible,
-  };
+  if (current < min * 0.3) return { color: '#ff1744', border: '#ff1744', label: 'Crítico' };
+  if (current < min)       return { color: '#f97316', border: '#f97316', label: 'Baixo' };
+  return                          { color: '#00e676', border: '#00e676', label: 'Normal' };
 }
 
 function getSortedProducts() {
   return [...estoqueState.products].sort((a, b) => {
-    const ratioA = Number(a.quantity || 0) / Math.max(Number(a.minLevel || 1), 1);
-    const ratioB = Number(b.quantity || 0) / Math.max(Number(b.minLevel || 1), 1);
+    const ratioA = Number(a.current_stock || 0) / Math.max(Number(a.min_stock || 1), 1);
+    const ratioB = Number(b.current_stock || 0) / Math.max(Number(b.min_stock || 1), 1);
     return ratioA - ratioB;
   });
 }
 
+function getSummary() {
+  const total = estoqueState.products.length;
+  const belowMin = estoqueState.products.filter(p => Number(p.current_stock || 0) < Number(p.min_stock || 0)).length;
+  const normal = total - belowMin;
+  const stockValue = estoqueState.products.reduce((sum, p) => sum + (Number(p.current_stock || 0) * Number(p.cost_price || 0)), 0);
+
+  return { total, belowMin, normal, stockValue };
+}
+
+// ─── Render rows ──────────────────────────────────────────────────────────────
+
 function renderStockRow(product) {
   const meta = getProductMeta(product);
-  const quantityLabel = formatStockAmount(product.quantity, product.unit);
-  const minLabel = formatStockAmount(product.minLevel, product.unit);
-  const detail = Number(product.quantity || 0) < Number(product.minLevel || 0)
-    ? `${quantityLabel} restantes · Mín: ${minLabel}`
-    : `Normal · ${quantityLabel}`;
+  const current = Number(product.current_stock || 0);
+  const min = Number(product.min_stock || 0);
+  const unit = product.unit || 'un';
+
+  const detail = current < min
+    ? `${formatNumber(current)} ${unit} restantes · Mín: ${formatNumber(min)} ${unit}`
+    : `Normal · ${formatNumber(current)} ${unit}`;
 
   return `
-    <button
-      type="button"
-      class="estoque-row-button"
+    <button type="button" class="estoque-row-button"
       data-product-id="${escapeHtml(product.id)}"
-      title="Ver detalhes de ${escapeHtml(product.title)}"
-    >
+      title="Ver detalhes de ${escapeHtml(product.name)}">
       <div class="fin-row" style="border-color:${meta.border}">
-        <div class="fin-icon">${escapeHtml(product.icon)}</div>
+        <div class="fin-icon">📦</div>
         <div class="fin-info">
-          <div class="fin-title">${escapeHtml(product.title)}</div>
-          <div class="fin-date">${escapeHtml(detail)}</div>
+          <div class="fin-title">${escapeHtml(product.name)}</div>
+          <div class="fin-date">${escapeHtml(detail)}${product.brand ? ` · ${escapeHtml(product.brand)}` : ''}</div>
         </div>
-        <div class="fin-val" style="color:${meta.color}">${escapeHtml(quantityLabel)}</div>
+        <div class="fin-val" style="color:${meta.color}">${escapeHtml(formatNumber(current))} ${escapeHtml(unit)}</div>
       </div>
     </button>
   `;
 }
 
 function renderSummaryCards() {
-  const summary = getInventorySummary();
+  const s = getSummary();
 
   return `
     <div class="estoque-summary-grid">
       <div class="mini-card">
-        <div class="mini-val">${escapeHtml(summary.totalProducts)}</div>
+        <div class="mini-val">${escapeHtml(s.total)}</div>
         <div class="mini-lbl">Produtos cadastrados</div>
       </div>
-
-      <div class="mini-card estoque-summary-card estoque-summary-card--danger">
-        <div class="mini-val" style="color:#ff1744">${escapeHtml(summary.belowMinimum)}</div>
+      <div class="mini-card">
+        <div class="mini-val" style="color:#ff1744">${escapeHtml(s.belowMin)}</div>
         <div class="mini-lbl">Abaixo do mínimo</div>
       </div>
-
       <div class="mini-card">
-        <div class="mini-val" style="color:#4fc3f7">${escapeHtml(formatCompactCurrency(summary.stockValue))}</div>
+        <div class="mini-val" style="color:#4fc3f7">${escapeHtml(formatCompactCurrency(s.stockValue))}</div>
         <div class="mini-lbl">Valor em estoque</div>
       </div>
-
-      <div class="mini-card estoque-summary-card estoque-summary-card--success">
-        <div class="mini-val" style="color:#00e676">${escapeHtml(summary.normalLevel)}</div>
+      <div class="mini-card">
+        <div class="mini-val" style="color:#00e676">${escapeHtml(s.normal)}</div>
         <div class="mini-lbl">Em nível normal</div>
       </div>
     </div>
   `;
 }
 
+// ─── Modal renders ────────────────────────────────────────────────────────────
+
 function renderProductDetails(product) {
   const meta = getProductMeta(product);
+  const unit = product.unit || 'un';
 
   return `
     <div class="estoque-modal-body">
       <div>
-        <div class="modal-title" style="margin:0;">${escapeHtml(product.title)}</div>
+        <div class="modal-title" style="margin:0;">${escapeHtml(product.name)}</div>
         <div class="modal-sub" style="margin-top:4px;">Detalhes do produto</div>
       </div>
 
       <div class="estoque-modal-grid">
         <div class="mini-card">
           <div class="mini-lbl">Estoque atual</div>
-          <div class="mini-val" style="color:${meta.color}">${escapeHtml(formatStockAmount(product.quantity, product.unit))}</div>
+          <div class="mini-val" style="color:${meta.color}">${escapeHtml(formatNumber(product.current_stock))} ${escapeHtml(unit)}</div>
         </div>
         <div class="mini-card">
           <div class="mini-lbl">Estoque mínimo</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(formatStockAmount(product.minLevel, product.unit))}</div>
+          <div class="mini-val" style="font-size:15px;">${escapeHtml(formatNumber(product.min_stock))} ${escapeHtml(unit)}</div>
         </div>
         <div class="mini-card">
-          <div class="mini-lbl">Custo médio</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(formatCurrency(product.avgCost))}</div>
+          <div class="mini-lbl">Custo</div>
+          <div class="mini-val" style="font-size:15px;">${escapeHtml(formatCurrency(product.cost_price))}</div>
         </div>
         <div class="mini-card">
           <div class="mini-lbl">Status</div>
@@ -231,17 +168,24 @@ function renderProductDetails(product) {
       </div>
 
       <div class="estoque-modal-info">
+        ${product.brand ? `<div class="estoque-modal-info-row"><strong>Marca:</strong> ${escapeHtml(product.brand)}</div>` : ''}
+        ${product.category ? `<div class="estoque-modal-info-row"><strong>Categoria:</strong> ${escapeHtml(product.category)}</div>` : ''}
         <div class="estoque-modal-info-row">
-          <strong>Valor em estoque:</strong> ${escapeHtml(formatCurrency(Number(product.quantity || 0) * Number(product.avgCost || 0)))}
+          <strong>Valor em estoque:</strong> ${escapeHtml(formatCurrency(Number(product.current_stock || 0) * Number(product.cost_price || 0)))}
         </div>
-        <div class="estoque-modal-info-row">
-          <strong>Observações:</strong> ${escapeHtml(product.notes || '—')}
-        </div>
+        ${product.description ? `<div class="estoque-modal-info-row"><strong>Descrição:</strong> ${escapeHtml(product.description)}</div>` : ''}
       </div>
+
+      <div id="estoque-modal-feedback" class="estoque-form-feedback"></div>
 
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="estoque-modal-close">Fechar</button>
-        <button type="button" class="btn-save" id="estoque-edit-button" data-product-id="${escapeHtml(product.id)}">Editar produto</button>
+        <button type="button" class="btn-secondary" id="estoque-movement-btn" data-product-id="${escapeHtml(product.id)}" style="background:rgba(79,195,247,.12);color:#4fc3f7;border:1px solid rgba(79,195,247,.2);">
+          Movimentar estoque
+        </button>
+        <button type="button" class="btn-save" id="estoque-edit-button" data-product-id="${escapeHtml(product.id)}">
+          Editar produto
+        </button>
       </div>
     </div>
   `;
@@ -249,66 +193,60 @@ function renderProductDetails(product) {
 
 function renderProductForm(mode, product = null) {
   const isEdit = mode === 'edit';
-  const safeProduct = product || {
-    title: '',
-    icon: '📦',
-    quantity: 1,
-    minLevel: 5,
-    unit: 'un',
-    avgCost: 50,
-    notes: '',
-  };
+  const p = product || {};
 
   return `
     <div class="estoque-modal-body">
       <div>
         <div class="modal-title" style="margin:0;">${isEdit ? 'Editar produto' : 'Novo produto'}</div>
-        <div class="modal-sub" style="margin-top:4px;">
-          ${isEdit ? 'Atualize os dados do produto.' : 'Preencha os dados para cadastrar um novo produto.'}
-        </div>
+        <div class="modal-sub" style="margin-top:4px;">${isEdit ? 'Atualize os dados do produto.' : 'Preencha os dados para cadastrar um produto.'}</div>
       </div>
 
       <form id="estoque-form" class="estoque-form">
         <div class="estoque-form-grid">
           <div>
-            <div class="color-section-label">Produto</div>
-            <input class="modal-input" name="title" type="text" value="${escapeHtml(safeProduct.title)}" placeholder="Nome do produto" />
+            <div class="color-section-label">Nome do produto</div>
+            <input class="modal-input" name="name" type="text" value="${escapeHtml(p.name || '')}" placeholder="Ex: Pomada Dapper Dan" />
           </div>
-
           <div>
-            <div class="color-section-label">Ícone</div>
-            <input class="modal-input" name="icon" type="text" value="${escapeHtml(safeProduct.icon)}" placeholder="Ex.: 📦" />
+            <div class="color-section-label">Marca</div>
+            <input class="modal-input" name="brand" type="text" value="${escapeHtml(p.brand || '')}" placeholder="Ex: Dapper Dan" />
           </div>
-
           <div>
-            <div class="color-section-label">Quantidade</div>
-            <input class="modal-input" name="quantity" type="number" min="0" step="0.1" value="${escapeHtml(safeProduct.quantity)}" />
+            <div class="color-section-label">Categoria</div>
+            <input class="modal-input" name="category" type="text" value="${escapeHtml(p.category || '')}" placeholder="Ex: Pomada, Lâmina..." />
           </div>
-
-          <div>
-            <div class="color-section-label">Estoque mínimo</div>
-            <input class="modal-input" name="minLevel" type="number" min="0" step="0.1" value="${escapeHtml(safeProduct.minLevel)}" />
-          </div>
-
           <div>
             <div class="color-section-label">Unidade</div>
             <select class="modal-input" name="unit">
-              <option value="un" ${safeProduct.unit === 'un' ? 'selected' : ''}>Unidade</option>
-              <option value="L" ${safeProduct.unit === 'L' ? 'selected' : ''}>Litro</option>
-              <option value="ml" ${safeProduct.unit === 'ml' ? 'selected' : ''}>Mililitro</option>
-              <option value="cx" ${safeProduct.unit === 'cx' ? 'selected' : ''}>Caixa</option>
+              <option value="un" ${(p.unit || 'un') === 'un' ? 'selected' : ''}>Unidade</option>
+              <option value="L" ${p.unit === 'L' ? 'selected' : ''}>Litro</option>
+              <option value="ml" ${p.unit === 'ml' ? 'selected' : ''}>Mililitro</option>
+              <option value="cx" ${p.unit === 'cx' ? 'selected' : ''}>Caixa</option>
+              <option value="kg" ${p.unit === 'kg' ? 'selected' : ''}>Quilograma</option>
             </select>
           </div>
-
           <div>
-            <div class="color-section-label">Custo médio</div>
-            <input class="modal-input" name="avgCost" type="number" min="0" step="1" value="${escapeHtml(safeProduct.avgCost)}" />
+            <div class="color-section-label">Estoque atual</div>
+            <input class="modal-input" name="current_stock" type="number" min="0" step="0.1" value="${escapeHtml(p.current_stock ?? 0)}" />
+          </div>
+          <div>
+            <div class="color-section-label">Estoque mínimo</div>
+            <input class="modal-input" name="min_stock" type="number" min="0" step="0.1" value="${escapeHtml(p.min_stock ?? 0)}" />
+          </div>
+          <div>
+            <div class="color-section-label">Preço de custo (R$)</div>
+            <input class="modal-input" name="cost_price" type="number" min="0" step="0.01" value="${escapeHtml(p.cost_price ?? 0)}" />
+          </div>
+          <div>
+            <div class="color-section-label">Preço de venda (R$)</div>
+            <input class="modal-input" name="sale_price" type="number" min="0" step="0.01" value="${escapeHtml(p.sale_price ?? 0)}" />
           </div>
         </div>
 
         <div>
-          <div class="color-section-label">Observações</div>
-          <textarea class="modal-input estoque-textarea" name="notes" placeholder="Observações do produto">${escapeHtml(safeProduct.notes || '')}</textarea>
+          <div class="color-section-label">Descrição</div>
+          <textarea class="modal-input estoque-textarea" name="description" placeholder="Descrição opcional">${escapeHtml(p.description || '')}</textarea>
         </div>
 
         <div id="estoque-form-feedback" class="estoque-form-feedback"></div>
@@ -317,28 +255,61 @@ function renderProductForm(mode, product = null) {
           <button type="button" class="btn-cancel" id="${isEdit ? 'estoque-form-back' : 'estoque-form-cancel'}">
             ${isEdit ? 'Voltar' : 'Cancelar'}
           </button>
-          <button type="submit" class="btn-save">
-            ${isEdit ? 'Salvar alterações' : 'Cadastrar produto'}
-          </button>
+          <button type="submit" class="btn-save">${isEdit ? 'Salvar alterações' : 'Cadastrar produto'}</button>
         </div>
       </form>
     </div>
   `;
 }
 
-function setEstoqueFormFeedback(message, variant = 'neutral') {
-  const el = document.getElementById('estoque-form-feedback');
-  if (!el) return;
+function renderMovementForm(product) {
+  return `
+    <div class="estoque-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">Movimentar estoque</div>
+        <div class="modal-sub" style="margin-top:4px;">${escapeHtml(product.name)} · Atual: ${escapeHtml(formatNumber(product.current_stock))} ${escapeHtml(product.unit || 'un')}</div>
+      </div>
 
-  el.textContent = message || '';
-  el.style.color =
-    variant === 'error' ? '#ff8a8a' :
-    variant === 'success' ? '#00e676' :
-    '#5a6888';
+      <form id="estoque-movement-form" class="estoque-form">
+        <div class="estoque-form-grid">
+          <div>
+            <div class="color-section-label">Tipo</div>
+            <select class="modal-input" name="type">
+              <option value="in">Entrada</option>
+              <option value="out">Saída</option>
+              <option value="adjustment">Ajuste</option>
+            </select>
+          </div>
+          <div>
+            <div class="color-section-label">Quantidade</div>
+            <input class="modal-input" name="quantity" type="number" min="0" step="0.1" placeholder="0" />
+          </div>
+          <div>
+            <div class="color-section-label">Custo unitário (R$)</div>
+            <input class="modal-input" name="unit_cost" type="number" min="0" step="0.01" value="${escapeHtml(product.cost_price ?? 0)}" />
+          </div>
+        </div>
+
+        <div>
+          <div class="color-section-label">Observações</div>
+          <textarea class="modal-input estoque-textarea" name="notes" placeholder="Motivo da movimentação"></textarea>
+        </div>
+
+        <div id="estoque-form-feedback" class="estoque-form-feedback"></div>
+
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="estoque-movement-back">Voltar</button>
+          <button type="submit" class="btn-save">Registrar</button>
+        </div>
+      </form>
+    </div>
+  `;
 }
 
-function openProductModal(productId) {
-  estoqueState.activeProductId = productId;
+// ─── Modal control ────────────────────────────────────────────────────────────
+
+function openProductModal(id) {
+  estoqueState.activeProductId = id;
   estoqueState.modalMode = 'view';
   renderEstoqueModal();
 }
@@ -349,9 +320,15 @@ function openCreateProductModal() {
   renderEstoqueModal();
 }
 
-function openEditProductModal(productId) {
-  estoqueState.activeProductId = productId;
+function openEditProductModal(id) {
+  estoqueState.activeProductId = id;
   estoqueState.modalMode = 'edit';
+  renderEstoqueModal();
+}
+
+function openMovementModal(id) {
+  estoqueState.activeProductId = id;
+  estoqueState.modalMode = 'movement';
   renderEstoqueModal();
 }
 
@@ -364,80 +341,7 @@ function closeEstoqueModal() {
   estoqueState.activeProductId = null;
   modal.classList.remove('open');
   modal.style.display = 'none';
-
   if (content) content.innerHTML = '';
-}
-
-function collectProductFormData() {
-  const form = document.getElementById('estoque-form');
-  const formData = new FormData(form);
-
-  return {
-    title: String(formData.get('title') || '').trim(),
-    icon: String(formData.get('icon') || '📦').trim() || '📦',
-    quantity: Number(formData.get('quantity') || 0),
-    minLevel: Number(formData.get('minLevel') || 0),
-    unit: String(formData.get('unit') || 'un').trim(),
-    avgCost: Number(formData.get('avgCost') || 0),
-    notes: String(formData.get('notes') || '').trim(),
-  };
-}
-
-function handleProductFormSubmit(event) {
-  event.preventDefault();
-
-  const data = collectProductFormData();
-
-  if (!data.title) {
-    setEstoqueFormFeedback('Informe o nome do produto.', 'error');
-    return;
-  }
-
-  if (data.quantity < 0) {
-    setEstoqueFormFeedback('Informe uma quantidade válida.', 'error');
-    return;
-  }
-
-  if (data.minLevel < 0) {
-    setEstoqueFormFeedback('Informe um estoque mínimo válido.', 'error');
-    return;
-  }
-
-  if (data.avgCost < 0) {
-    setEstoqueFormFeedback('Informe um custo médio válido.', 'error');
-    return;
-  }
-
-  if (estoqueState.modalMode === 'create') {
-    const newProduct = {
-      id: normalizeProductId(data.title),
-      ...data,
-    };
-
-    estoqueState.products = [newProduct, ...estoqueState.products];
-    rerenderEstoque();
-    openProductModal(newProduct.id);
-    return;
-  }
-
-  if (estoqueState.modalMode === 'edit' && estoqueState.activeProductId) {
-    estoqueState.products = estoqueState.products.map((item) => {
-      if (item.id !== estoqueState.activeProductId) return item;
-      return { ...item, ...data };
-    });
-
-    rerenderEstoque();
-    openProductModal(estoqueState.activeProductId);
-  }
-}
-
-function restockCriticalProducts() {
-  estoqueState.products = estoqueState.products.map((item) => {
-    if (Number(item.quantity || 0) >= Number(item.minLevel || 0)) return item;
-    return { ...item, quantity: item.minLevel };
-  });
-
-  rerenderEstoque();
 }
 
 function renderEstoqueModal() {
@@ -446,24 +350,21 @@ function renderEstoqueModal() {
   if (!modal || !content) return;
 
   if (estoqueState.modalMode === 'closed') {
-    modal.classList.remove('open');
     modal.style.display = 'none';
+    modal.classList.remove('open');
     content.innerHTML = '';
     return;
   }
 
   const product = estoqueState.activeProductId ? getProductById(estoqueState.activeProductId) : null;
 
-  if ((estoqueState.modalMode === 'view' || estoqueState.modalMode === 'edit') && !product) {
-    closeEstoqueModal();
-    return;
-  }
-
   if (estoqueState.modalMode === 'view') {
+    if (!product) { closeEstoqueModal(); return; }
     content.innerHTML = renderProductDetails(product);
   }
 
   if (estoqueState.modalMode === 'edit') {
+    if (!product) { closeEstoqueModal(); return; }
     content.innerHTML = renderProductForm('edit', product);
   }
 
@@ -471,53 +372,232 @@ function renderEstoqueModal() {
     content.innerHTML = renderProductForm('create');
   }
 
+  if (estoqueState.modalMode === 'movement') {
+    if (!product) { closeEstoqueModal(); return; }
+    content.innerHTML = renderMovementForm(product);
+  }
+
   modal.style.display = 'flex';
   modal.classList.add('open');
-
   bindEstoqueModalEvents();
 }
 
-function bindProductEvents() {
-  document.querySelectorAll('.estoque-row-button[data-product-id]').forEach((button) => {
-    button.addEventListener('click', () => {
-      openProductModal(button.dataset.productId);
-    });
-  });
+// ─── API calls ────────────────────────────────────────────────────────────────
+
+async function loadEstoqueData() {
+  estoqueState.isLoading = true;
+  rerenderEstoque();
+
+  try {
+    const data = await apiFetch('/api/stock');
+    estoqueState.products = Array.isArray(data) ? data : [];
+    estoqueState.isLoaded = true;
+  } catch (error) {
+    console.error('Erro ao carregar estoque:', error);
+  } finally {
+    estoqueState.isLoading = false;
+    rerenderEstoque();
+  }
 }
+
+async function handleCreateProduct(event) {
+  event.preventDefault();
+  const form = document.getElementById('estoque-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+
+  const name = String(formData.get('name') || '').trim();
+  if (!name) { setFeedback('estoque-form-feedback', 'Informe o nome do produto.', 'error'); return; }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('estoque-form-feedback', 'Salvando...', 'neutral');
+
+    await apiFetch('/api/stock', {
+      method: 'POST',
+      body: JSON.stringify({
+        name,
+        brand: String(formData.get('brand') || '').trim() || null,
+        category: String(formData.get('category') || '').trim() || null,
+        unit: String(formData.get('unit') || 'un'),
+        current_stock: Number(formData.get('current_stock') || 0),
+        min_stock: Number(formData.get('min_stock') || 0),
+        cost_price: Number(formData.get('cost_price') || 0),
+        sale_price: Number(formData.get('sale_price') || 0),
+        description: String(formData.get('description') || '').trim() || null,
+        is_active: true,
+        is_for_sale: false,
+      }),
+    });
+
+    closeEstoqueModal();
+    await loadEstoqueData();
+  } catch (error) {
+    setFeedback('estoque-form-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleEditProduct(event) {
+  event.preventDefault();
+  const form = document.getElementById('estoque-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+  const productId = estoqueState.activeProductId;
+
+  const name = String(formData.get('name') || '').trim();
+  if (!name) { setFeedback('estoque-form-feedback', 'Informe o nome do produto.', 'error'); return; }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('estoque-form-feedback', 'Salvando...', 'neutral');
+
+    await apiFetch(`/api/stock/${productId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name,
+        brand: String(formData.get('brand') || '').trim() || null,
+        category: String(formData.get('category') || '').trim() || null,
+        unit: String(formData.get('unit') || 'un'),
+        min_stock: Number(formData.get('min_stock') || 0),
+        cost_price: Number(formData.get('cost_price') || 0),
+        sale_price: Number(formData.get('sale_price') || 0),
+        description: String(formData.get('description') || '').trim() || null,
+      }),
+    });
+
+    closeEstoqueModal();
+    await loadEstoqueData();
+  } catch (error) {
+    setFeedback('estoque-form-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleMovement(event) {
+  event.preventDefault();
+  const form = document.getElementById('estoque-movement-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+  const productId = estoqueState.activeProductId;
+
+  const quantity = Number(formData.get('quantity') || 0);
+  if (!quantity || quantity <= 0) {
+    setFeedback('estoque-form-feedback', 'Informe uma quantidade válida.', 'error');
+    return;
+  }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('estoque-form-feedback', 'Registrando...', 'neutral');
+
+    await apiFetch(`/api/stock/${productId}/movement`, {
+      method: 'POST',
+      body: JSON.stringify({
+        type: String(formData.get('type') || 'in'),
+        quantity,
+        unit_cost: Number(formData.get('unit_cost') || 0) || null,
+        notes: String(formData.get('notes') || '').trim() || null,
+      }),
+    });
+
+    closeEstoqueModal();
+    await loadEstoqueData();
+  } catch (error) {
+    setFeedback('estoque-form-feedback', error instanceof Error ? error.message : 'Erro ao registrar.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
 
 function bindEstoqueModalEvents() {
   document.getElementById('estoque-modal-close')?.addEventListener('click', closeEstoqueModal);
+  document.getElementById('estoque-form-cancel')?.addEventListener('click', closeEstoqueModal);
+  document.getElementById('estoque-movement-back')?.addEventListener('click', () => {
+    if (estoqueState.activeProductId) openProductModal(estoqueState.activeProductId);
+  });
 
-  document.getElementById('estoque-edit-button')?.addEventListener('click', () => {
-    const button = document.getElementById('estoque-edit-button');
-    if (!button?.dataset.productId) return;
-    openEditProductModal(button.dataset.productId);
+  document.getElementById('estoque-edit-button')?.addEventListener('click', (e) => {
+    const id = e.currentTarget.dataset.productId;
+    if (id) openEditProductModal(id);
+  });
+
+  document.getElementById('estoque-movement-btn')?.addEventListener('click', (e) => {
+    const id = e.currentTarget.dataset.productId;
+    if (id) openMovementModal(id);
   });
 
   document.getElementById('estoque-form-back')?.addEventListener('click', () => {
-    if (!estoqueState.activeProductId) return;
-    openProductModal(estoqueState.activeProductId);
+    if (estoqueState.activeProductId) openProductModal(estoqueState.activeProductId);
   });
 
-  document.getElementById('estoque-form-cancel')?.addEventListener('click', closeEstoqueModal);
-  document.getElementById('estoque-form')?.addEventListener('submit', handleProductFormSubmit);
+  const productForm = document.getElementById('estoque-form');
+  if (productForm) {
+    if (estoqueState.modalMode === 'create') {
+      productForm.addEventListener('submit', handleCreateProduct);
+    } else if (estoqueState.modalMode === 'edit') {
+      productForm.addEventListener('submit', handleEditProduct);
+    }
+  }
+
+  document.getElementById('estoque-movement-form')?.addEventListener('submit', handleMovement);
+}
+
+function bindProductEvents() {
+  document.querySelectorAll('.estoque-row-button[data-product-id]').forEach((btn) => {
+    btn.addEventListener('click', () => openProductModal(btn.dataset.productId));
+  });
 }
 
 function bindEstoqueStaticEvents() {
   document.getElementById('estoque-new-button')?.addEventListener('click', openCreateProductModal);
-  document.getElementById('estoque-restock-all-button')?.addEventListener('click', restockCriticalProducts);
 
-  document.getElementById('estoque-details-modal')?.addEventListener('click', (event) => {
-    if (event.target?.id === 'estoque-details-modal') {
-      closeEstoqueModal();
+  document.getElementById('estoque-restock-all-button')?.addEventListener('click', async () => {
+    const critical = estoqueState.products.filter(p => Number(p.current_stock || 0) < Number(p.min_stock || 0));
+    if (!critical.length) return;
+
+    try {
+      await Promise.all(critical.map(p =>
+        apiFetch(`/api/stock/${p.id}/movement`, {
+          method: 'POST',
+          body: JSON.stringify({
+            type: 'adjustment',
+            quantity: Number(p.min_stock || 0),
+            notes: 'Reposição automática pelo painel',
+          }),
+        })
+      ));
+      await loadEstoqueData();
+    } catch (error) {
+      console.error('Erro ao repor estoque:', error);
     }
   });
+
+  document.getElementById('estoque-details-modal')?.addEventListener('click', (e) => {
+    if (e.target?.id === 'estoque-details-modal') closeEstoqueModal();
+  });
 }
+
+// ─── Render ───────────────────────────────────────────────────────────────────
 
 function rerenderEstoque() {
   const list = document.getElementById('estoque-products-list');
   const summary = document.getElementById('estoque-summary');
-  if (list) list.innerHTML = getSortedProducts().map(renderStockRow).join('');
+
+  if (estoqueState.isLoading) {
+    if (list) list.innerHTML = `<div class="finance-empty">Carregando...</div>`;
+    return;
+  }
+
+  const sorted = getSortedProducts();
+
+  if (list) {
+    list.innerHTML = sorted.length
+      ? sorted.map(renderStockRow).join('')
+      : `<div class="finance-empty">Nenhum produto cadastrado.</div>`;
+  }
+
   if (summary) summary.innerHTML = renderSummaryCards();
 
   bindProductEvents();
@@ -532,9 +612,8 @@ export function renderEstoque() {
         <div class="card-title">⚠️ Estoque Crítico</div>
         <button type="button" class="btn-primary-gradient" id="estoque-restock-all-button">Repor tudo</button>
       </div>
-
       <div id="estoque-products-list">
-        ${getSortedProducts().map(renderStockRow).join('')}
+        <div class="finance-empty">Carregando...</div>
       </div>
     </div>
 
@@ -543,7 +622,6 @@ export function renderEstoque() {
         <div class="card-title">Resumo do Estoque</div>
         <button type="button" class="btn-primary-gradient" id="estoque-new-button">+ Produto</button>
       </div>
-
       <div id="estoque-summary">
         ${renderSummaryCards()}
       </div>
@@ -561,5 +639,5 @@ export function renderEstoque() {
 
 export function initEstoquePage() {
   bindEstoqueStaticEvents();
-  bindProductEvents();
+  loadEstoqueData();
 }
