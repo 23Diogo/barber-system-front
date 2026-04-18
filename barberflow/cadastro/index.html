@@ -1,1 +1,82 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>BarberFlow — Criar conta</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="/styles/app/onboarding.css" rel="stylesheet" />
+</head>
+<body>
+  <div class="page">
 
+    <section class="hero">
+      <div class="hero-logo">
+        <div class="hero-b">B</div>
+        <div class="hero-name">Barber<span class="flow">Flow</span></div>
+      </div>
+      <div class="hero-subtitle">14 dias grátis · Sem cartão de crédito</div>
+      <div class="hero-ring"></div>
+    </section>
+
+    <section class="card">
+      <h1 class="card-title">Criar sua conta</h1>
+      <p class="card-subtitle">Preencha os dados para começar a usar o BarberFlow gratuitamente por 14 dias.</p>
+
+      <div id="ob-feedback" class="ob-feedback"></div>
+
+      <form id="ob-form" class="ob-form">
+
+        <div class="ob-section-label">Dados da barbearia</div>
+
+        <div class="ob-field">
+          <label class="ob-label">Nome da barbearia</label>
+          <input class="ob-input" id="ob-barbershop-name" type="text" placeholder="Ex: Barbearia do João" autocomplete="organization" />
+        </div>
+
+        <div class="ob-section-label" style="margin-top:8px;">Dados do proprietário</div>
+
+        <div class="ob-grid">
+          <div class="ob-field">
+            <label class="ob-label">Seu nome</label>
+            <input class="ob-input" id="ob-owner-name" type="text" placeholder="Nome completo" autocomplete="name" />
+          </div>
+
+          <div class="ob-field">
+            <label class="ob-label">WhatsApp</label>
+            <input class="ob-input" id="ob-phone" type="text" placeholder="(11) 99999-9999" autocomplete="tel" />
+          </div>
+        </div>
+
+        <div class="ob-field">
+          <label class="ob-label">E-mail</label>
+          <input class="ob-input" id="ob-email" type="email" placeholder="seu@email.com" autocomplete="email" />
+        </div>
+
+        <div class="ob-grid">
+          <div class="ob-field">
+            <label class="ob-label">Senha</label>
+            <input class="ob-input" id="ob-password" type="password" placeholder="Mínimo 6 caracteres" autocomplete="new-password" />
+          </div>
+
+          <div class="ob-field">
+            <label class="ob-label">Confirmar senha</label>
+            <input class="ob-input" id="ob-password-confirm" type="password" placeholder="Repita a senha" autocomplete="new-password" />
+          </div>
+        </div>
+
+        <button type="submit" class="ob-primary-btn">Criar conta grátis →</button>
+
+        <div class="ob-links">
+          <span class="ob-muted">Já tem conta?</span>
+          <a class="ob-link-btn" href="/app/login/">Entrar no painel</a>
+        </div>
+
+      </form>
+    </section>
+
+  </div>
+
+  <script src="/js/app/onboarding.js" type="module"></script>
+</body>
+</html>
