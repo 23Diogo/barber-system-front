@@ -146,17 +146,23 @@
   .data-table th,
   .data-table td { padding: 6px 8px; font-size: 10px; white-space: nowrap; }
 
-  /* ── Modal: sheet da base ── */
-  .modal-overlay { align-items: flex-end !important; padding: 0 !important; }
+  /* ── Modal: centralizado com todas as bordas visíveis ── */
+  .modal-overlay {
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 16px !important;
+  }
   .modal {
-    width: 100%      !important;
-    max-width: 100%  !important;
-    max-height: 90vh;
+    width: calc(100vw - 32px) !important;
+    max-width: 480px          !important;
+    max-height: calc(100vh - 80px);
     overflow-y: auto;
+    overflow-x: hidden;
     padding: 20px 16px;
     margin: 0;
-    border-radius: 18px 18px 0 0;
-    border-bottom: none;
+    border-radius: 16px !important;
+    border: 1px solid #232845;
+    box-shadow: 0 0 60px rgba(79,195,247,.15), 0 24px 48px rgba(0,0,0,.6);
   }
 
   /* ── Inputs: 16px evita zoom iOS ── */
@@ -239,7 +245,7 @@
   #hero::after {
     content: '';
     display: block;
-    height: 200px;
+    height: 32px;
     flex-shrink: 0;
   }
 }
