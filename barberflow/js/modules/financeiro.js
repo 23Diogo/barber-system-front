@@ -1,87 +1,21 @@
+import {
+  apiFetch,
+} from '../services/api.js';
+
+// ─── State ────────────────────────────────────────────────────────────────────
+
 const financeiroState = {
-  summaryBase: {
-    revenueBaseline: 18235,
-    expensesBaseline: 2756,
-    commissions: 4800,
-    revenueTrend: '↑ 8% vs anterior',
-    expensesTrend: '↑ 3%',
-  },
-  payables: [
-    {
-      id: 'aluguel',
-      icon: '🏠',
-      title: 'Aluguel',
-      dateLabel: 'Vence amanhã · 14/04',
-      amount: 1800,
-      highlight: 'warning',
-      notes: 'Pagamento mensal do ponto comercial.',
-    },
-    {
-      id: 'energia-eletrica',
-      icon: '⚡',
-      title: 'Energia elétrica',
-      dateLabel: 'Vence 20/04 · 7 dias',
-      amount: 380,
-      highlight: 'danger',
-      notes: 'Conta de energia da unidade.',
-    },
-    {
-      id: 'reposicao-estoque',
-      icon: '📦',
-      title: 'Reposição estoque',
-      dateLabel: 'Vence 25/04',
-      amount: 620,
-      highlight: 'info',
-      notes: 'Compra de insumos e produtos.',
-    },
-    {
-      id: 'barberflow-pro',
-      icon: '💻',
-      title: 'BarberFlow Pro',
-      dateLabel: 'Automático · 30/04',
-      amount: 399,
-      highlight: 'success',
-      notes: 'Assinatura do sistema.',
-    },
-  ],
-  transactions: [
-    {
-      id: 'corte-barba-rafael',
-      icon: '💇',
-      title: 'Corte + Barba — Rafael',
-      dateLabel: 'Hoje · Pix',
-      amount: 70,
-      notes: 'Recebimento confirmado.',
-    },
-    {
-      id: 'fade-medio-pedro',
-      icon: '💇',
-      title: 'Fade médio — Pedro',
-      dateLabel: 'Hoje · Dinheiro',
-      amount: 50,
-      notes: 'Pagamento recebido em dinheiro.',
-    },
-    {
-      id: 'compra-produtos',
-      icon: '🧴',
-      title: 'Compra de produtos',
-      dateLabel: 'Ontem · Débito',
-      amount: -245,
-      notes: 'Reposição de pomadas e óleos.',
-    },
-    {
-      id: 'barba-andre',
-      icon: '💇',
-      title: 'Barba — André',
-      dateLabel: 'Ontem · Pix',
-      amount: 45,
-      notes: 'Recebimento confirmado.',
-    },
-  ],
-  modalMode: 'closed', // closed | view | edit | create
+  bills: [],
+  transactions: [],
+  commissions: [],
+  isLoading: false,
+  isLoaded: false,
+  modalMode: 'closed',   // closed | viewBill | editBill | createBill | createTransaction
   activeEntryId: null,
-  activeSection: null, // payables | transactions
+  activeSection: null,   // bills | transactions
 };
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -102,320 +36,20 @@ function formatCurrency(value) {
 
 function formatCompactCurrency(value) {
   const abs = Math.abs(Number(value || 0));
-  if (abs >= 1000) {
-    return `R$${(abs / 1000).toFixed(1)}k`;
-  }
+  if (abs >= 1000) return `R$${(abs / 1000).toFixed(1)}k`;
   return formatCurrency(abs);
 }
 
-function getPayablesTotal() {
-  return financeiroState.payables.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+function formatDate(value) {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString('pt-BR');
 }
 
-function getPositiveTransactionsTotal() {
-  return financeiroState.transactions
-    .filter((item) => Number(item.amount || 0) > 0)
-    .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-}
-
-function getNegativeTransactionsTotal() {
-  return financeiroState.transactions
-    .filter((item) => Number(item.amount || 0) < 0)
-    .reduce((sum, item) => sum + Math.abs(Number(item.amount || 0)), 0);
-}
-
-function getFinanceMetrics() {
-  const revenue = financeiroState.summaryBase.revenueBaseline + getPositiveTransactionsTotal();
-  const expenses = financeiroState.summaryBase.expensesBaseline + getPayablesTotal() + getNegativeTransactionsTotal();
-  const commissions = financeiroState.summaryBase.commissions;
-  const profit = revenue - expenses;
-  const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
-
-  return {
-    revenue,
-    expenses,
-    profit,
-    commissions,
-    revenueTrend: financeiroState.summaryBase.revenueTrend,
-    expensesTrend: financeiroState.summaryBase.expensesTrend,
-    marginLabel: `Margem ${margin}%`,
-    commissionsLabel: '3 barbeiros',
-  };
-}
-
-function getPayableHighlightMeta(highlight) {
-  const map = {
-    warning: { color: '#f97316', border: '#f97316' },
-    danger: { color: '#ff1744', border: '#ff1744' },
-    info: { color: '#4fc3f7', border: '#4fc3f7' },
-    success: { color: '#00e676', border: '#00e676' },
-  };
-
-  return map[highlight] || map.info;
-}
-
-function getTransactionMeta(amount) {
-  if (Number(amount || 0) >= 0) {
-    return { color: '#00e676', border: '#00e676', prefix: '+' };
-  }
-
-  return { color: '#ff1744', border: '#ff1744', prefix: '-' };
-}
-
-function getEntryById(section, entryId) {
-  const source = section === 'payables' ? financeiroState.payables : financeiroState.transactions;
-  return source.find((item) => item.id === entryId) || null;
-}
-
-function normalizeEntryId(title) {
-  const base = String(title || 'novo-lancamento')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .trim()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '') || 'novo-lancamento';
-
-  let candidate = base;
-  let counter = 2;
-
-  while (
-    financeiroState.payables.some((item) => item.id === candidate) ||
-    financeiroState.transactions.some((item) => item.id === candidate)
-  ) {
-    candidate = `${base}-${counter}`;
-    counter += 1;
-  }
-
-  return candidate;
-}
-
-function renderFinanceMetrics() {
-  const metrics = getFinanceMetrics();
-
-  return `
-    <div class="grid-4 finance-metrics-grid">
-      <div class="metric-card">
-        <div class="metric-label">Receita do mês</div>
-        <div class="metric-value">${escapeHtml(formatCompactCurrency(metrics.revenue))}</div>
-        <div class="metric-sub color-up">${escapeHtml(metrics.revenueTrend)}</div>
-      </div>
-
-      <div class="metric-card">
-        <div class="metric-label">Despesas</div>
-        <div class="metric-value" style="color:#ff1744">${escapeHtml(formatCompactCurrency(metrics.expenses))}</div>
-        <div class="metric-sub color-dn">${escapeHtml(metrics.expensesTrend)}</div>
-      </div>
-
-      <div class="metric-card">
-        <div class="metric-label">Lucro líquido</div>
-        <div class="metric-value" style="color:#00e676">${escapeHtml(formatCompactCurrency(metrics.profit))}</div>
-        <div class="metric-sub color-up">${escapeHtml(metrics.marginLabel)}</div>
-      </div>
-
-      <div class="metric-card">
-        <div class="metric-label">Comissões</div>
-        <div class="metric-value">${escapeHtml(formatCompactCurrency(metrics.commissions))}</div>
-        <div class="metric-sub color-nt">${escapeHtml(metrics.commissionsLabel)}</div>
-      </div>
-    </div>
-  `;
-}
-
-function renderPayableRow(entry) {
-  const meta = getPayableHighlightMeta(entry.highlight);
-
-  return `
-    <button
-      type="button"
-      class="finance-row-button"
-      data-entry-id="${escapeHtml(entry.id)}"
-      data-entry-section="payables"
-      title="Ver detalhes de ${escapeHtml(entry.title)}"
-    >
-      <div class="fin-row" style="border-color:${meta.border}">
-        <div class="fin-icon">${escapeHtml(entry.icon)}</div>
-        <div class="fin-info">
-          <div class="fin-title">${escapeHtml(entry.title)}</div>
-          <div class="fin-date">${escapeHtml(entry.dateLabel)}</div>
-        </div>
-        <div class="fin-val" style="color:${meta.color}">${escapeHtml(formatCurrency(entry.amount))}</div>
-      </div>
-    </button>
-  `;
-}
-
-function renderTransactionRow(entry) {
-  const meta = getTransactionMeta(entry.amount);
-  const amountLabel = `${meta.prefix}${formatCurrency(Math.abs(entry.amount))}`;
-
-  return `
-    <button
-      type="button"
-      class="finance-row-button"
-      data-entry-id="${escapeHtml(entry.id)}"
-      data-entry-section="transactions"
-      title="Ver detalhes de ${escapeHtml(entry.title)}"
-    >
-      <div class="fin-row" style="border-color:${meta.border}">
-        <div class="fin-icon">${escapeHtml(entry.icon)}</div>
-        <div class="fin-info">
-          <div class="fin-title">${escapeHtml(entry.title)}</div>
-          <div class="fin-date">${escapeHtml(entry.dateLabel)}</div>
-        </div>
-        <div class="fin-val" style="color:${meta.color}">${escapeHtml(amountLabel)}</div>
-      </div>
-    </button>
-  `;
-}
-
-function renderFinanceDetails(entry, section) {
-  const isPayable = section === 'payables';
-  const amountMeta = isPayable ? getPayableHighlightMeta(entry.highlight) : getTransactionMeta(entry.amount);
-  const amountLabel = isPayable
-    ? formatCurrency(entry.amount)
-    : `${amountMeta.prefix}${formatCurrency(Math.abs(entry.amount))}`;
-
-  return `
-    <div class="finance-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">${escapeHtml(entry.title)}</div>
-        <div class="modal-sub" style="margin-top:4px;">
-          ${escapeHtml(isPayable ? 'Conta a pagar' : 'Transação financeira')}
-        </div>
-      </div>
-
-      <div class="finance-modal-grid">
-        <div class="mini-card">
-          <div class="mini-lbl">Valor</div>
-          <div class="mini-val" style="color:${amountMeta.color}">${escapeHtml(amountLabel)}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Categoria</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(isPayable ? 'Despesa planejada' : (entry.amount >= 0 ? 'Entrada' : 'Saída'))}</div>
-        </div>
-      </div>
-
-      <div class="finance-modal-info">
-        <div class="finance-modal-info-row">
-          <strong>Data/descrição:</strong> ${escapeHtml(entry.dateLabel)}
-        </div>
-        <div class="finance-modal-info-row">
-          <strong>Observações:</strong> ${escapeHtml(entry.notes || '—')}
-        </div>
-      </div>
-
-      <div class="modal-buttons" style="margin-top:10px;">
-        <button type="button" class="btn-cancel" id="finance-modal-close">Fechar</button>
-        <button
-          type="button"
-          class="btn-save"
-          id="finance-edit-button"
-          data-entry-id="${escapeHtml(entry.id)}"
-          data-entry-section="${escapeHtml(section)}"
-        >
-          Editar informações
-        </button>
-      </div>
-    </div>
-  `;
-}
-
-function renderFinanceForm(mode, section = 'payables', entry = null) {
-  const isEdit = mode === 'edit';
-  const safeEntry = entry || {
-    title: '',
-    icon: '💸',
-    dateLabel: '',
-    amount: 100,
-    notes: '',
-    highlight: 'info',
-  };
-
-  const transactionType = !entry ? 'income' : Number(entry.amount || 0) >= 0 ? 'income' : 'expense';
-
-  return `
-    <div class="finance-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">${isEdit ? 'Editar lançamento' : 'Novo lançamento'}</div>
-        <div class="modal-sub" style="margin-top:4px;">
-          ${isEdit ? 'Atualize os dados do lançamento financeiro.' : 'Preencha os dados para adicionar um novo item financeiro.'}
-        </div>
-      </div>
-
-      <form id="finance-form" class="finance-form">
-        <div class="finance-form-grid">
-          <div>
-            <div class="color-section-label">Seção</div>
-            <select class="modal-input" name="section">
-              <option value="payables" ${section === 'payables' ? 'selected' : ''}>Contas a pagar</option>
-              <option value="transactions" ${section === 'transactions' ? 'selected' : ''}>Transações</option>
-            </select>
-          </div>
-
-          <div>
-            <div class="color-section-label">Ícone</div>
-            <input class="modal-input" name="icon" type="text" value="${escapeHtml(safeEntry.icon)}" placeholder="Ex.: 💇" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Título</div>
-            <input class="modal-input" name="title" type="text" value="${escapeHtml(safeEntry.title)}" placeholder="Nome do lançamento" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Data / descrição</div>
-            <input class="modal-input" name="dateLabel" type="text" value="${escapeHtml(safeEntry.dateLabel)}" placeholder="Ex.: Hoje · Pix" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Valor</div>
-            <input class="modal-input" name="amount" type="number" min="1" step="1" value="${escapeHtml(Math.abs(safeEntry.amount || 0))}" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Tipo da transação</div>
-            <select class="modal-input" name="transactionType">
-              <option value="income" ${transactionType === 'income' ? 'selected' : ''}>Entrada</option>
-              <option value="expense" ${transactionType === 'expense' ? 'selected' : ''}>Saída</option>
-            </select>
-          </div>
-
-          <div>
-            <div class="color-section-label">Destaque visual</div>
-            <select class="modal-input" name="highlight">
-              <option value="warning" ${safeEntry.highlight === 'warning' ? 'selected' : ''}>Laranja</option>
-              <option value="danger" ${safeEntry.highlight === 'danger' ? 'selected' : ''}>Vermelho</option>
-              <option value="info" ${safeEntry.highlight === 'info' ? 'selected' : ''}>Azul</option>
-              <option value="success" ${safeEntry.highlight === 'success' ? 'selected' : ''}>Verde</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <div class="color-section-label">Observações</div>
-          <textarea class="modal-input finance-textarea" name="notes" placeholder="Observações do lançamento">${escapeHtml(safeEntry.notes || '')}</textarea>
-        </div>
-
-        <div id="finance-form-feedback" class="finance-form-feedback"></div>
-
-        <div class="modal-buttons" style="margin-top:10px;">
-          <button type="button" class="btn-cancel" id="${isEdit ? 'finance-form-back' : 'finance-form-cancel'}">
-            ${isEdit ? 'Voltar' : 'Cancelar'}
-          </button>
-          <button type="submit" class="btn-save">
-            ${isEdit ? 'Salvar alterações' : 'Adicionar lançamento'}
-          </button>
-        </div>
-      </form>
-    </div>
-  `;
-}
-
-function setFinanceFormFeedback(message, variant = 'neutral') {
-  const el = document.getElementById('finance-form-feedback');
+function setFeedback(id, message, variant = 'neutral') {
+  const el = document.getElementById(id);
   if (!el) return;
-
   el.textContent = message || '';
   el.style.color =
     variant === 'error' ? '#ff8a8a' :
@@ -423,24 +57,290 @@ function setFinanceFormFeedback(message, variant = 'neutral') {
     '#5a6888';
 }
 
-function openFinanceModal(section, entryId) {
-  financeiroState.activeSection = section;
-  financeiroState.activeEntryId = entryId;
-  financeiroState.modalMode = 'view';
-  renderFinanceModal();
+// ─── Métricas ─────────────────────────────────────────────────────────────────
+
+function getMetrics() {
+  const revenue = financeiroState.transactions
+    .filter(t => t.type === 'income')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+  const expenses = financeiroState.transactions
+    .filter(t => t.type === 'expense')
+    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+
+  const commissions = financeiroState.commissions
+    .reduce((sum, c) => sum + Number(c.commission_amount || 0), 0);
+
+  const profit = revenue - expenses - commissions;
+  const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+
+  return { revenue, expenses, profit, commissions, margin };
 }
 
-function openCreateFinanceModal(defaultSection = 'payables') {
-  financeiroState.activeSection = defaultSection;
-  financeiroState.activeEntryId = null;
-  financeiroState.modalMode = 'create';
-  renderFinanceModal();
+function renderMetrics() {
+  const m = getMetrics();
+
+  return `
+    <div class="grid-4 finance-metrics-grid">
+      <div class="metric-card">
+        <div class="metric-label">Receita do mês</div>
+        <div class="metric-value">${escapeHtml(formatCompactCurrency(m.revenue))}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Despesas</div>
+        <div class="metric-value" style="color:#ff1744">${escapeHtml(formatCompactCurrency(m.expenses))}</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Lucro líquido</div>
+        <div class="metric-value" style="color:#00e676">${escapeHtml(formatCompactCurrency(m.profit))}</div>
+        <div class="metric-sub color-up">Margem ${escapeHtml(m.margin)}%</div>
+      </div>
+      <div class="metric-card">
+        <div class="metric-label">Comissões</div>
+        <div class="metric-value">${escapeHtml(formatCompactCurrency(m.commissions))}</div>
+      </div>
+    </div>
+  `;
 }
 
-function openEditFinanceModal(section, entryId) {
+// ─── Bills ────────────────────────────────────────────────────────────────────
+
+function getBillHighlight(bill) {
+  if (bill.status === 'paid') return { color: '#00e676', border: '#00e676' };
+  if (bill.status === 'cancelled') return { color: '#5a6888', border: '#5a6888' };
+
+  const due = new Date(bill.due_date);
+  const now = new Date();
+  const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) return { color: '#ff1744', border: '#ff1744' };
+  if (diffDays <= 3) return { color: '#f97316', border: '#f97316' };
+  return { color: '#4fc3f7', border: '#4fc3f7' };
+}
+
+function renderBillRow(bill) {
+  const meta = getBillHighlight(bill);
+  const duLabel = bill.due_date ? `Vence ${formatDate(bill.due_date)}` : '—';
+
+  return `
+    <button type="button" class="finance-row-button"
+      data-entry-id="${escapeHtml(bill.id)}"
+      data-entry-section="bills"
+      title="Ver detalhes de ${escapeHtml(bill.description)}">
+      <div class="fin-row" style="border-color:${meta.border}">
+        <div class="fin-icon">💸</div>
+        <div class="fin-info">
+          <div class="fin-title">${escapeHtml(bill.description)}</div>
+          <div class="fin-date">${escapeHtml(duLabel)}${bill.category ? ` · ${escapeHtml(bill.category)}` : ''}</div>
+        </div>
+        <div class="fin-val" style="color:${meta.color}">${escapeHtml(formatCurrency(bill.amount))}</div>
+      </div>
+    </button>
+  `;
+}
+
+function renderBillsSection() {
+  const pending = financeiroState.bills.filter(b => b.status !== 'cancelled');
+
+  if (!pending.length) {
+    return `<div class="finance-empty">Nenhuma conta a pagar cadastrada.</div>`;
+  }
+
+  return pending.map(renderBillRow).join('');
+}
+
+// ─── Transactions ─────────────────────────────────────────────────────────────
+
+function renderTransactionRow(t) {
+  const isIncome = t.type === 'income';
+  const color = isIncome ? '#00e676' : '#ff1744';
+  const prefix = isIncome ? '+' : '-';
+
+  return `
+    <button type="button" class="finance-row-button"
+      data-entry-id="${escapeHtml(t.id)}"
+      data-entry-section="transactions"
+      title="Ver detalhes">
+      <div class="fin-row" style="border-color:${color}">
+        <div class="fin-icon">${isIncome ? '💇' : '🧴'}</div>
+        <div class="fin-info">
+          <div class="fin-title">${escapeHtml(t.description)}</div>
+          <div class="fin-date">${escapeHtml(formatDate(t.transaction_date))}${t.payment_method ? ` · ${escapeHtml(t.payment_method)}` : ''}</div>
+        </div>
+        <div class="fin-val" style="color:${color}">${prefix}${escapeHtml(formatCurrency(t.amount))}</div>
+      </div>
+    </button>
+  `;
+}
+
+function renderTransactionsSection() {
+  const recent = [...financeiroState.transactions].slice(0, 20);
+
+  if (!recent.length) {
+    return `<div class="finance-empty">Nenhuma transação registrada.</div>`;
+  }
+
+  return recent.map(renderTransactionRow).join('');
+}
+
+// ─── Modal ────────────────────────────────────────────────────────────────────
+
+function renderBillDetails(bill) {
+  const meta = getBillHighlight(bill);
+
+  return `
+    <div class="finance-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">${escapeHtml(bill.description)}</div>
+        <div class="modal-sub" style="margin-top:4px;">Conta a pagar</div>
+      </div>
+
+      <div class="finance-modal-grid">
+        <div class="mini-card">
+          <div class="mini-lbl">Valor</div>
+          <div class="mini-val" style="color:${meta.color}">${escapeHtml(formatCurrency(bill.amount))}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Status</div>
+          <div class="mini-val" style="font-size:15px;color:${meta.color}">${escapeHtml(bill.status || '—')}</div>
+        </div>
+      </div>
+
+      <div class="finance-modal-info">
+        <div class="finance-modal-info-row"><strong>Vencimento:</strong> ${escapeHtml(formatDate(bill.due_date))}</div>
+        <div class="finance-modal-info-row"><strong>Categoria:</strong> ${escapeHtml(bill.category || '—')}</div>
+        <div class="finance-modal-info-row"><strong>Fornecedor:</strong> ${escapeHtml(bill.supplier || '—')}</div>
+        <div class="finance-modal-info-row"><strong>Observações:</strong> ${escapeHtml(bill.notes || '—')}</div>
+      </div>
+
+      <div id="finance-modal-feedback" class="finance-form-feedback"></div>
+
+      <div class="modal-buttons" style="margin-top:10px;">
+        <button type="button" class="btn-cancel" id="finance-modal-close">Fechar</button>
+        ${bill.status !== 'paid' && bill.status !== 'cancelled' ? `
+          <button type="button" class="btn-save" id="finance-pay-bill-btn" data-bill-id="${escapeHtml(bill.id)}">
+            Marcar como paga
+          </button>
+        ` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderBillForm() {
+  return `
+    <div class="finance-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">Nova conta a pagar</div>
+        <div class="modal-sub" style="margin-top:4px;">Preencha os dados da conta.</div>
+      </div>
+
+      <form id="finance-bill-form" class="finance-form">
+        <div class="finance-form-grid">
+          <div>
+            <div class="color-section-label">Descrição</div>
+            <input class="modal-input" name="description" type="text" placeholder="Ex: Aluguel" />
+          </div>
+          <div>
+            <div class="color-section-label">Categoria</div>
+            <input class="modal-input" name="category" type="text" placeholder="Ex: Aluguel, Energia..." />
+          </div>
+          <div>
+            <div class="color-section-label">Valor (R$)</div>
+            <input class="modal-input" name="amount" type="number" min="0" step="0.01" placeholder="0,00" />
+          </div>
+          <div>
+            <div class="color-section-label">Vencimento</div>
+            <input class="modal-input" name="due_date" type="date" />
+          </div>
+          <div>
+            <div class="color-section-label">Fornecedor</div>
+            <input class="modal-input" name="supplier" type="text" placeholder="Nome do fornecedor" />
+          </div>
+        </div>
+
+        <div>
+          <div class="color-section-label">Observações</div>
+          <textarea class="modal-input finance-textarea" name="notes" placeholder="Observações"></textarea>
+        </div>
+
+        <div id="finance-form-feedback" class="finance-form-feedback"></div>
+
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
+          <button type="submit" class="btn-save">Salvar conta</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function renderTransactionForm() {
+  return `
+    <div class="finance-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">Nova transação</div>
+        <div class="modal-sub" style="margin-top:4px;">Registre uma entrada ou saída financeira.</div>
+      </div>
+
+      <form id="finance-transaction-form" class="finance-form">
+        <div class="finance-form-grid">
+          <div>
+            <div class="color-section-label">Tipo</div>
+            <select class="modal-input" name="type">
+              <option value="income">Entrada</option>
+              <option value="expense">Saída</option>
+            </select>
+          </div>
+          <div>
+            <div class="color-section-label">Descrição</div>
+            <input class="modal-input" name="description" type="text" placeholder="Ex: Corte — Rafael" />
+          </div>
+          <div>
+            <div class="color-section-label">Categoria</div>
+            <input class="modal-input" name="category" type="text" placeholder="Ex: Serviço, Produto..." />
+          </div>
+          <div>
+            <div class="color-section-label">Valor (R$)</div>
+            <input class="modal-input" name="amount" type="number" min="0" step="0.01" placeholder="0,00" />
+          </div>
+          <div>
+            <div class="color-section-label">Forma de pagamento</div>
+            <select class="modal-input" name="payment_method">
+              <option value="pix">Pix</option>
+              <option value="cash">Dinheiro</option>
+              <option value="credit_card">Cartão de crédito</option>
+              <option value="debit_card">Cartão de débito</option>
+            </select>
+          </div>
+          <div>
+            <div class="color-section-label">Data</div>
+            <input class="modal-input" name="transaction_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
+          </div>
+        </div>
+
+        <div>
+          <div class="color-section-label">Observações</div>
+          <textarea class="modal-input finance-textarea" name="notes" placeholder="Observações"></textarea>
+        </div>
+
+        <div id="finance-form-feedback" class="finance-form-feedback"></div>
+
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
+          <button type="submit" class="btn-save">Salvar transação</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+// ─── Modal control ────────────────────────────────────────────────────────────
+
+function openModal(mode, section = null, entryId = null) {
+  financeiroState.modalMode = mode;
   financeiroState.activeSection = section;
   financeiroState.activeEntryId = entryId;
-  financeiroState.modalMode = 'edit';
   renderFinanceModal();
 }
 
@@ -454,96 +354,7 @@ function closeFinanceModal() {
   financeiroState.activeEntryId = null;
   modal.classList.remove('open');
   modal.style.display = 'none';
-
   if (content) content.innerHTML = '';
-}
-
-function collectFinanceFormData() {
-  const form = document.getElementById('finance-form');
-  const formData = new FormData(form);
-
-  const section = String(formData.get('section') || 'payables');
-  const amountAbs = Number(formData.get('amount') || 0);
-  const transactionType = String(formData.get('transactionType') || 'income');
-
-  return {
-    section,
-    entry: {
-      title: String(formData.get('title') || '').trim(),
-      icon: String(formData.get('icon') || '💸').trim() || '💸',
-      dateLabel: String(formData.get('dateLabel') || '').trim(),
-      amount: section === 'payables'
-        ? amountAbs
-        : transactionType === 'expense'
-          ? -amountAbs
-          : amountAbs,
-      notes: String(formData.get('notes') || '').trim(),
-      highlight: String(formData.get('highlight') || 'info').trim(),
-    },
-  };
-}
-
-function handleFinanceFormSubmit(event) {
-  event.preventDefault();
-
-  const { section, entry } = collectFinanceFormData();
-
-  if (!entry.title) {
-    setFinanceFormFeedback('Informe o título do lançamento.', 'error');
-    return;
-  }
-
-  if (!entry.dateLabel) {
-    setFinanceFormFeedback('Informe a data ou descrição do lançamento.', 'error');
-    return;
-  }
-
-  if (Math.abs(Number(entry.amount || 0)) <= 0) {
-    setFinanceFormFeedback('Informe um valor válido.', 'error');
-    return;
-  }
-
-  if (financeiroState.modalMode === 'create') {
-    const newEntry = {
-      id: normalizeEntryId(entry.title),
-      ...entry,
-    };
-
-    if (section === 'payables') {
-      financeiroState.payables = [newEntry, ...financeiroState.payables];
-    } else {
-      financeiroState.transactions = [newEntry, ...financeiroState.transactions];
-    }
-
-    rerenderFinanceiro();
-    openFinanceModal(section, newEntry.id);
-    return;
-  }
-
-  if (financeiroState.modalMode === 'edit' && financeiroState.activeEntryId && financeiroState.activeSection) {
-    const oldSection = financeiroState.activeSection;
-    const oldId = financeiroState.activeEntryId;
-
-    const currentEntry = getEntryById(oldSection, oldId);
-    if (!currentEntry) return;
-
-    const updatedEntry = {
-      ...currentEntry,
-      ...entry,
-    };
-
-    financeiroState.payables = financeiroState.payables.filter((item) => item.id !== oldId);
-    financeiroState.transactions = financeiroState.transactions.filter((item) => item.id !== oldId);
-
-    if (section === 'payables') {
-      financeiroState.payables = [updatedEntry, ...financeiroState.payables];
-    } else {
-      financeiroState.transactions = [updatedEntry, ...financeiroState.transactions];
-    }
-
-    rerenderFinanceiro();
-    openFinanceModal(section, updatedEntry.id);
-  }
 }
 
 function renderFinanceModal() {
@@ -552,121 +363,235 @@ function renderFinanceModal() {
   if (!modal || !content) return;
 
   if (financeiroState.modalMode === 'closed') {
-    modal.classList.remove('open');
     modal.style.display = 'none';
+    modal.classList.remove('open');
     content.innerHTML = '';
     return;
   }
 
-  const entry = financeiroState.activeEntryId && financeiroState.activeSection
-    ? getEntryById(financeiroState.activeSection, financeiroState.activeEntryId)
-    : null;
-
-  if ((financeiroState.modalMode === 'view' || financeiroState.modalMode === 'edit') && !entry) {
-    closeFinanceModal();
-    return;
+  if (financeiroState.modalMode === 'viewBill') {
+    const bill = financeiroState.bills.find(b => b.id === financeiroState.activeEntryId);
+    if (!bill) { closeFinanceModal(); return; }
+    content.innerHTML = renderBillDetails(bill);
   }
 
-  if (financeiroState.modalMode === 'view') {
-    content.innerHTML = renderFinanceDetails(entry, financeiroState.activeSection);
+  if (financeiroState.modalMode === 'createBill') {
+    content.innerHTML = renderBillForm();
   }
 
-  if (financeiroState.modalMode === 'edit') {
-    content.innerHTML = renderFinanceForm('edit', financeiroState.activeSection, entry);
-  }
-
-  if (financeiroState.modalMode === 'create') {
-    content.innerHTML = renderFinanceForm('create', financeiroState.activeSection || 'payables');
+  if (financeiroState.modalMode === 'createTransaction') {
+    content.innerHTML = renderTransactionForm();
   }
 
   modal.style.display = 'flex';
   modal.classList.add('open');
-
-  bindFinanceModalEvents();
+  bindModalEvents();
 }
 
-function bindFinanceRowsEvents() {
-  document.querySelectorAll('.finance-row-button[data-entry-id]').forEach((button) => {
-    button.addEventListener('click', () => {
-      openFinanceModal(button.dataset.entrySection, button.dataset.entryId);
+// ─── API calls ────────────────────────────────────────────────────────────────
+
+async function loadFinanceiroData() {
+  financeiroState.isLoading = true;
+  rerenderFinanceiro();
+
+  try {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+
+    const [bills, transactions, commissions] = await Promise.all([
+      apiFetch('/api/financial/bills'),
+      apiFetch(`/api/financial/transactions?start=${start}&end=${end}`),
+      apiFetch('/api/financial/commissions'),
+    ]);
+
+    financeiroState.bills = Array.isArray(bills) ? bills : [];
+    financeiroState.transactions = Array.isArray(transactions) ? transactions : [];
+    financeiroState.commissions = Array.isArray(commissions) ? commissions : [];
+    financeiroState.isLoaded = true;
+  } catch (error) {
+    console.error('Erro ao carregar financeiro:', error);
+  } finally {
+    financeiroState.isLoading = false;
+    rerenderFinanceiro();
+  }
+}
+
+async function handleCreateBill(event) {
+  event.preventDefault();
+  const form = document.getElementById('finance-bill-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+
+  const description = String(formData.get('description') || '').trim();
+  const amount = Number(formData.get('amount') || 0);
+  const due_date = String(formData.get('due_date') || '').trim();
+
+  if (!description) { setFeedback('finance-form-feedback', 'Informe a descrição.', 'error'); return; }
+  if (!amount || amount <= 0) { setFeedback('finance-form-feedback', 'Informe um valor válido.', 'error'); return; }
+  if (!due_date) { setFeedback('finance-form-feedback', 'Informe o vencimento.', 'error'); return; }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('finance-form-feedback', 'Salvando...', 'neutral');
+
+    await apiFetch('/api/financial/bills', {
+      method: 'POST',
+      body: JSON.stringify({
+        description,
+        amount,
+        due_date,
+        category: String(formData.get('category') || '').trim() || null,
+        supplier: String(formData.get('supplier') || '').trim() || null,
+        notes: String(formData.get('notes') || '').trim() || null,
+        status: 'pending',
+      }),
+    });
+
+    closeFinanceModal();
+    await loadFinanceiroData();
+  } catch (error) {
+    setFeedback('finance-form-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleCreateTransaction(event) {
+  event.preventDefault();
+  const form = document.getElementById('finance-transaction-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+
+  const description = String(formData.get('description') || '').trim();
+  const amount = Number(formData.get('amount') || 0);
+  const transaction_date = String(formData.get('transaction_date') || '').trim();
+
+  if (!description) { setFeedback('finance-form-feedback', 'Informe a descrição.', 'error'); return; }
+  if (!amount || amount <= 0) { setFeedback('finance-form-feedback', 'Informe um valor válido.', 'error'); return; }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('finance-form-feedback', 'Salvando...', 'neutral');
+
+    await apiFetch('/api/financial/transactions', {
+      method: 'POST',
+      body: JSON.stringify({
+        type: String(formData.get('type') || 'income'),
+        description,
+        amount,
+        transaction_date: transaction_date || new Date().toISOString().split('T')[0],
+        category: String(formData.get('category') || '').trim() || null,
+        payment_method: String(formData.get('payment_method') || 'pix'),
+        notes: String(formData.get('notes') || '').trim() || null,
+      }),
+    });
+
+    closeFinanceModal();
+    await loadFinanceiroData();
+  } catch (error) {
+    setFeedback('finance-form-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handlePayBill(billId) {
+  try {
+    setFeedback('finance-modal-feedback', 'Registrando pagamento...', 'neutral');
+    await apiFetch(`/api/financial/bills/${billId}/pay`, {
+      method: 'PATCH',
+      body: JSON.stringify({ paymentMethod: 'pix' }),
+    });
+    closeFinanceModal();
+    await loadFinanceiroData();
+  } catch (error) {
+    setFeedback('finance-modal-feedback', error instanceof Error ? error.message : 'Erro ao pagar.', 'error');
+  }
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+function bindModalEvents() {
+  document.getElementById('finance-modal-close')?.addEventListener('click', closeFinanceModal);
+  document.getElementById('finance-form-cancel')?.addEventListener('click', closeFinanceModal);
+
+  document.getElementById('finance-pay-bill-btn')?.addEventListener('click', (e) => {
+    const billId = e.currentTarget.dataset.billId;
+    if (billId) handlePayBill(billId);
+  });
+
+  document.getElementById('finance-bill-form')?.addEventListener('submit', handleCreateBill);
+  document.getElementById('finance-transaction-form')?.addEventListener('submit', handleCreateTransaction);
+}
+
+function bindRowEvents() {
+  document.querySelectorAll('.finance-row-button[data-entry-id]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const section = btn.dataset.entrySection;
+      const id = btn.dataset.entryId;
+      if (section === 'bills') openModal('viewBill', section, id);
     });
   });
 }
 
-function bindFinanceModalEvents() {
-  document.getElementById('finance-modal-close')?.addEventListener('click', closeFinanceModal);
-
-  document.getElementById('finance-edit-button')?.addEventListener('click', () => {
-    const button = document.getElementById('finance-edit-button');
-    if (!button?.dataset.entryId || !button?.dataset.entrySection) return;
-    openEditFinanceModal(button.dataset.entrySection, button.dataset.entryId);
+function bindStaticEvents() {
+  document.getElementById('finance-new-bill-btn')?.addEventListener('click', () => {
+    openModal('createBill');
   });
 
-  document.getElementById('finance-form-back')?.addEventListener('click', () => {
-    if (!financeiroState.activeSection || !financeiroState.activeEntryId) return;
-    openFinanceModal(financeiroState.activeSection, financeiroState.activeEntryId);
+  document.getElementById('finance-new-transaction-btn')?.addEventListener('click', () => {
+    openModal('createTransaction');
   });
 
-  document.getElementById('finance-form-cancel')?.addEventListener('click', closeFinanceModal);
-  document.getElementById('finance-form')?.addEventListener('submit', handleFinanceFormSubmit);
-}
-
-function bindFinanceiroStaticEvents() {
-  document.getElementById('finance-new-button')?.addEventListener('click', () => {
-    openCreateFinanceModal('payables');
-  });
-
-  document.getElementById('finance-details-modal')?.addEventListener('click', (event) => {
-    if (event.target?.id === 'finance-details-modal') {
-      closeFinanceModal();
-    }
+  document.getElementById('finance-details-modal')?.addEventListener('click', (e) => {
+    if (e.target?.id === 'finance-details-modal') closeFinanceModal();
   });
 }
+
+// ─── Render ───────────────────────────────────────────────────────────────────
 
 function rerenderFinanceiro() {
   const metrics = document.getElementById('finance-metrics');
-  const payables = document.getElementById('finance-payables-list');
+  const bills = document.getElementById('finance-payables-list');
   const transactions = document.getElementById('finance-transactions-list');
 
-  if (metrics) metrics.innerHTML = renderFinanceMetrics();
-
-  if (payables) {
-    payables.innerHTML = financeiroState.payables.map(renderPayableRow).join('');
+  if (financeiroState.isLoading) {
+    if (bills) bills.innerHTML = `<div class="finance-empty">Carregando...</div>`;
+    if (transactions) transactions.innerHTML = `<div class="finance-empty">Carregando...</div>`;
+    return;
   }
 
-  if (transactions) {
-    transactions.innerHTML = financeiroState.transactions.map(renderTransactionRow).join('');
-  }
+  if (metrics) metrics.innerHTML = renderMetrics();
+  if (bills) bills.innerHTML = renderBillsSection();
+  if (transactions) transactions.innerHTML = renderTransactionsSection();
 
-  bindFinanceRowsEvents();
+  bindRowEvents();
 }
 
 export function renderFinanceiro() {
   return /* html */ `
 <section class="page-shell page--financeiro">
   <div id="finance-metrics">
-    ${renderFinanceMetrics()}
+    ${renderMetrics()}
   </div>
 
   <div class="grid-2">
     <div class="card">
       <div class="card-header">
         <div class="card-title">Contas a Pagar</div>
-        <button type="button" class="btn-primary-gradient" id="finance-new-button">+ Adicionar</button>
+        <button type="button" class="btn-primary-gradient" id="finance-new-bill-btn">+ Adicionar</button>
       </div>
-
       <div id="finance-payables-list">
-        ${financeiroState.payables.map(renderPayableRow).join('')}
+        <div class="finance-empty">Carregando...</div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-header">
         <div class="card-title">Últimas Transações</div>
+        <button type="button" class="btn-primary-gradient" id="finance-new-transaction-btn">+ Registrar</button>
       </div>
-
       <div id="finance-transactions-list">
-        ${financeiroState.transactions.map(renderTransactionRow).join('')}
+        <div class="finance-empty">Carregando...</div>
       </div>
     </div>
   </div>
@@ -681,6 +606,6 @@ export function renderFinanceiro() {
 }
 
 export function initFinanceiroPage() {
-  bindFinanceiroStaticEvents();
-  bindFinanceRowsEvents();
+  bindStaticEvents();
+  loadFinanceiroData();
 }
