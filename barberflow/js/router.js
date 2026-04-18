@@ -13,8 +13,10 @@ import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
 import { renderConfiguracoes, initConfiguracoesPage } from './modules/configuracoes.js';
 import { renderPlanos, initPlanosPage } from './modules/planos.js';
+import { hasAuthToken } from './services/api.js';
 
 const ADMIN_BASE_PATH = '/app';
+const LOGIN_PATH = '/app/login';
 
 const renderers = {
   agenda: renderAgenda,
@@ -72,6 +74,10 @@ function shouldRedirectToAdmin(pathname = window.location.pathname) {
   return normalized === '/' || !normalized.startsWith(ADMIN_BASE_PATH);
 }
 
+function redirectToLogin() {
+  window.location.replace(LOGIN_PATH);
+}
+
 function renderPage(pageId) {
   const container = document.getElementById('pages');
   if (!container) return;
@@ -120,13 +126,27 @@ export function navigate(pageId, options = {}) {
   }
 }
 
+export function logout() {
+  import('./services/api.js').then(({ clearAuthToken }) => {
+    clearAuthToken();
+    redirectToLogin();
+  });
+}
+
 export function initRouter() {
+  // Protege todas as rotas /app — redireciona para login se não tiver token
+  if (!hasAuthToken()) {
+    redirectToLogin();
+    return;
+  }
+
   const initialPage = getPageFromPath(window.location.pathname);
   const replace = shouldRedirectToAdmin(window.location.pathname);
 
   navigate(initialPage, { replace });
 
   window.addEventListener('popstate', () => {
+    if (!hasAuthToken()) { redirectToLogin(); return; }
     const pageFromUrl = getPageFromPath(window.location.pathname);
     navigate(pageFromUrl, { skipHistory: true });
   });
