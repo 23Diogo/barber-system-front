@@ -392,3 +392,30 @@ body.client-area::before {
     font-size: 32px;
   }
 }
+
+body.client-area {
+  overflow-x: hidden;
+  overflow-y: auto;
+}
+
+.client-card {
+  margin-bottom: 24px;
+}
+
+@media (max-width: 720px) {
+  .client-shell {
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .client-main {
+    width: calc(100% - 24px);
+    padding: 20px 0 32px;
+    align-items: flex-start;
+  }
+
+  .client-card {
+    width: 100%;
+    margin-bottom: 20px;
+  }
+}
