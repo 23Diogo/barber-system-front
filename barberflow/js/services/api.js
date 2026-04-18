@@ -1,8 +1,113 @@
 const API_URL_STORAGE_KEY = 'barberflow.apiUrl';
 const AUTH_TOKEN_STORAGE_KEY = 'barberflow.authToken';
 
+const DEFAULT_LOCAL_API_URL = 'http://localhost:3002';
+const DEFAULT_PRODUCTION_API_URL = 'https://api.bbarberflow.com.br';
+const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
+
 function sanitizeBaseUrl(url) {
-  return String(url || '').trim().replace(/\/$/, '');
+  return String(url || '').trim().replace(/\/+$/, '');
+}
+
+function safeGetLocalStorageItem(key) {
+  try {
+    return localStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+function safeSetLocalStorageItem(key, value) {
+  try {
+    if (value) {
+      localStorage.setItem(key, value);
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // noop
+  }
+}
+
+function getMetaApiBaseUrl() {
+  try {
+    return sanitizeBaseUrl(
+      document.querySelector('meta[name="barberflow-api-url"]')?.getAttribute('content') || ''
+    );
+  } catch {
+    return '';
+  }
+}
+
+function getWindowApiBaseUrl() {
+  try {
+    return sanitizeBaseUrl(window.BARBERFLOW_API_URL || '');
+  } catch {
+    return '';
+  }
+}
+
+function getCurrentHostname() {
+  try {
+    return String(window.location.hostname || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function getCurrentHost() {
+  try {
+    return String(window.location.host || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function isLocalHostname(hostname) {
+  return (
+    hostname === 'localhost' ||
+    hostname === '127.0.0.1' ||
+    hostname === '0.0.0.0'
+  );
+}
+
+function isBarberFlowProductionHostname(hostname) {
+  return (
+    hostname === 'bbarberflow.com.br' ||
+    hostname === 'www.bbarberflow.com.br' ||
+    hostname === 'api.bbarberflow.com.br' ||
+    hostname.endsWith('.bbarberflow.com.br')
+  );
+}
+
+function inferApiBaseUrlFromHostname() {
+  const hostname = getCurrentHostname();
+
+  if (!hostname) return '';
+
+  if (isLocalHostname(hostname)) {
+    return DEFAULT_LOCAL_API_URL;
+  }
+
+  if (isBarberFlowProductionHostname(hostname)) {
+    return DEFAULT_PRODUCTION_API_URL;
+  }
+
+  return '';
+}
+
+function getTenantSlugFromHostname(hostname = getCurrentHostname()) {
+  const suffix = '.bbarberflow.com.br';
+
+  if (!hostname.endsWith(suffix)) return '';
+
+  const subdomain = hostname.slice(0, -suffix.length).trim();
+
+  if (!subdomain || subdomain === 'www' || subdomain === 'api') {
+    return '';
+  }
+
+  return subdomain;
 }
 
 function buildQueryString(params = {}) {
@@ -18,33 +123,44 @@ function buildQueryString(params = {}) {
 }
 
 export function getApiBaseUrl() {
-  return sanitizeBaseUrl(window.BARBERFLOW_API_URL || localStorage.getItem(API_URL_STORAGE_KEY) || '');
+  return sanitizeBaseUrl(
+    getWindowApiBaseUrl() ||
+    getMetaApiBaseUrl() ||
+    safeGetLocalStorageItem(API_URL_STORAGE_KEY) ||
+    inferApiBaseUrlFromHostname()
+  );
 }
 
 export function setApiBaseUrl(url) {
   const value = sanitizeBaseUrl(url);
-  if (value) localStorage.setItem(API_URL_STORAGE_KEY, value);
-  else localStorage.removeItem(API_URL_STORAGE_KEY);
+  safeSetLocalStorageItem(API_URL_STORAGE_KEY, value);
   return value;
 }
 
 export function clearApiBaseUrl() {
-  localStorage.removeItem(API_URL_STORAGE_KEY);
+  safeSetLocalStorageItem(API_URL_STORAGE_KEY, '');
 }
 
 export function getAuthToken() {
-  return String(window.BARBERFLOW_AUTH_TOKEN || localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || '').trim();
+  try {
+    return String(
+      window.BARBERFLOW_AUTH_TOKEN ||
+      safeGetLocalStorageItem(AUTH_TOKEN_STORAGE_KEY) ||
+      ''
+    ).trim();
+  } catch {
+    return String(safeGetLocalStorageItem(AUTH_TOKEN_STORAGE_KEY) || '').trim();
+  }
 }
 
 export function setAuthToken(token) {
   const value = String(token || '').trim();
-  if (value) localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, value);
-  else localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  safeSetLocalStorageItem(AUTH_TOKEN_STORAGE_KEY, value);
   return value;
 }
 
 export function clearAuthToken() {
-  localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
+  safeSetLocalStorageItem(AUTH_TOKEN_STORAGE_KEY, '');
 }
 
 export function hasApiConfig() {
@@ -55,12 +171,24 @@ export function hasAuthToken() {
   return Boolean(getAuthToken());
 }
 
+export function getTenantSlug() {
+  return getTenantSlugFromHostname();
+}
+
 export async function apiFetch(path, options = {}) {
   const baseUrl = getApiBaseUrl();
-  if (!baseUrl) throw new Error('URL da API não configurada.');
+
+  if (!baseUrl) {
+    throw new Error(
+      'URL da API não configurada. Configure window.BARBERFLOW_API_URL ou publique a API em https://api.bbarberflow.com.br.'
+    );
+  }
 
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Accept')) headers.set('Accept', 'application/json');
+
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json');
+  }
 
   const authToken = getAuthToken();
   if (authToken && !headers.has('Authorization')) {
@@ -72,28 +200,65 @@ export async function apiFetch(path, options = {}) {
     headers.set('Content-Type', 'application/json');
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-  });
+  const tenantSlug = getTenantSlug();
+  if (tenantSlug && !headers.has('X-BarberFlow-Tenant')) {
+    headers.set('X-BarberFlow-Tenant', tenantSlug);
+  }
 
-  const text = await response.text();
-  let payload = null;
+  const currentHost = getCurrentHost();
+  if (currentHost && !headers.has('X-BarberFlow-Host')) {
+    headers.set('X-BarberFlow-Host', currentHost);
+  }
 
-  if (text) {
-    try {
-      payload = JSON.parse(text);
-    } catch {
-      payload = text;
+  const timeoutMs =
+    Number.isFinite(Number(options.timeoutMs)) && Number(options.timeoutMs) > 0
+      ? Number(options.timeoutMs)
+      : DEFAULT_REQUEST_TIMEOUT_MS;
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  const requestUrl = String(path || '').startsWith('http')
+    ? String(path)
+    : `${baseUrl}${path}`;
+
+  try {
+    const response = await fetch(requestUrl, {
+      ...options,
+      headers,
+      signal: controller.signal,
+    });
+
+    const text = await response.text();
+    let payload = null;
+
+    if (text) {
+      try {
+        payload = JSON.parse(text);
+      } catch {
+        payload = text;
+      }
     }
-  }
 
-  if (!response.ok) {
-    const message = payload?.error || payload?.message || `Erro HTTP ${response.status}`;
-    throw new Error(message);
-  }
+    if (!response.ok) {
+      const message =
+        payload?.error ||
+        payload?.message ||
+        `Erro HTTP ${response.status}`;
 
-  return payload;
+      throw new Error(message);
+    }
+
+    return payload;
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw new Error('A API demorou para responder. Tente novamente.');
+    }
+
+    throw error;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 export function formatDateForApi(date = new Date()) {
@@ -329,6 +494,7 @@ window.BarberFlowApi = {
   clearAuthToken,
   hasApiConfig,
   hasAuthToken,
+  getTenantSlug,
   apiFetch,
   formatDateForApi,
   loginWithEmail,
