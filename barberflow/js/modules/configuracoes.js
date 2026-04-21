@@ -206,13 +206,23 @@ function renderShopInfo() {
         <div class="cfg-action-muted">${escapeHtml(shop.email || '—')}</div>
       </div>
 
-      <div class="cfg-row" style="cursor:default;">
-        <div>
+      <div class="cfg-row" style="cursor:default;flex-wrap:wrap;gap:8px;">
+        <div style="flex:1;">
           <div class="cfg-label">📱 WhatsApp da barbearia</div>
-          <div class="cfg-sub">Número que recebe alertas automáticos</div>
+          <div class="cfg-sub">Com código do país + DDD. Ex: 5511999990000</div>
         </div>
-        <div class="cfg-action-muted">${escapeHtml(shop.whatsapp || '—')}</div>
+        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
+          <input type="text" id="cfg-whatsapp-input" class="modal-input"
+            style="width:180px;margin:0;padding:7px 10px;"
+            placeholder="5511999990000"
+            value="${escapeHtml(shop.whatsapp || '')}"/>
+          <button type="button" id="cfg-whatsapp-save-btn" class="btn-primary-gradient"
+            style="min-height:34px;padding:7px 14px;font-size:11px;white-space:nowrap;">
+            Salvar
+          </button>
+        </div>
       </div>
+      <div id="cfg-whatsapp-feedback" style="min-height:16px;font-size:10px;margin:-4px 0 6px;color:#5a6888;padding:0 4px;"></div>
 
       <div class="cfg-row" style="cursor:default;">
         <div><div class="cfg-label">💳 Plano atual</div></div>
@@ -337,6 +347,34 @@ async function saveSettings() {
   }
 }
 
+async function saveWhatsApp() {
+  const input = document.getElementById('cfg-whatsapp-input');
+  const btn   = document.getElementById('cfg-whatsapp-save-btn');
+  const phone = String(input?.value || '').replace(/\D/g, '').trim();
+
+  if (!phone || phone.length < 10) {
+    setFeedback('cfg-whatsapp-feedback', 'Informe um número válido com DDD e código do país.', 'error');
+    return;
+  }
+
+  if (btn) btn.disabled = true;
+  setFeedback('cfg-whatsapp-feedback', 'Salvando...', 'neutral');
+
+  try {
+    await apiFetch('/api/barbershops/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ whatsapp: phone }),
+    });
+    if (configState.shop) configState.shop.whatsapp = phone;
+    if (input) input.value = phone;
+    setFeedback('cfg-whatsapp-feedback', '✓ Número salvo com sucesso!', 'success');
+  } catch (error) {
+    setFeedback('cfg-whatsapp-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function saveWorkingHours() {
   if (configState.isSavingHours) return;
   configState.isSavingHours = true;
@@ -430,5 +468,6 @@ export async function initConfiguracoesPage() {
   if (workingHoursEl) workingHoursEl.innerHTML = renderWorkingHoursForm();
 
   document.getElementById('cfg-save-btn')?.addEventListener('click', saveSettings);
+  document.getElementById('cfg-whatsapp-save-btn')?.addEventListener('click', saveWhatsApp);
   bindWorkingHoursEvents();
 }
