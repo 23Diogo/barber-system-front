@@ -8,7 +8,7 @@ export default {
       return assetResponse;
     }
 
-    // /cadastro → onboarding da barbearia
+    // /cadastro → onboarding da barbearia (visão dono)
     if (url.pathname === '/cadastro' || url.pathname === '/cadastro/') {
       const cadastroUrl = new URL('/cadastro/index.html', url.origin);
       return env.ASSETS.fetch(new Request(cadastroUrl.toString(), request));
@@ -26,17 +26,11 @@ export default {
       return env.ASSETS.fetch(new Request(indexUrl.toString(), request));
     }
 
-    // /client/* → portal do cliente
+    // /client/* → portal do cliente (SPA — sempre serve client.html)
+    // O roteamento interno é feito pelo client-router.js
     if (url.pathname === '/client' || url.pathname.startsWith('/client/')) {
-      const segments = url.pathname.replace(/\/$/, '').split('/').filter(Boolean);
-      if (segments.length >= 2) {
-        const subPage = segments[1];
-        const subUrl = new URL(`/client/${subPage}/index.html`, url.origin);
-        const subResponse = await env.ASSETS.fetch(new Request(subUrl.toString(), request));
-        if (subResponse.status !== 404) return subResponse;
-      }
-      const fallbackUrl = new URL('/client/login/index.html', url.origin);
-      return env.ASSETS.fetch(new Request(fallbackUrl.toString(), request));
+      const clientUrl = new URL('/client.html', url.origin);
+      return env.ASSETS.fetch(new Request(clientUrl.toString(), request));
     }
 
     return assetResponse;
