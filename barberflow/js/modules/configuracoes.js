@@ -168,7 +168,7 @@ function renderWorkingHoursForm() {
 // ─── Info da barbearia ────────────────────────────────────────────────────────
 
 function buildInviteLink(slug) {
-  return `https://bbarberflow.com.br/client/${encodeURIComponent(slug)}/cadastro`;
+  return `https://bbarberflow.com.br/client/cadastro?slug=${encodeURIComponent(slug)}`;
 }
 
 function renderShopInfo() {
