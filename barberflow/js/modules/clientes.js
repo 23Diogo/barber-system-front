@@ -242,7 +242,7 @@ async function loadInviteShopData() {
   if (_inviteShopData) return _inviteShopData;
   try {
     const data = await apiFetch('/api/auth/me');
-    _inviteShopData = data?.barbershop || null;
+    _inviteShopData = data?.barbershop || data?.barbershops || null;
   } catch { _inviteShopData = null; }
   return _inviteShopData;
 }
