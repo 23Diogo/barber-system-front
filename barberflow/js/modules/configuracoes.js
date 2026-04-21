@@ -87,13 +87,8 @@ function renderHourInput() {
 // ─── Horário de funcionamento ─────────────────────────────────────────────────
 
 const DAY_LABELS = {
-  monday:    'Segunda-feira',
-  tuesday:   'Terça-feira',
-  wednesday: 'Quarta-feira',
-  thursday:  'Quinta-feira',
-  friday:    'Sexta-feira',
-  saturday:  'Sábado',
-  sunday:    'Domingo',
+  monday: 'Segunda-feira', tuesday: 'Terça-feira', wednesday: 'Quarta-feira',
+  thursday: 'Quinta-feira', friday: 'Sexta-feira', saturday: 'Sábado', sunday: 'Domingo',
 };
 
 const DAY_KEYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
@@ -118,8 +113,8 @@ function parseWorkingHours(raw) {
     if (raw[key]) {
       result[key] = {
         active: raw[key].active !== undefined ? Boolean(raw[key].active) : defaults[key].active,
-        open:   raw[key].open  || defaults[key].open,
-        close:  raw[key].close || defaults[key].close,
+        open:   raw[key].open   || defaults[key].open,
+        close:  raw[key].close  || defaults[key].close,
       };
     }
   }
@@ -128,14 +123,12 @@ function parseWorkingHours(raw) {
 
 function renderWorkingHoursForm() {
   const hours = parseWorkingHours(configState.workingHours);
-
   const rows = DAY_KEYS.map(key => {
     const day = hours[key];
     return `
       <div class="cfg-row" style="cursor:default;gap:12px;flex-wrap:wrap;">
         <label class="cfg-toggle" style="flex-shrink:0;">
-          <input type="checkbox" data-wh-day="${escapeHtml(key)}" data-wh-field="active"
-            ${day.active ? 'checked' : ''}/>
+          <input type="checkbox" data-wh-day="${escapeHtml(key)}" data-wh-field="active" ${day.active ? 'checked' : ''}/>
           <span class="cfg-toggle-track"></span>
         </label>
         <div style="flex:1;min-width:100px;">
@@ -143,13 +136,13 @@ function renderWorkingHoursForm() {
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
           <input type="time" data-wh-day="${escapeHtml(key)}" data-wh-field="open"
-            value="${escapeHtml(day.open)}"
-            class="modal-input" style="width:100px;margin:0;padding:6px 8px;font-size:12px;"
+            value="${escapeHtml(day.open)}" class="modal-input"
+            style="width:100px;margin:0;padding:6px 8px;font-size:12px;"
             ${!day.active ? 'disabled' : ''}/>
           <span style="color:#5a6888;font-size:11px;">até</span>
           <input type="time" data-wh-day="${escapeHtml(key)}" data-wh-field="close"
-            value="${escapeHtml(day.close)}"
-            class="modal-input" style="width:100px;margin:0;padding:6px 8px;font-size:12px;"
+            value="${escapeHtml(day.close)}" class="modal-input"
+            style="width:100px;margin:0;padding:6px 8px;font-size:12px;"
             ${!day.active ? 'disabled' : ''}/>
         </div>
       </div>
@@ -174,6 +167,10 @@ function renderWorkingHoursForm() {
 
 // ─── Info da barbearia ────────────────────────────────────────────────────────
 
+function buildInviteLink(slug) {
+  return `https://bbarberflow.com.br/client/${encodeURIComponent(slug)}/cadastro`;
+}
+
 function renderShopInfo() {
   const shop = configState.shop;
   if (!shop) return `
@@ -189,6 +186,8 @@ function renderShopInfo() {
   const subEnd = shop.subscription_end
     ? new Date(shop.subscription_end).toLocaleDateString('pt-BR')
     : '—';
+
+  const inviteLink = shop.slug ? buildInviteLink(shop.slug) : null;
 
   return `
     <div class="card">
@@ -242,6 +241,22 @@ function renderShopInfo() {
         <div style="font-size:11px;font-weight:700;color:${shop.meta_phone_id ? '#00e676' : '#5a6888'};">
           ${shop.meta_phone_id ? '● Conectado' : '○ Não configurado'}
         </div>
+      </div>
+
+      <div class="cfg-row" style="cursor:default;flex-direction:column;align-items:flex-start;gap:8px;">
+        <div>
+          <div class="cfg-label">📨 Link de convite de clientes</div>
+          <div class="cfg-sub">Compartilhe este link para que clientes se cadastrem direto na sua barbearia</div>
+        </div>
+        ${inviteLink ? `
+        <div class="cfg-invite-link-box">
+          <span class="cfg-invite-link-text">${escapeHtml(inviteLink)}</span>
+          <button type="button" id="cfg-invite-copy-btn" class="btn-save cfg-invite-copy-btn">
+            Copiar link
+          </button>
+        </div>
+        <div id="cfg-invite-feedback" style="min-height:14px;font-size:10px;color:#5a6888;"></div>
+        ` : `<div class="cfg-action-muted">Slug da barbearia não configurado.</div>`}
       </div>
     </div>
   `;
@@ -398,21 +413,42 @@ async function saveWorkingHours() {
   }
 }
 
+function bindInviteLinkCopy() {
+  document.getElementById('cfg-invite-copy-btn')?.addEventListener('click', async () => {
+    const slug = configState.shop?.slug;
+    if (!slug) return;
+    const link = buildInviteLink(slug);
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(link);
+      } else {
+        const ta = document.createElement('textarea');
+        ta.value = link;
+        ta.style.position = 'absolute';
+        ta.style.left = '-9999px';
+        document.body.appendChild(ta);
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      }
+      setFeedback('cfg-invite-feedback', '✓ Link copiado!', 'success');
+    } catch {
+      setFeedback('cfg-invite-feedback', 'Não foi possível copiar o link.', 'error');
+    }
+  });
+}
+
 // ─── Bind events ──────────────────────────────────────────────────────────────
 
 function bindWorkingHoursEvents() {
-  // Habilita/desabilita inputs de horário ao togular o dia
   document.querySelectorAll('[data-wh-field="active"]').forEach(checkbox => {
     checkbox.addEventListener('change', () => {
       const day = checkbox.dataset.whDay;
-      const inputs = document.querySelectorAll(
-        `[data-wh-day="${day}"][data-wh-field="open"],
-         [data-wh-day="${day}"][data-wh-field="close"]`
-      );
-      inputs.forEach(input => { input.disabled = !checkbox.checked; });
+      document.querySelectorAll(
+        `[data-wh-day="${day}"][data-wh-field="open"], [data-wh-day="${day}"][data-wh-field="close"]`
+      ).forEach(input => { input.disabled = !checkbox.checked; });
     });
   });
-
   document.getElementById('cfg-hours-save-btn')?.addEventListener('click', saveWorkingHours);
 }
 
@@ -470,4 +506,5 @@ export async function initConfiguracoesPage() {
   document.getElementById('cfg-save-btn')?.addEventListener('click', saveSettings);
   document.getElementById('cfg-whatsapp-save-btn')?.addEventListener('click', saveWhatsApp);
   bindWorkingHoursEvents();
+  bindInviteLinkCopy();
 }
