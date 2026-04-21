@@ -62,7 +62,7 @@ body.auth-locked #modal { display: none !important; }
       </div>
       <div class="nav-item" data-nav-target="agenda">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><rect height="18" rx="2" width="18" x="3" y="4"></rect><line x1="16" x2="16" y1="2" y2="6"></line><line x1="8" x2="8" y1="2" y2="6"></line><line x1="3" x2="21" y1="10" y2="10"></line></svg>
-        Agenda <span class="nav-badge badge-green">8</span>
+        Agenda <span id="badge-agenda" class="nav-badge badge-green" style="display:none">0</span>
       </div>
       <div class="nav-item" data-nav-target="clientes">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
@@ -76,7 +76,7 @@ body.auth-locked #modal { display: none !important; }
       </div>
       <div class="nav-item" data-nav-target="estoque">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"></path><line x1="3" x2="21" y1="6" y2="6"></line></svg>
-        Estoque <span class="nav-badge badge-red">3</span>
+        Estoque <span id="badge-estoque" class="nav-badge badge-red" style="display:none">0</span>
       </div>
       <div class="nav-item" data-nav-target="planos">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M14.7 6.3a1 1 0 000 1.4l1.6 1.6a1 1 0 001.4 0l3.77-3.77a6 6 0 01-7.94 7.94l-6.91 6.91a2.12 2.12 0 01-3-3l6.91-6.91a6 6 0 017.94-7.94l-3.76 3.76z"></path></svg>
@@ -98,7 +98,7 @@ body.auth-locked #modal { display: none !important; }
       </div>
       <div class="nav-item" data-nav-target="mkt">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"></path><polyline points="22,6 12,13 2,6"></polyline></svg>
-        Marketing <span class="nav-badge badge-purple">2</span>
+        Marketing <span id="badge-mkt" class="nav-badge badge-purple" style="display:none">0</span>
       </div>
       <div class="nav-item" data-nav-target="fidel">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>
@@ -106,7 +106,7 @@ body.auth-locked #modal { display: none !important; }
       </div>
       <div class="nav-item" data-nav-target="aval">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-        Avaliações <span class="nav-badge badge-green">4</span>
+        Avaliações <span id="badge-aval" class="nav-badge badge-green" style="display:none">0</span>
       </div>
 
       <div class="nav-group-label">Sistema</div>
