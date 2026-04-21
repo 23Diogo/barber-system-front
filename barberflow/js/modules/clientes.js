@@ -1612,11 +1612,12 @@ export function renderClientes() {
         value="${escapeHtml(clientesState.searchTerm)}"
       />
     </div>
-    
-    <button type="button" class="btn-save" id="client-invite-button" style="background:rgba(79,195,247,.12);color:#7dd3fc;border:1px solid rgba(79,195,247,.25);">
-      📨 Convidar cliente
-    </button>
 
+
+    <button type="button" class="clients-invite-btn" id="client-invite-button">
+      📨 Convidar cliente 
+    </button>
+    
     <button type="button" class="btn-primary-gradient" id="client-new-button">
       + Novo cliente
     </button>
