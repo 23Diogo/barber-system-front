@@ -11,6 +11,7 @@ import { renderClientAssinatura, initClientAssinaturaPage } from './modules/assi
 import { renderClientDados, initClientDadosPage } from './modules/dados.js';
 import { renderClientPagamentos, initClientPagamentosPage } from './modules/pagamentos.js';
 import { renderClientSuporte, initClientSuportePage } from './modules/suporte.js';
+import { renderClientBarbearias, initClientBarbeariasPage } from './modules/barbearias.js';
 
 const CLIENT_BASE = '/client';
 
@@ -405,13 +406,12 @@ const routes = {
   },
   barbearias: {
     path: '/client/barbearias',
-    render: () => renderBarbeariasPage(getClientProfile()),
+    render: renderClientBarbearias,
+    init: () => initClientBarbeariasPage(),
     protected: true,
-    layoutOptions: {
-      variant: 'dashboard',
-      title: 'MINHAS BARBEARIAS',
-    },
+    layoutOptions: { variant: 'dashboard', title: 'MINHAS BARBEARIAS' },
   },
+  
   dados: {
     path: '/client/dados',
     render: renderClientDados,
