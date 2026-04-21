@@ -194,46 +194,25 @@ body.auth-locked #modal { display: none !important; }
         <!-- Widgets -->
         <div class="analytics-card pos-tl dashboard-widget" data-target="fin" data-widget-id="widget-fin" title="Abrir Financeiro">
           <div class="widget-topbar"><div class="ac-title">Financeiro</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
-          <div class="ac-value">R$7.840</div><div class="ac-sub">↑ 12% na receita da semana</div>
-          <div class="chart-line"><svg height="52" preserveaspectratio="none" viewbox="0 0 220 52" width="100%"><defs><lineargradient id="lineGrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#4fc3f7" stop-opacity=".45"></stop><stop offset="100%" stop-color="#4fc3f7" stop-opacity="0"></stop></lineargradient></defs><path d="M0 42 C20 42,26 22,44 24 S68 38,84 18 S112 8,134 12 S162 6,186 4 L220 2" fill="none" stroke="#4fc3f7" stroke-width="2"></path><path d="M0 42 C20 42,26 22,44 24 S68 38,84 18 S112 8,134 12 S162 6,186 4 L220 2 L220 52 L0 52Z" fill="url(#lineGrad)"></path><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="2" y="51">Seg</text><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="60" y="51">Ter</text><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="118" y="51">Qua</text><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="182" y="51">Hoje</text></svg></div>
+          <div id="dashboardFinContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando financeiro...</div></div>
           <div class="widget-module">Módulo: Financeiro</div>
         </div>
 
         <div class="analytics-card pos-tr dashboard-widget" data-target="aval" data-widget-id="widget-aval" title="Abrir Avaliações">
           <div class="widget-topbar"><div class="ac-title">Avaliações</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
-          <div class="ac-value" style="color:#9c6fff">94%</div><div class="ac-sub" style="color:#9c6fff">clientes satisfeitos no mês</div>
-          <div class="chart-line"><svg height="52" preserveaspectratio="none" viewbox="0 0 220 52" width="100%"><defs><lineargradient id="purpleGrad" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#9c6fff" stop-opacity=".45"></stop><stop offset="100%" stop-color="#9c6fff" stop-opacity="0"></stop></lineargradient></defs><path d="M0 42 C16 42,20 30,36 32 S58 40,74 22 S100 10,120 8 S150 3,178 2 L220 1" fill="none" stroke="#9c6fff" stroke-width="2"></path><path d="M0 42 C16 42,20 30,36 32 S58 40,74 22 S100 10,120 8 S150 3,178 2 L220 1 L220 52 L0 52Z" fill="url(#purpleGrad)"></path><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="2" y="51">1★</text><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="60" y="51">3★</text><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="118" y="51">4★</text><text fill="#343868" font-family="DM Sans,sans-serif" font-size="8" x="182" y="51">5★</text></svg></div>
+          <div id="dashboardAvalContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando avaliações...</div></div>
           <div class="widget-module" style="color:#d8b4fe;border-color:rgba(156,111,255,.24);background:rgba(156,111,255,.08)">Módulo: Avaliações</div>
         </div>
 
         <div class="analytics-card pos-bl dashboard-widget" data-target="agenda" data-widget-id="widget-agenda" title="Abrir Agenda">
           <div class="widget-topbar"><div class="ac-title">Agenda de hoje</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
-          <div class="data-nums"><span style="color:#343868">09:00</span><span style="color:#00e676">Rafael</span><span style="color:#00e676">Concluído</span></div>
-          <div class="data-nums"><span style="color:#343868">14:30</span><span style="color:#4fc3f7">Carlos</span><span style="color:#4fc3f7">Agora</span></div>
-          <div class="data-nums" style="margin-bottom:8px"><span style="color:#343868">15:30</span><span style="color:#9c6fff">Bruno</span><span style="color:#9c6fff">Próximo</span></div>
-          <div class="ac-title">Ocupação <span>Hoje</span></div>
-          <div class="data-row"><span class="data-name">Jorge</span><div class="data-bar"><div class="data-fill" style="width:96%"></div></div><span class="data-val">96%</span></div>
-          <div class="data-row"><span class="data-name">Marcos</span><div class="data-bar"><div class="data-fill" style="width:74%"></div></div><span class="data-val">74%</span></div>
-          <div class="data-row"><span class="data-name">Lucas</span><div class="data-bar"><div class="data-fill" style="width:58%"></div></div><span class="data-val">58%</span></div>
+          <div id="dashboardAgendaContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando agenda...</div></div>
           <div class="widget-module">Módulo: Agenda</div>
         </div>
 
         <div class="analytics-card pos-br dashboard-widget" data-target="servicos" data-widget-id="widget-servicos" title="Abrir Serviços">
           <div class="widget-topbar"><div class="ac-title">Serviços mais vendidos</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
-          <div class="bar-chart">
-            <div class="bar-col" style="height:42%;background:rgba(79,195,247,.3)"></div>
-            <div class="bar-col" style="height:72%;background:linear-gradient(180deg,#4fc3f7,#0066ff)"></div>
-            <div class="bar-col" style="height:30%;background:rgba(79,195,247,.25)"></div>
-            <div class="bar-col" style="height:88%;background:linear-gradient(180deg,#4fc3f7,#0066ff)"></div>
-            <div class="bar-col" style="height:48%;background:rgba(79,195,247,.2)"></div>
-            <div class="bar-col" style="height:58%;background:rgba(156,111,255,.35)"></div>
-            <div class="bar-col" style="height:100%;background:linear-gradient(180deg,#9c6fff,#5530dd)"></div>
-          </div>
-          <div class="ac-title">Resumo por serviço <span>Hoje</span></div>
-          <div class="data-row"><span class="data-name">Corte premium</span><div class="data-bar"><div class="data-fill" style="width:84%;background:linear-gradient(90deg,#ff6b00,#ff3d00)"></div></div><span class="data-val" style="color:#ff6b00">84%</span></div>
-          <div class="data-row"><span class="data-name">Barba</span><div class="data-bar"><div class="data-fill" style="width:66%;background:linear-gradient(90deg,#9c6fff,#6c3fff)"></div></div><span class="data-val" style="color:#9c6fff">66%</span></div>
-          <div class="data-row"><span class="data-name">Pigmentação</span><div class="data-bar"><div class="data-fill" style="width:41%"></div></div><span class="data-val">41%</span></div>
-          <div class="data-row"><span class="data-name">Sobrancelha</span><div class="data-bar"><div class="data-fill" style="width:31%"></div></div><span class="data-val">31%</span></div>
+          <div id="dashboardServicosContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando serviços...</div></div>
           <div class="widget-module">Módulo: Serviços</div>
         </div>
       </div><!-- /hero -->
