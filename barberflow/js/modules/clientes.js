@@ -368,6 +368,131 @@ async function copyTextToClipboard(text) {
   document.body.removeChild(textarea);
 }
 
+// ─── CONVITE DE CLIENTE ───────────────────────────────────────────────────────
+
+let _inviteShopData = null;
+
+async function loadInviteShopData() {
+  if (_inviteShopData) return _inviteShopData;
+  try {
+    const { apiFetch } = await import('../services/api.js');
+    const data = await apiFetch('/api/auth/me');
+    _inviteShopData = data?.barbershop || null;
+  } catch { _inviteShopData = null; }
+  return _inviteShopData;
+}
+
+function buildInviteLink(slug) {
+  return `https://bbarberflow.com.br/client/${encodeURIComponent(slug)}/cadastro`;
+}
+
+function getDefaultInviteMessage(shopName, link) {
+  return `Olá! Temos uma novidade para você 🎉\n\nAgora você pode agendar seus horários na ${shopName} direto pelo celular, de forma fácil e rápida.\n\nCrie sua conta gratuitamente pelo link abaixo e já garanta seu próximo agendamento:\n\n👉 ${link}\n\nEstamos te esperando! 💈`;
+}
+
+function buildWhatsAppInviteUrl(message) {
+  return `https://wa.me/?text=${encodeURIComponent(message)}`;
+}
+
+function openInviteModal() {
+  let modal = document.getElementById('client-invite-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'client-invite-modal';
+    modal.className = 'modal-overlay';
+    modal.style.cssText = 'display:flex;';
+    modal.innerHTML = `<div class="modal" style="width:min(92vw,580px);"><div id="client-invite-content"><div class="modal-title">📨 Convidar cliente</div><div class="modal-sub">Carregando...</div></div></div>`;
+    modal.addEventListener('click', e => { if (e.target === modal) closeInviteModal(); });
+    document.body.appendChild(modal);
+  } else {
+    modal.style.display = 'flex';
+  }
+  renderInviteContent();
+}
+
+function closeInviteModal() {
+  const modal = document.getElementById('client-invite-modal');
+  if (modal) modal.style.display = 'none';
+}
+
+async function renderInviteContent() {
+  const content = document.getElementById('client-invite-content');
+  if (!content) return;
+
+  const shop = await loadInviteShopData();
+  if (!shop?.slug) {
+    content.innerHTML = `<div class="modal-title">📨 Convidar cliente</div><div class="modal-sub" style="color:#ff8a8a;">Não foi possível carregar os dados da barbearia.</div><div class="modal-buttons"><div class="btn-cancel" id="invite-close-btn">Fechar</div></div>`;
+    document.getElementById('invite-close-btn')?.addEventListener('click', closeInviteModal);
+    return;
+  }
+
+  const link    = buildInviteLink(shop.slug);
+  const message = shop.invite_message || getDefaultInviteMessage(shop.name || 'nossa barbearia', link);
+
+  content.innerHTML = `
+    <div class="modal-title" style="margin:0;">📨 Convidar cliente</div>
+    <div class="modal-sub" style="margin-top:4px;">Compartilhe o link de cadastro da sua barbearia</div>
+
+    <div style="margin-top:16px;">
+      <div class="color-section-label">Link de cadastro</div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
+        <input id="invite-link-input" class="modal-input" type="text" readonly
+          value="${escapeHtml(link)}"
+          style="flex:1;min-width:0;margin:0;background:rgba(79,195,247,.06);color:#7dd3fc;font-size:12px;"/>
+        <button type="button" id="invite-copy-link-btn" class="btn-save" style="flex-shrink:0;min-height:38px;padding:0 14px;">
+          Copiar link
+        </button>
+      </div>
+      <div id="invite-link-feedback" style="min-height:16px;font-size:10px;margin-top:4px;color:#5a6888;"></div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="color-section-label">Mensagem de convite</div>
+      <div class="cfg-sub" style="margin-bottom:8px;">Edite a mensagem antes de enviar. O link já está incluído.</div>
+      <textarea id="invite-message-textarea" maxlength="1000"
+        style="width:100%;min-height:150px;border-radius:12px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#f5f9ff;padding:12px;font:inherit;font-size:12px;resize:vertical;box-sizing:border-box;"
+      >${escapeHtml(message)}</textarea>
+    </div>
+
+    <div id="invite-msg-feedback" style="min-height:16px;font-size:10px;margin-top:4px;color:#5a6888;"></div>
+
+    <div class="modal-buttons" style="margin-top:14px;flex-wrap:wrap;gap:8px;">
+      <div class="btn-cancel" id="invite-close-btn">Fechar</div>
+      <button type="button" id="invite-copy-msg-btn" class="btn-save" style="background:rgba(79,195,247,.14);color:#7dd3fc;border:1px solid rgba(79,195,247,.25);">
+        📋 Copiar mensagem
+      </button>
+      <a id="invite-whatsapp-btn" href="${escapeHtml(buildWhatsAppInviteUrl(message))}" target="_blank" rel="noopener"
+        class="btn-save" style="background:linear-gradient(90deg,#00b4ff,#6c3fff);text-decoration:none;display:inline-flex;align-items:center;justify-content:center;">
+        📲 Abrir WhatsApp
+      </a>
+    </div>
+  `;
+
+  document.getElementById('invite-close-btn')?.addEventListener('click', closeInviteModal);
+
+  document.getElementById('invite-copy-link-btn')?.addEventListener('click', async () => {
+    try {
+      await copyTextToClipboard(link);
+      const fb = document.getElementById('invite-link-feedback');
+      if (fb) { fb.textContent = '✓ Link copiado!'; fb.style.color = '#00e676'; }
+    } catch {}
+  });
+
+  document.getElementById('invite-copy-msg-btn')?.addEventListener('click', async () => {
+    const msg = document.getElementById('invite-message-textarea')?.value || message;
+    try {
+      await copyTextToClipboard(msg);
+      const fb = document.getElementById('invite-msg-feedback');
+      if (fb) { fb.textContent = '✓ Mensagem copiada!'; fb.style.color = '#00e676'; }
+    } catch {}
+  });
+
+  document.getElementById('invite-message-textarea')?.addEventListener('input', e => {
+    const waBtn = document.getElementById('invite-whatsapp-btn');
+    if (waBtn) waBtn.href = buildWhatsAppInviteUrl(e.target.value || message);
+  });
+}
+
 function mapClientSummaryFromApi(client) {
   return {
     id: client.id,
@@ -1451,6 +1576,7 @@ function bindClientModalEvents() {
 
 function bindClientesStaticEvents() {
   document.getElementById('client-new-button')?.addEventListener('click', openCreateClientModal);
+  document.getElementById('client-invite-button')?.addEventListener('click', openInviteModal);
 
   document.getElementById('client-search-input')?.addEventListener('input', (event) => {
     clientesState.searchTerm = event.target.value || '';
@@ -1486,10 +1612,15 @@ export function renderClientes() {
         value="${escapeHtml(clientesState.searchTerm)}"
       />
     </div>
+    
+    <button type="button" class="btn-save" id="client-invite-button" style="background:rgba(79,195,247,.12);color:#7dd3fc;border:1px solid rgba(79,195,247,.25);">
+      📨 Convidar cliente
+    </button>
 
     <button type="button" class="btn-primary-gradient" id="client-new-button">
       + Novo cliente
     </button>
+    
   </div>
 
   <div class="card">
