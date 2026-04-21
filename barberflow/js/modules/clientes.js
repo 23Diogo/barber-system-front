@@ -1,6 +1,7 @@
 import {
   hasApiConfig,
   hasAuthToken,
+  apiFetch,
   getClients,
   getClientById,
   createClient,
@@ -18,10 +19,10 @@ import {
   cancelInvoice,
 } from '../services/api.js';
 
-const CLIENT_NAME_MAX_LENGTH = 100;
-const CLIENT_PHONE_MAX_LENGTH = 20;
+const CLIENT_NAME_MAX_LENGTH     = 100;
+const CLIENT_PHONE_MAX_LENGTH    = 20;
 const CLIENT_WHATSAPP_MAX_LENGTH = 20;
-const CLIENT_NOTES_MAX_LENGTH = 500;
+const CLIENT_NOTES_MAX_LENGTH    = 500;
 
 const clientesState = {
   items: [],
@@ -35,20 +36,16 @@ const clientesState = {
   isDetailLoading: false,
 };
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function escapeHtml(value) {
   return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 function formatCurrency(value) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-  }).format(Number(value || 0));
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
 }
 
 function formatCompactCurrency(value) {
@@ -59,26 +56,16 @@ function formatCompactCurrency(value) {
 
 function formatDateDisplay(value) {
   if (!value) return '—';
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-
   return date.toLocaleDateString('pt-BR');
 }
 
 function formatDateTimeDisplay(value) {
   if (!value) return '—';
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-
-  return date.toLocaleString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 function normalizeClientStatusFromApi(client) {
@@ -89,139 +76,74 @@ function normalizeClientStatusFromApi(client) {
 
 function getSubscriptionStatusMeta(status) {
   const map = {
-    active: {
-      label: 'Ativa',
-      color: '#00e676',
-      bg: 'rgba(0,230,118,.1)',
-      border: 'rgba(0,230,118,.18)',
-    },
-    past_due: {
-      label: 'Inadimplente',
-      color: '#ff1744',
-      bg: 'rgba(255,23,68,.1)',
-      border: 'rgba(255,23,68,.18)',
-    },
-    paused: {
-      label: 'Pausada',
-      color: '#f97316',
-      bg: 'rgba(249,115,22,.1)',
-      border: 'rgba(249,115,22,.18)',
-    },
-    canceled: {
-      label: 'Cancelada',
-      color: '#5a6888',
-      bg: 'rgba(90,104,136,.12)',
-      border: 'rgba(90,104,136,.18)',
-    },
-    pending_activation: {
-      label: 'Pendente',
-      color: '#4fc3f7',
-      bg: 'rgba(79,195,247,.1)',
-      border: 'rgba(79,195,247,.18)',
-    },
-    trialing: {
-      label: 'Trial',
-      color: '#9c6fff',
-      bg: 'rgba(156,111,255,.1)',
-      border: 'rgba(156,111,255,.18)',
-    },
+    active:             { label: 'Ativa',        color: '#00e676', bg: 'rgba(0,230,118,.1)',    border: 'rgba(0,230,118,.18)' },
+    past_due:           { label: 'Inadimplente', color: '#ff1744', bg: 'rgba(255,23,68,.1)',    border: 'rgba(255,23,68,.18)' },
+    paused:             { label: 'Pausada',       color: '#f97316', bg: 'rgba(249,115,22,.1)',  border: 'rgba(249,115,22,.18)' },
+    canceled:           { label: 'Cancelada',     color: '#5a6888', bg: 'rgba(90,104,136,.12)', border: 'rgba(90,104,136,.18)' },
+    pending_activation: { label: 'Pendente',      color: '#4fc3f7', bg: 'rgba(79,195,247,.1)',  border: 'rgba(79,195,247,.18)' },
+    trialing:           { label: 'Trial',         color: '#9c6fff', bg: 'rgba(156,111,255,.1)', border: 'rgba(156,111,255,.18)' },
   };
-
   return map[status] || map.active;
 }
 
 function getInvoiceStatusMeta(status) {
   const map = {
-    paid: { label: 'Pago', color: '#00e676' },
-    failed: { label: 'Falhou', color: '#ff1744' },
-    pending: { label: 'Pendente', color: '#f97316' },
+    paid:     { label: 'Pago',      color: '#00e676' },
+    failed:   { label: 'Falhou',    color: '#ff1744' },
+    pending:  { label: 'Pendente',  color: '#f97316' },
     canceled: { label: 'Cancelado', color: '#5a6888' },
     refunded: { label: 'Estornado', color: '#9c6fff' },
-    expired: { label: 'Expirado', color: '#f97316' },
+    expired:  { label: 'Expirado',  color: '#f97316' },
   };
-
   return map[status] || map.pending;
 }
 
 function getAppointmentStatusMeta(status) {
   const map = {
-    completed: { label: 'Feito', color: '#00e676', bg: 'rgba(0,230,118,.1)' },
+    completed:   { label: 'Feito',        color: '#00e676', bg: 'rgba(0,230,118,.1)' },
     in_progress: { label: 'Em andamento', color: '#4fc3f7', bg: 'rgba(79,195,247,.1)' },
-    confirmed: { label: 'Confirmado', color: '#9c6fff', bg: 'rgba(156,111,255,.1)' },
-    pending: { label: 'Agendado', color: '#c0cce8', bg: 'rgba(255,255,255,.04)' },
-    cancelled: { label: 'Cancelado', color: '#ff1744', bg: 'rgba(255,23,68,.1)' },
-    no_show: { label: 'No-show', color: '#f97316', bg: 'rgba(249,115,22,.1)' },
+    confirmed:   { label: 'Confirmado',   color: '#9c6fff', bg: 'rgba(156,111,255,.1)' },
+    pending:     { label: 'Agendado',     color: '#c0cce8', bg: 'rgba(255,255,255,.04)' },
+    cancelled:   { label: 'Cancelado',    color: '#ff1744', bg: 'rgba(255,23,68,.1)' },
+    no_show:     { label: 'No-show',      color: '#f97316', bg: 'rgba(249,115,22,.1)' },
   };
-
   return map[status] || map.pending;
 }
 
 function getClientStatusMeta(status) {
   const map = {
-    vip: {
-      label: '✦ VIP',
-      text: '#ffd700',
-      bg: 'rgba(255,215,0,.1)',
-    },
-    active: {
-      label: 'Ativo',
-      text: '#00e676',
-      bg: 'rgba(0,230,118,.1)',
-    },
-    inactive: {
-      label: 'Inativo',
-      text: '#f97316',
-      bg: 'rgba(249,115,22,.1)',
-    },
+    vip:      { label: '✦ VIP', text: '#ffd700', bg: 'rgba(255,215,0,.1)' },
+    active:   { label: 'Ativo',  text: '#00e676', bg: 'rgba(0,230,118,.1)' },
+    inactive: { label: 'Inativo',text: '#f97316', bg: 'rgba(249,115,22,.1)' },
   };
-
   return map[status] || map.active;
 }
 
 function getLatestCycle(subscription) {
-  const cycles = Array.isArray(subscription?.subscription_cycles)
-    ? [...subscription.subscription_cycles]
-    : [];
-
+  const cycles = Array.isArray(subscription?.subscription_cycles) ? [...subscription.subscription_cycles] : [];
   if (!cycles.length) return null;
-
   cycles.sort((a, b) => Number(b?.cycle_number || 0) - Number(a?.cycle_number || 0));
   return cycles[0] || null;
 }
 
 function getLatestInvoice(subscription) {
-  const invoices = Array.isArray(subscription?.subscription_invoices)
-    ? [...subscription.subscription_invoices]
-    : [];
-
+  const invoices = Array.isArray(subscription?.subscription_invoices) ? [...subscription.subscription_invoices] : [];
   if (!invoices.length) return null;
-
-  invoices.sort((a, b) => {
-    const aDate = new Date(a?.created_at || a?.due_at || 0).getTime();
-    const bDate = new Date(b?.created_at || b?.due_at || 0).getTime();
-    return bDate - aDate;
-  });
-
+  invoices.sort((a, b) => new Date(b?.created_at || b?.due_at || 0).getTime() - new Date(a?.created_at || a?.due_at || 0).getTime());
   return invoices[0] || null;
 }
 
 function getLatestAppointment(appointments = []) {
-  const safeAppointments = Array.isArray(appointments) ? [...appointments] : [];
-  if (!safeAppointments.length) return null;
-
-  safeAppointments.sort((a, b) => {
-    const aDate = new Date(a?.scheduled_at || 0).getTime();
-    const bDate = new Date(b?.scheduled_at || 0).getTime();
-    return bDate - aDate;
-  });
-
-  return safeAppointments[0] || null;
+  const safe = Array.isArray(appointments) ? [...appointments] : [];
+  if (!safe.length) return null;
+  safe.sort((a, b) => new Date(b?.scheduled_at || 0).getTime() - new Date(a?.scheduled_at || 0).getTime());
+  return safe[0] || null;
 }
 
 function getAppointmentBarberName(appointment) {
-  const nestedUsers = appointment?.barber_profiles?.users;
-  if (Array.isArray(nestedUsers)) return nestedUsers[0]?.name || 'Barbeiro';
-  if (nestedUsers?.name) return nestedUsers.name;
+  const nested = appointment?.barber_profiles?.users;
+  if (Array.isArray(nested)) return nested[0]?.name || 'Barbeiro';
+  if (nested?.name) return nested.name;
   return 'Barbeiro';
 }
 
@@ -230,133 +152,77 @@ function getAppointmentServiceName(appointment) {
 }
 
 function getInvoicePaymentUrl(invoice) {
-  return (
-    invoice?.payment_url ||
-    invoice?.checkout_url ||
-    invoice?.external_url ||
-    invoice?.gateway_checkout_url ||
-    invoice?.gateway_payment_url ||
-    invoice?.hosted_url ||
-    invoice?.metadata?.payment_url ||
-    invoice?.metadata?.checkout_url ||
-    invoice?.metadata?.init_point ||
-    invoice?.metadata?.mercadopago_init_point ||
-    ''
-  );
+  return invoice?.payment_url || invoice?.checkout_url || invoice?.external_url ||
+    invoice?.gateway_checkout_url || invoice?.gateway_payment_url || invoice?.hosted_url ||
+    invoice?.metadata?.payment_url || invoice?.metadata?.checkout_url ||
+    invoice?.metadata?.init_point || invoice?.metadata?.mercadopago_init_point || '';
 }
 
 function getInvoiceGatewayReference(invoice) {
-  return (
-    invoice?.external_invoice_id ||
-    invoice?.gateway_reference ||
-    invoice?.gateway_external_id ||
-    invoice?.external_reference ||
-    invoice?.payment_reference ||
-    invoice?.metadata?.external_reference ||
-    invoice?.metadata?.preference_id ||
-    ''
-  );
+  return invoice?.external_invoice_id || invoice?.gateway_reference || invoice?.gateway_external_id ||
+    invoice?.external_reference || invoice?.payment_reference ||
+    invoice?.metadata?.external_reference || invoice?.metadata?.preference_id || '';
 }
 
 function getSubscriptionAmountCents(subscription) {
   const raw = subscription?.raw || {};
   const possibleValues = [
-    raw.amount_cents,
-    raw.plan_price_cents,
-    raw.price_cents,
-    raw.monthly_amount_cents,
-    raw.plans?.amount_cents,
-    raw.plans?.price_cents,
+    raw.amount_cents, raw.plan_price_cents, raw.price_cents, raw.monthly_amount_cents,
+    raw.plans?.amount_cents, raw.plans?.price_cents,
     Number(raw.plans?.price || 0) * 100,
     Number(raw.plans?.monthly_price || 0) * 100,
   ];
-
-  const found = possibleValues.find((value) => Number.isFinite(Number(value)) && Number(value) > 0);
+  const found = possibleValues.find(v => Number.isFinite(Number(v)) && Number(v) > 0);
   return Math.round(Number(found || 0));
 }
 
 function getSubscriptionDueDateIso(subscription) {
   const latestInvoice = getLatestInvoice(subscription?.raw);
-  const rawValue =
-    subscription?.raw?.next_billing_at ||
-    subscription?.raw?.current_period_end ||
-    latestInvoice?.due_at ||
-    latestInvoice?.created_at;
-
+  const rawValue = subscription?.raw?.next_billing_at || subscription?.raw?.current_period_end ||
+    latestInvoice?.due_at || latestInvoice?.created_at;
   if (rawValue) {
     const parsed = new Date(rawValue);
-    if (!Number.isNaN(parsed.getTime())) {
-      return parsed.toISOString();
-    }
+    if (!Number.isNaN(parsed.getTime())) return parsed.toISOString();
   }
-
   return new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
 }
 
 function buildMercadoPagoInvoicePayloadVariants(subscription, preference, externalReference) {
   const amountCents = getSubscriptionAmountCents(subscription);
   const dueAt = getSubscriptionDueDateIso(subscription);
-
   const basePayload = {
-    subscription_id: subscription.id,
-    due_at: dueAt,
-    billing_reason: 'manual_charge',
-    gateway_provider: 'mercadopago',
-    status: 'pending',
-    gateway_reference: externalReference,
-    external_invoice_id: externalReference,
-    payment_url: preference.initPoint,
+    subscription_id: subscription.id, due_at: dueAt,
+    billing_reason: 'manual_charge', gateway_provider: 'mercadopago',
+    status: 'pending', gateway_reference: externalReference,
+    external_invoice_id: externalReference, payment_url: preference.initPoint,
     sandbox_payment_url: preference.sandboxInitPoint,
     metadata: {
-      provider: 'mercadopago',
-      preference_id: preference.preferenceId,
-      external_reference: externalReference,
-      init_point: preference.initPoint,
+      provider: 'mercadopago', preference_id: preference.preferenceId,
+      external_reference: externalReference, init_point: preference.initPoint,
       sandbox_init_point: preference.sandboxInitPoint,
     },
   };
-
   return [
-    {
-      ...basePayload,
-      amount_cents: amountCents,
-    },
-    {
-      ...basePayload,
-      amount: Number((amountCents / 100).toFixed(2)),
-    },
-    {
-      ...basePayload,
-      amount_cents: amountCents,
-      checkout_url: preference.initPoint,
-    },
+    { ...basePayload, amount_cents: amountCents },
+    { ...basePayload, amount: Number((amountCents / 100).toFixed(2)) },
+    { ...basePayload, amount_cents: amountCents, checkout_url: preference.initPoint },
   ];
 }
 
 async function createMercadoPagoInvoice(subscription, preference, externalReference) {
   const variants = buildMercadoPagoInvoicePayloadVariants(subscription, preference, externalReference);
   let lastError = null;
-
   for (const payload of variants) {
-    try {
-      return await createManualInvoice(payload);
-    } catch (error) {
-      lastError = error;
-    }
+    try { return await createManualInvoice(payload); }
+    catch (error) { lastError = error; }
   }
-
   throw lastError || new Error('Não foi possível registrar a cobrança do Mercado Pago.');
 }
 
 async function copyTextToClipboard(text) {
   const safeText = String(text || '').trim();
   if (!safeText) throw new Error('Não há link disponível para copiar.');
-
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(safeText);
-    return;
-  }
-
+  if (navigator.clipboard?.writeText) { await navigator.clipboard.writeText(safeText); return; }
   const textarea = document.createElement('textarea');
   textarea.value = safeText;
   textarea.setAttribute('readonly', 'readonly');
@@ -368,14 +234,13 @@ async function copyTextToClipboard(text) {
   document.body.removeChild(textarea);
 }
 
-// ─── CONVITE DE CLIENTE ───────────────────────────────────────────────────────
+// ─── Convite de cliente ────────────────────────────────────────────────────────
 
 let _inviteShopData = null;
 
 async function loadInviteShopData() {
   if (_inviteShopData) return _inviteShopData;
   try {
-    const { apiFetch } = await import('../services/api.js');
     const data = await apiFetch('/api/auth/me');
     _inviteShopData = data?.barbershop || null;
   } catch { _inviteShopData = null; }
@@ -390,7 +255,7 @@ function getDefaultInviteMessage(shopName, link) {
   return `Olá! Temos uma novidade para você 🎉\n\nAgora você pode agendar seus horários na ${shopName} direto pelo celular, de forma fácil e rápida.\n\nCrie sua conta gratuitamente pelo link abaixo e já garanta seu próximo agendamento:\n\n👉 ${link}\n\nEstamos te esperando! 💈`;
 }
 
-function buildWhatsAppInviteUrl(message) {
+function buildWhatsAppUrl(message) {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
@@ -400,8 +265,14 @@ function openInviteModal() {
     modal = document.createElement('div');
     modal.id = 'client-invite-modal';
     modal.className = 'modal-overlay';
-    modal.style.cssText = 'display:flex;';
-    modal.innerHTML = `<div class="modal" style="width:min(92vw,580px);"><div id="client-invite-content"><div class="modal-title">📨 Convidar cliente</div><div class="modal-sub">Carregando...</div></div></div>`;
+    modal.style.display = 'flex';
+    modal.innerHTML = `
+      <div class="modal">
+        <div id="client-invite-content">
+          <div class="modal-title">📨 Convidar cliente</div>
+          <div class="modal-sub">Carregando link de cadastro...</div>
+        </div>
+      </div>`;
     modal.addEventListener('click', e => { if (e.target === modal) closeInviteModal(); });
     document.body.appendChild(modal);
   } else {
@@ -421,7 +292,12 @@ async function renderInviteContent() {
 
   const shop = await loadInviteShopData();
   if (!shop?.slug) {
-    content.innerHTML = `<div class="modal-title">📨 Convidar cliente</div><div class="modal-sub" style="color:#ff8a8a;">Não foi possível carregar os dados da barbearia.</div><div class="modal-buttons"><div class="btn-cancel" id="invite-close-btn">Fechar</div></div>`;
+    content.innerHTML = `
+      <div class="modal-title">📨 Convidar cliente</div>
+      <div class="modal-sub" style="color:#ff8a8a;">Não foi possível carregar os dados da barbearia.</div>
+      <div class="modal-buttons">
+        <div class="btn-cancel" id="invite-close-btn">Fechar</div>
+      </div>`;
     document.getElementById('invite-close-btn')?.addEventListener('click', closeInviteModal);
     return;
   }
@@ -431,38 +307,35 @@ async function renderInviteContent() {
 
   content.innerHTML = `
     <div class="modal-title" style="margin:0;">📨 Convidar cliente</div>
-    <div class="modal-sub" style="margin-top:4px;">Compartilhe o link de cadastro da sua barbearia</div>
+    <div class="modal-sub">Compartilhe o link de cadastro da sua barbearia</div>
 
     <div style="margin-top:16px;">
       <div class="color-section-label">Link de cadastro</div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:6px;">
-        <input id="invite-link-input" class="modal-input" type="text" readonly
-          value="${escapeHtml(link)}"
-          style="flex:1;min-width:0;margin:0;background:rgba(79,195,247,.06);color:#7dd3fc;font-size:12px;"/>
-        <button type="button" id="invite-copy-link-btn" class="btn-save" style="flex-shrink:0;min-height:38px;padding:0 14px;">
+      <div class="invite-link-row">
+        <input id="invite-link-input" class="modal-input invite-link-input" type="text" readonly
+          value="${escapeHtml(link)}"/>
+        <button type="button" id="invite-copy-link-btn" class="btn-save invite-copy-link-btn">
           Copiar link
         </button>
       </div>
-      <div id="invite-link-feedback" style="min-height:16px;font-size:10px;margin-top:4px;color:#5a6888;"></div>
+      <div id="invite-link-feedback" class="invite-feedback"></div>
     </div>
 
-    <div style="margin-top:14px;">
+    <div>
       <div class="color-section-label">Mensagem de convite</div>
-      <div class="cfg-sub" style="margin-bottom:8px;">Edite a mensagem antes de enviar. O link já está incluído.</div>
-      <textarea id="invite-message-textarea" maxlength="1000"
-        style="width:100%;min-height:150px;border-radius:12px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#f5f9ff;padding:12px;font:inherit;font-size:12px;resize:vertical;box-sizing:border-box;"
-      >${escapeHtml(message)}</textarea>
+      <div class="modal-sub">Edite a mensagem antes de enviar. O link já está incluído.</div>
+      <textarea id="invite-message-textarea" class="invite-message-textarea" maxlength="1000">${escapeHtml(message)}</textarea>
     </div>
 
-    <div id="invite-msg-feedback" style="min-height:16px;font-size:10px;margin-top:4px;color:#5a6888;"></div>
+    <div id="invite-msg-feedback" class="invite-feedback"></div>
 
-    <div class="modal-buttons" style="margin-top:14px;flex-wrap:wrap;gap:8px;">
+    <div class="modal-buttons invite-actions">
       <div class="btn-cancel" id="invite-close-btn">Fechar</div>
-      <button type="button" id="invite-copy-msg-btn" class="btn-save" style="background:rgba(79,195,247,.14);color:#7dd3fc;border:1px solid rgba(79,195,247,.25);">
+      <button type="button" id="invite-copy-msg-btn" class="btn-save invite-btn-copy-msg">
         📋 Copiar mensagem
       </button>
-      <a id="invite-whatsapp-btn" href="${escapeHtml(buildWhatsAppInviteUrl(message))}" target="_blank" rel="noopener"
-        class="btn-save" style="background:linear-gradient(90deg,#00b4ff,#6c3fff);text-decoration:none;display:inline-flex;align-items:center;justify-content:center;">
+      <a id="invite-whatsapp-btn" href="${escapeHtml(buildWhatsAppUrl(message))}"
+        target="_blank" rel="noopener" class="btn-save invite-btn-whatsapp">
         📲 Abrir WhatsApp
       </a>
     </div>
@@ -489,9 +362,11 @@ async function renderInviteContent() {
 
   document.getElementById('invite-message-textarea')?.addEventListener('input', e => {
     const waBtn = document.getElementById('invite-whatsapp-btn');
-    if (waBtn) waBtn.href = buildWhatsAppInviteUrl(e.target.value || message);
+    if (waBtn) waBtn.href = buildWhatsAppUrl(e.target.value || message);
   });
 }
+
+// ─── Mappers ──────────────────────────────────────────────────────────────────
 
 function mapClientSummaryFromApi(client) {
   return {
@@ -511,21 +386,11 @@ function mapClientSummaryFromApi(client) {
 
 function mapClientDetailFromApi(client) {
   const appointments = Array.isArray(client?.appointments) ? [...client.appointments] : [];
-
-  appointments.sort((a, b) => {
-    const aDate = new Date(a?.scheduled_at || 0).getTime();
-    const bDate = new Date(b?.scheduled_at || 0).getTime();
-    return bDate - aDate;
-  });
-
-  const completedAppointments = appointments.filter((item) => item.status === 'completed');
+  appointments.sort((a, b) => new Date(b?.scheduled_at || 0).getTime() - new Date(a?.scheduled_at || 0).getTime());
+  const completedAppointments = appointments.filter(item => item.status === 'completed');
   const latestAppointment = getLatestAppointment(appointments);
-
   const visits = completedAppointments.length || Number(client.visits || client.total_visits || 0);
-  const totalSpent =
-    completedAppointments.reduce((sum, item) => sum + Number(item.final_price || 0), 0) ||
-    Number(client.total_spent || 0);
-
+  const totalSpent = completedAppointments.reduce((sum, item) => sum + Number(item.final_price || 0), 0) || Number(client.total_spent || 0);
   return {
     id: client.id,
     name: client.name || 'Cliente',
@@ -543,9 +408,8 @@ function mapClientDetailFromApi(client) {
 }
 
 function mapSubscriptionDetail(subscription) {
-  const latestCycle = getLatestCycle(subscription);
+  const latestCycle   = getLatestCycle(subscription);
   const latestInvoice = getLatestInvoice(subscription);
-
   return {
     id: subscription.id,
     planName: subscription?.plans?.name || 'Plano',
@@ -560,73 +424,59 @@ function mapSubscriptionDetail(subscription) {
 }
 
 function getClientSummaryById(clientId) {
-  return clientesState.items.find((item) => item.id === clientId) || null;
+  return clientesState.items.find(item => item.id === clientId) || null;
 }
 
 function getFilteredClients() {
   const term = clientesState.searchTerm.trim().toLowerCase();
   if (!term) return clientesState.items;
-
-  return clientesState.items.filter((client) => {
-    return [client.name, client.phone, client.whatsapp, client.lastService, client.lastCut, getClientStatusMeta(client.status).label]
-      .join(' ')
-      .toLowerCase()
-      .includes(term);
-  });
+  return clientesState.items.filter(client =>
+    [client.name, client.phone, client.whatsapp, client.lastService, client.lastCut, getClientStatusMeta(client.status).label]
+      .join(' ').toLowerCase().includes(term)
+  );
 }
 
 function getSubscriptionActionButtons(subscription) {
   const buttons = [];
-
   if (subscription.status === 'pending_activation') {
     buttons.push({ action: 'activate', label: 'Ativar assinatura' });
-    buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
+    buttons.push({ action: 'cancel',   label: 'Cancelar assinatura' });
   }
-
   if (subscription.status === 'active' || subscription.status === 'trialing') {
-    buttons.push({ action: 'pause', label: 'Pausar assinatura' });
+    buttons.push({ action: 'pause',  label: 'Pausar assinatura' });
     buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
   }
-
   if (subscription.status === 'paused') {
     buttons.push({ action: 'reactivate', label: 'Reativar assinatura' });
-    buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
+    buttons.push({ action: 'cancel',     label: 'Cancelar assinatura' });
   }
-
   if (subscription.status === 'past_due') {
     buttons.push({ action: 'activate', label: 'Marcar como ativa' });
-    buttons.push({ action: 'pause', label: 'Pausar assinatura' });
-    buttons.push({ action: 'cancel', label: 'Cancelar assinatura' });
+    buttons.push({ action: 'pause',    label: 'Pausar assinatura' });
+    buttons.push({ action: 'cancel',   label: 'Cancelar assinatura' });
   }
-
   return buttons;
 }
 
 function getInvoiceActionButtons(invoice) {
   const buttons = [];
-
   if (invoice.status === 'pending') {
-    buttons.push({ action: 'markPaid', label: 'Marcar paga' });
+    buttons.push({ action: 'markPaid',   label: 'Marcar paga' });
     buttons.push({ action: 'markFailed', label: 'Marcar falha' });
-    buttons.push({ action: 'cancel', label: 'Cancelar' });
+    buttons.push({ action: 'cancel',     label: 'Cancelar' });
   }
-
   if (invoice.status === 'failed') {
     buttons.push({ action: 'markPaid', label: 'Marcar paga' });
-    buttons.push({ action: 'cancel', label: 'Cancelar' });
+    buttons.push({ action: 'cancel',   label: 'Cancelar' });
   }
-
   return buttons;
 }
 
+// ─── Render ───────────────────────────────────────────────────────────────────
+
 function renderClientStatusPill(status) {
   const meta = getClientStatusMeta(status);
-
-  return `
-    <span class="pill" style="background:${meta.bg};color:${meta.text}">
-      ${meta.label}
-    </span>
-  `;
+  return `<span class="pill" style="background:${meta.bg};color:${meta.text}">${meta.label}</span>`;
 }
 
 function renderClientRow(client) {
@@ -649,37 +499,18 @@ function renderClientRow(client) {
 
 function renderClientsTableBody() {
   const clients = getFilteredClients();
-
-  if (!clients.length) {
-    return `
-      <tr>
-        <td colspan="6" class="clients-empty">
-          Nenhum cliente encontrado para a busca informada.
-        </td>
-      </tr>
-    `;
-  }
-
+  if (!clients.length) return `<tr><td colspan="6" class="clients-empty">Nenhum cliente encontrado para a busca informada.</td></tr>`;
   return clients.map(renderClientRow).join('');
 }
 
 function renderClientAppointments(detailClient) {
   const appointments = Array.isArray(detailClient?.appointments) ? detailClient.appointments.slice(0, 6) : [];
-
-  if (!appointments.length) {
-    return `
-      <div class="clients-modal-info-row">
-        Nenhum atendimento encontrado para este cliente.
-      </div>
-    `;
-  }
-
+  if (!appointments.length) return `<div class="clients-modal-info-row">Nenhum atendimento encontrado para este cliente.</div>`;
   return `
     <div class="clients-history-list">
-      ${appointments
-        .map((appointment) => {
-          const meta = getAppointmentStatusMeta(appointment.status);
-          return `
+      ${appointments.map(appointment => {
+        const meta = getAppointmentStatusMeta(appointment.status);
+        return `
           <div class="clients-history-row">
             <div class="clients-history-main">
               <div class="clients-history-title">${escapeHtml(getAppointmentServiceName(appointment))}</div>
@@ -690,98 +521,54 @@ function renderClientAppointments(detailClient) {
               </div>
             </div>
             <div class="clients-history-side">
-              <span class="clients-status-chip" style="background:${meta.bg};color:${meta.color};">
-                ${escapeHtml(meta.label)}
-              </span>
+              <span class="clients-status-chip" style="background:${meta.bg};color:${meta.color};">${escapeHtml(meta.label)}</span>
             </div>
-          </div>
-        `;
-        })
-        .join('')}
-    </div>
-  `;
+          </div>`;
+      }).join('')}
+    </div>`;
 }
 
 function renderClientConsumptions(subscription) {
-  const consumptions = Array.isArray(subscription?.raw?.subscription_consumptions) ? [...subscription.raw.subscription_consumptions] : [];
-
-  consumptions.sort((a, b) => {
-    const aDate = new Date(a?.created_at || 0).getTime();
-    const bDate = new Date(b?.created_at || 0).getTime();
-    return bDate - aDate;
-  });
-
-  if (!consumptions.length) {
-    return `
-      <div class="clients-modal-info-row">
-        Nenhum consumo registrado para esta assinatura.
-      </div>
-    `;
-  }
-
+  const consumptions = Array.isArray(subscription?.raw?.subscription_consumptions)
+    ? [...subscription.raw.subscription_consumptions] : [];
+  consumptions.sort((a, b) => new Date(b?.created_at || 0).getTime() - new Date(a?.created_at || 0).getTime());
+  if (!consumptions.length) return `<div class="clients-modal-info-row">Nenhum consumo registrado para esta assinatura.</div>`;
   return `
     <div class="clients-history-list">
-      ${consumptions
-        .slice(0, 6)
-        .map(
-          (consumption) => `
+      ${consumptions.slice(0, 6).map(c => `
         <div class="clients-history-row">
           <div class="clients-history-main">
-            <div class="clients-history-title">${escapeHtml(consumption?.services?.name || consumption.consumed_type || 'Consumo')}</div>
+            <div class="clients-history-title">${escapeHtml(c?.services?.name || c.consumed_type || 'Consumo')}</div>
             <div class="clients-history-sub">
-              ${escapeHtml(formatDateTimeDisplay(consumption.created_at))}
-              · Quantidade: ${escapeHtml(consumption.quantity || 1)}
-              · ${escapeHtml(consumption.notes || 'Sem observações')}
+              ${escapeHtml(formatDateTimeDisplay(c.created_at))}
+              · Quantidade: ${escapeHtml(c.quantity || 1)}
+              · ${escapeHtml(c.notes || 'Sem observações')}
             </div>
           </div>
-        </div>
-      `
-        )
-        .join('')}
-    </div>
-  `;
+        </div>`).join('')}
+    </div>`;
 }
 
 function renderClientInvoices(subscription) {
-  if (!subscription) {
-    return `
-      <div class="clients-modal-info-row">
-        Nenhuma cobrança encontrada para esta assinatura.
-      </div>
-    `;
-  }
-
-  const invoices = Array.isArray(subscription?.raw?.subscription_invoices) ? [...subscription.raw.subscription_invoices] : [];
-
-  invoices.sort((a, b) => {
-    const aDate = new Date(a?.created_at || a?.due_at || 0).getTime();
-    const bDate = new Date(b?.created_at || b?.due_at || 0).getTime();
-    return bDate - aDate;
-  });
-
+  if (!subscription) return `<div class="clients-modal-info-row">Nenhuma cobrança encontrada para esta assinatura.</div>`;
+  const invoices = Array.isArray(subscription?.raw?.subscription_invoices)
+    ? [...subscription.raw.subscription_invoices] : [];
+  invoices.sort((a, b) => new Date(b?.created_at || b?.due_at || 0).getTime() - new Date(a?.created_at || a?.due_at || 0).getTime());
   return `
     <div class="clients-billing-toolbar">
-      <button
-        type="button"
-        class="clients-action-btn clients-action-btn--primary clients-generate-charge-action"
-        data-subscription-id="${escapeHtml(subscription.id)}"
-      >
+      <button type="button" class="clients-action-btn clients-action-btn--primary clients-generate-charge-action"
+        data-subscription-id="${escapeHtml(subscription.id)}">
         Gerar cobrança MP
       </button>
     </div>
-
-    ${
-      invoices.length
-        ? `
+    ${invoices.length ? `
       <div class="clients-invoice-list">
-        ${invoices
-          .map((invoice) => {
-            const invoiceMeta = getInvoiceStatusMeta(invoice.status);
-            const actionButtons = getInvoiceActionButtons(invoice);
-            const paymentUrl = getInvoicePaymentUrl(invoice);
-            const gatewayReference = getInvoiceGatewayReference(invoice);
-
-            return `
+        ${invoices.map(invoice => {
+          const invoiceMeta = getInvoiceStatusMeta(invoice.status);
+          const actionButtons = getInvoiceActionButtons(invoice);
+          const paymentUrl = getInvoicePaymentUrl(invoice);
+          const gatewayReference = getInvoiceGatewayReference(invoice);
+          return `
             <div class="clients-invoice-row">
               <div class="clients-invoice-main">
                 <div class="clients-invoice-title">${escapeHtml(formatCurrency((invoice.amount_cents || 0) / 100))}</div>
@@ -791,81 +578,38 @@ function renderClientInvoices(subscription) {
                   · Gateway: ${escapeHtml(invoice.gateway_provider || '—')}
                   ${gatewayReference ? `· Ref: ${escapeHtml(gatewayReference)}` : ''}
                 </div>
-
-                ${
-                  paymentUrl
-                    ? `
+                ${paymentUrl ? `
                   <div class="clients-link-box">
                     <div class="clients-link-text">${escapeHtml(paymentUrl)}</div>
-                    <button
-                      type="button"
-                      class="clients-action-btn clients-invoice-copy-link"
-                      data-payment-url="${escapeHtml(paymentUrl)}"
-                    >
+                    <button type="button" class="clients-action-btn clients-invoice-copy-link"
+                      data-payment-url="${escapeHtml(paymentUrl)}">
                       Copiar link
                     </button>
-                  </div>
-                `
-                    : ''
-                }
-
-                ${
-                  actionButtons.length
-                    ? `
+                  </div>` : ''}
+                ${actionButtons.length ? `
                   <div class="clients-action-grid clients-action-grid--nested">
-                    ${actionButtons
-                      .map(
-                        (button) => `
-                      <button
-                        type="button"
-                        class="clients-action-btn clients-invoice-action"
-                        data-invoice-id="${escapeHtml(invoice.id)}"
-                        data-action="${escapeHtml(button.action)}"
-                      >
-                        ${escapeHtml(button.label)}
-                      </button>
-                    `,
-                      )
-                      .join('')}
-                  </div>
-                `
-                    : ''
-                }
+                    ${actionButtons.map(btn => `
+                      <button type="button" class="clients-action-btn clients-invoice-action"
+                        data-invoice-id="${escapeHtml(invoice.id)}" data-action="${escapeHtml(btn.action)}">
+                        ${escapeHtml(btn.label)}
+                      </button>`).join('')}
+                  </div>` : ''}
               </div>
-
               <div class="clients-invoice-side">
                 <span class="clients-status-chip" style="background:rgba(255,255,255,.04);color:${invoiceMeta.color};">
                   ${escapeHtml(invoiceMeta.label)}
                 </span>
               </div>
-            </div>
-          `;
-          })
-          .join('')}
-      </div>
-    `
-        : `
-      <div class="clients-modal-info-row">
-        Nenhuma cobrança encontrada para esta assinatura.
-      </div>
-    `
-    }
-  `;
+            </div>`;
+        }).join('')}
+      </div>` : `<div class="clients-modal-info-row">Nenhuma cobrança encontrada para esta assinatura.</div>`}`;
 }
 
 function renderClientSubscription(subscription) {
-  if (!subscription) {
-    return `
-      <div class="clients-modal-info-row">
-        Este cliente não possui assinatura cadastrada no momento.
-      </div>
-    `;
-  }
-
-  const statusMeta = getSubscriptionStatusMeta(subscription.status);
+  if (!subscription) return `<div class="clients-modal-info-row">Este cliente não possui assinatura cadastrada no momento.</div>`;
+  const statusMeta  = getSubscriptionStatusMeta(subscription.status);
   const invoiceMeta = getInvoiceStatusMeta(subscription.lastInvoiceStatus);
   const actionButtons = getSubscriptionActionButtons(subscription);
-
   return `
     <div class="clients-subscription-box">
       <div class="clients-subscription-header">
@@ -876,12 +620,10 @@ function renderClientSubscription(subscription) {
             · Pagamento: ${escapeHtml(subscription.paymentMethod)}
           </div>
         </div>
-
         <span class="clients-status-chip" style="background:${statusMeta.bg};color:${statusMeta.color};border:1px solid ${statusMeta.border};">
           ${escapeHtml(statusMeta.label)}
         </span>
       </div>
-
       <div class="clients-subscription-grid">
         <div class="mini-card">
           <div class="mini-lbl">Saldo de cortes</div>
@@ -892,189 +634,105 @@ function renderClientSubscription(subscription) {
           <div class="mini-val" style="font-size:16px;color:#9c6fff">${escapeHtml(subscription.remainingBeards)}</div>
         </div>
       </div>
-
       <div class="clients-modal-info-row">
         <strong>Última cobrança:</strong>
         <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
       </div>
-
       <div>
         <div class="clients-section-title">Ações da assinatura</div>
-        ${
-          actionButtons.length
-            ? `
-              <div class="clients-action-grid">
-                ${actionButtons
-                  .map(
-                    (button) => `
-                  <button
-                    type="button"
-                    class="clients-action-btn clients-subscription-action"
-                    data-subscription-id="${escapeHtml(subscription.id)}"
-                    data-action="${escapeHtml(button.action)}"
-                  >
-                    ${escapeHtml(button.label)}
-                  </button>
-                `,
-                  )
-                  .join('')}
-              </div>
-            `
-            : `
-              <div class="clients-modal-info-row">
-                Nenhuma ação disponível para o status atual.
-              </div>
-            `
-        }
+        ${actionButtons.length ? `
+          <div class="clients-action-grid">
+            ${actionButtons.map(btn => `
+              <button type="button" class="clients-action-btn clients-subscription-action"
+                data-subscription-id="${escapeHtml(subscription.id)}" data-action="${escapeHtml(btn.action)}">
+                ${escapeHtml(btn.label)}
+              </button>`).join('')}
+          </div>` : `<div class="clients-modal-info-row">Nenhuma ação disponível para o status atual.</div>`}
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderClientDetails(detailClient, subscription) {
   const statusMeta = getClientStatusMeta(detailClient.status);
-
   return `
     <div class="clients-modal-body">
       <div>
         <div class="modal-title" style="margin:0;">${escapeHtml(detailClient.name)}</div>
         <div class="modal-sub" style="margin-top:4px;">Ficha do cliente</div>
       </div>
-
       <div class="clients-modal-grid">
-        <div class="mini-card">
-          <div class="mini-lbl">Visitas</div>
-          <div class="mini-val" style="color:#4fc3f7">${escapeHtml(detailClient.visits)}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Total gasto</div>
-          <div class="mini-val" style="color:#ffd700">${escapeHtml(formatCompactCurrency(detailClient.totalSpent))}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Último atendimento</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(detailClient.lastCut)}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Status do cliente</div>
-          <div class="mini-val" style="font-size:15px;color:${statusMeta.text}">
-            ${escapeHtml(statusMeta.label)}
-          </div>
-        </div>
+        <div class="mini-card"><div class="mini-lbl">Visitas</div><div class="mini-val" style="color:#4fc3f7">${escapeHtml(detailClient.visits)}</div></div>
+        <div class="mini-card"><div class="mini-lbl">Total gasto</div><div class="mini-val" style="color:#ffd700">${escapeHtml(formatCompactCurrency(detailClient.totalSpent))}</div></div>
+        <div class="mini-card"><div class="mini-lbl">Último atendimento</div><div class="mini-val" style="font-size:15px;">${escapeHtml(detailClient.lastCut)}</div></div>
+        <div class="mini-card"><div class="mini-lbl">Status do cliente</div><div class="mini-val" style="font-size:15px;color:${statusMeta.text}">${escapeHtml(statusMeta.label)}</div></div>
       </div>
-
       <div class="clients-modal-info">
-        <div class="clients-modal-info-row">
-          <strong>WhatsApp:</strong> ${escapeHtml(detailClient.whatsapp || '—')}
-        </div>
-        <div class="clients-modal-info-row">
-          <strong>Telefone:</strong> ${escapeHtml(detailClient.phone || '—')}
-        </div>
-        <div class="clients-modal-info-row">
-          <strong>Serviço mais recente:</strong> ${escapeHtml(detailClient.lastService)}
-        </div>
-        <div class="clients-modal-info-row">
-          <strong>Observações:</strong> ${escapeHtml(detailClient.notes || '—')}
-        </div>
+        <div class="clients-modal-info-row"><strong>WhatsApp:</strong> ${escapeHtml(detailClient.whatsapp || '—')}</div>
+        <div class="clients-modal-info-row"><strong>Telefone:</strong> ${escapeHtml(detailClient.phone || '—')}</div>
+        <div class="clients-modal-info-row"><strong>Serviço mais recente:</strong> ${escapeHtml(detailClient.lastService)}</div>
+        <div class="clients-modal-info-row"><strong>Observações:</strong> ${escapeHtml(detailClient.notes || '—')}</div>
       </div>
-
-      <div>
-        <div class="clients-section-title">Assinatura</div>
-        ${renderClientSubscription(subscription)}
-      </div>
-
-      <div>
-        <div class="clients-section-title">Cobranças</div>
-        ${renderClientInvoices(subscription)}
-      </div>
-
-      <div>
-        <div class="clients-section-title">Consumos da assinatura</div>
-        ${renderClientConsumptions(subscription)}
-      </div>
-
-      <div>
-        <div class="clients-section-title">Histórico de atendimentos</div>
-        ${renderClientAppointments(detailClient)}
-      </div>
-
+      <div><div class="clients-section-title">Assinatura</div>${renderClientSubscription(subscription)}</div>
+      <div><div class="clients-section-title">Cobranças</div>${renderClientInvoices(subscription)}</div>
+      <div><div class="clients-section-title">Consumos da assinatura</div>${renderClientConsumptions(subscription)}</div>
+      <div><div class="clients-section-title">Histórico de atendimentos</div>${renderClientAppointments(detailClient)}</div>
       <div id="client-detail-feedback" class="clients-form-feedback"></div>
-
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="client-modal-close">Fechar</button>
         <button type="button" class="btn-save" id="client-edit-button" data-client-id="${escapeHtml(detailClient.id)}">Editar informações</button>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderClientForm(mode, client = null) {
   const isEdit = mode === 'edit';
-  const safeClient = client || {
-    name: '',
-    phone: '',
-    whatsapp: '',
-    status: 'active',
-    notes: '',
-  };
-
+  const safeClient = client || { name: '', phone: '', whatsapp: '', status: 'active', notes: '' };
   return `
     <div class="clients-modal-body">
       <div>
         <div class="modal-title" style="margin:0;">${isEdit ? 'Editar cliente' : 'Novo cliente'}</div>
-        <div class="modal-sub" style="margin-top:4px;">
-          ${isEdit ? 'Atualize os dados principais do cliente.' : 'Preencha os dados para cadastrar um novo cliente.'}
-        </div>
+        <div class="modal-sub" style="margin-top:4px;">${isEdit ? 'Atualize os dados principais do cliente.' : 'Preencha os dados para cadastrar um novo cliente.'}</div>
       </div>
-
       <form id="client-form" class="clients-form">
         <div class="clients-form-grid">
           <div>
             <div class="color-section-label">Nome</div>
-            <input class="modal-input" id="client-name-input" name="name" type="text" maxlength="${CLIENT_NAME_MAX_LENGTH}" value="${escapeHtml(safeClient.name)}" placeholder="Nome do cliente" />
+            <input class="modal-input" id="client-name-input" name="name" type="text" maxlength="${CLIENT_NAME_MAX_LENGTH}" value="${escapeHtml(safeClient.name)}" placeholder="Nome do cliente"/>
             <div class="clients-field-counter-wrap"><span id="client-name-counter">0 / ${CLIENT_NAME_MAX_LENGTH}</span></div>
           </div>
-
           <div>
             <div class="color-section-label">WhatsApp</div>
-            <input class="modal-input" id="client-whatsapp-input" name="whatsapp" type="text" maxlength="${CLIENT_WHATSAPP_MAX_LENGTH}" value="${escapeHtml(safeClient.whatsapp)}" placeholder="(11) 99999-9999" />
+            <input class="modal-input" id="client-whatsapp-input" name="whatsapp" type="text" maxlength="${CLIENT_WHATSAPP_MAX_LENGTH}" value="${escapeHtml(safeClient.whatsapp)}" placeholder="(11) 99999-9999"/>
             <div class="clients-field-counter-wrap"><span id="client-whatsapp-counter">0 / ${CLIENT_WHATSAPP_MAX_LENGTH}</span></div>
           </div>
-
           <div>
             <div class="color-section-label">Telefone</div>
-            <input class="modal-input" id="client-phone-input" name="phone" type="text" maxlength="${CLIENT_PHONE_MAX_LENGTH}" value="${escapeHtml(safeClient.phone)}" placeholder="(11) 99999-9999" />
+            <input class="modal-input" id="client-phone-input" name="phone" type="text" maxlength="${CLIENT_PHONE_MAX_LENGTH}" value="${escapeHtml(safeClient.phone)}" placeholder="(11) 99999-9999"/>
             <div class="clients-field-counter-wrap"><span id="client-phone-counter">0 / ${CLIENT_PHONE_MAX_LENGTH}</span></div>
           </div>
-
           <div>
             <div class="color-section-label">Status</div>
             <select class="modal-input" name="status">
-              <option value="vip" ${safeClient.status === 'vip' ? 'selected' : ''}>VIP</option>
-              <option value="active" ${safeClient.status === 'active' ? 'selected' : ''}>Ativo</option>
+              <option value="vip"      ${safeClient.status === 'vip'      ? 'selected' : ''}>VIP</option>
+              <option value="active"   ${safeClient.status === 'active'   ? 'selected' : ''}>Ativo</option>
               <option value="inactive" ${safeClient.status === 'inactive' ? 'selected' : ''}>Inativo</option>
             </select>
           </div>
         </div>
-
         <div>
           <div class="color-section-label">Observações</div>
           <textarea class="modal-input clients-textarea" id="client-notes-input" name="notes" maxlength="${CLIENT_NOTES_MAX_LENGTH}" placeholder="Observações do cliente">${escapeHtml(safeClient.notes)}</textarea>
           <div class="clients-field-counter-wrap"><span id="client-notes-counter">0 / ${CLIENT_NOTES_MAX_LENGTH}</span></div>
         </div>
-
         <div id="client-form-feedback" class="clients-form-feedback"></div>
-
         <div class="modal-buttons" style="margin-top:10px;">
           <button type="button" class="btn-cancel" id="${isEdit ? 'client-form-back' : 'client-form-cancel'}">
             ${isEdit ? 'Voltar' : 'Cancelar'}
           </button>
-          <button type="submit" class="btn-save">
-            ${isEdit ? 'Salvar alterações' : 'Cadastrar cliente'}
-          </button>
+          <button type="submit" class="btn-save">${isEdit ? 'Salvar alterações' : 'Cadastrar cliente'}</button>
         </div>
       </form>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderClientModalLoading() {
@@ -1094,14 +752,14 @@ function renderClientModalLoading() {
         <div class="clients-modal-info-row">Carregando dados do cliente...</div>
         <div class="clients-modal-info-row">Carregando assinatura e cobranças...</div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
+
+// ─── Feedback ─────────────────────────────────────────────────────────────────
 
 function setClientFormFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-form-feedback');
   if (!el) return;
-
   el.textContent = message || '';
   el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
@@ -1109,77 +767,63 @@ function setClientFormFeedback(message, variant = 'neutral') {
 function setClientDetailFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-detail-feedback');
   if (!el) return;
-
   el.textContent = message || '';
   el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
+// ─── Counters ─────────────────────────────────────────────────────────────────
+
 function updateCounter(inputId, counterId, maxLength) {
-  const input = document.getElementById(inputId);
+  const input   = document.getElementById(inputId);
   const counter = document.getElementById(counterId);
   if (!input || !counter) return;
-
-  if (input.value.length > maxLength) {
-    input.value = input.value.slice(0, maxLength);
-  }
-
+  if (input.value.length > maxLength) input.value = input.value.slice(0, maxLength);
   counter.textContent = `${input.value.length} / ${maxLength}`;
 }
 
 function bindCounter(inputId, counterId, maxLength) {
   const input = document.getElementById(inputId);
   if (!input) return;
-
   const sync = () => updateCounter(inputId, counterId, maxLength);
   input.addEventListener('input', sync);
   sync();
 }
 
 function initClientFormEnhancements() {
-  bindCounter('client-name-input', 'client-name-counter', CLIENT_NAME_MAX_LENGTH);
-  bindCounter('client-phone-input', 'client-phone-counter', CLIENT_PHONE_MAX_LENGTH);
+  bindCounter('client-name-input',     'client-name-counter',     CLIENT_NAME_MAX_LENGTH);
+  bindCounter('client-phone-input',    'client-phone-counter',    CLIENT_PHONE_MAX_LENGTH);
   bindCounter('client-whatsapp-input', 'client-whatsapp-counter', CLIENT_WHATSAPP_MAX_LENGTH);
-  bindCounter('client-notes-input', 'client-notes-counter', CLIENT_NOTES_MAX_LENGTH);
+  bindCounter('client-notes-input',    'client-notes-counter',    CLIENT_NOTES_MAX_LENGTH);
 }
+
+// ─── Load data ────────────────────────────────────────────────────────────────
 
 async function loadClientsData() {
   const tbody = document.getElementById('clients-table-body');
   if (!tbody) return;
 
   if (!hasApiConfig()) {
-    clientesState.items = [];
-    clientesState.isLoaded = false;
-    tbody.innerHTML = `
-      <tr><td colspan="6" class="clients-empty">API não configurada. Abra o login dev para conectar o backend.</td></tr>
-    `;
+    clientesState.items = []; clientesState.isLoaded = false;
+    tbody.innerHTML = `<tr><td colspan="6" class="clients-empty">API não configurada. Abra o login dev para conectar o backend.</td></tr>`;
     return;
   }
 
   if (!hasAuthToken()) {
-    clientesState.items = [];
-    clientesState.isLoaded = false;
-    tbody.innerHTML = `
-      <tr><td colspan="6" class="clients-empty">Login pendente. Faça a autenticação para carregar os clientes reais.</td></tr>
-    `;
+    clientesState.items = []; clientesState.isLoaded = false;
+    tbody.innerHTML = `<tr><td colspan="6" class="clients-empty">Login pendente. Faça a autenticação para carregar os clientes reais.</td></tr>`;
     return;
   }
 
   clientesState.isLoading = true;
-  tbody.innerHTML = `
-    <tr><td colspan="6" class="clients-empty">Carregando clientes...</td></tr>
-  `;
+  tbody.innerHTML = `<tr><td colspan="6" class="clients-empty">Carregando clientes...</td></tr>`;
 
   try {
     const payload = await getClients();
-    const safeItems = Array.isArray(payload) ? payload.map(mapClientSummaryFromApi) : [];
-    clientesState.items = safeItems;
+    clientesState.items = Array.isArray(payload) ? payload.map(mapClientSummaryFromApi) : [];
     clientesState.isLoaded = true;
     rerenderClientesTable();
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível carregar os clientes.';
-    tbody.innerHTML = `
-      <tr><td colspan="6" class="clients-empty">${escapeHtml(message)}</td></tr>
-    `;
+    tbody.innerHTML = `<tr><td colspan="6" class="clients-empty">${escapeHtml(error instanceof Error ? error.message : 'Não foi possível carregar os clientes.')}</td></tr>`;
   } finally {
     clientesState.isLoading = false;
   }
@@ -1191,272 +835,195 @@ async function loadClientDetails(clientId) {
       getClientById(clientId),
       getSubscriptions({ client_id: clientId }),
     ]);
-
     const detailClient = mapClientDetailFromApi(clientPayload);
-
     let detailSubscription = null;
     if (Array.isArray(subscriptionsPayload) && subscriptionsPayload.length) {
-      const latestSubscription = subscriptionsPayload[0];
-      const subscriptionPayload = await getSubscriptionById(latestSubscription.id);
+      const subscriptionPayload = await getSubscriptionById(subscriptionsPayload[0].id);
       detailSubscription = mapSubscriptionDetail(subscriptionPayload);
     }
-
     if (clientesState.activeClientId !== clientId) return;
-
-    clientesState.detailClient = detailClient;
+    clientesState.detailClient      = detailClient;
     clientesState.detailSubscription = detailSubscription;
-    clientesState.isDetailLoading = false;
+    clientesState.isDetailLoading   = false;
     renderClientModal();
   } catch (error) {
     if (clientesState.activeClientId !== clientId) return;
-
-    const fallbackClient = getClientSummaryById(clientId);
-    clientesState.detailClient = fallbackClient
-      ? {
-          ...fallbackClient,
-          appointments: [],
-          raw: fallbackClient.raw || {},
-        }
-      : null;
+    const fallback = getClientSummaryById(clientId);
+    clientesState.detailClient      = fallback ? { ...fallback, appointments: [], raw: fallback.raw || {} } : null;
     clientesState.detailSubscription = null;
-    clientesState.isDetailLoading = false;
+    clientesState.isDetailLoading   = false;
     renderClientModal();
-
-    const message = error instanceof Error ? error.message : 'Não foi possível carregar a ficha do cliente.';
-    setTimeout(() => {
-      setClientDetailFeedback(message, 'error');
-    }, 0);
+    setTimeout(() => setClientDetailFeedback(error instanceof Error ? error.message : 'Não foi possível carregar a ficha do cliente.', 'error'), 0);
   }
 }
 
+// ─── Modal control ────────────────────────────────────────────────────────────
+
 function openClientModal(clientId) {
-  clientesState.activeClientId = clientId;
-  clientesState.detailClient = null;
+  clientesState.activeClientId    = clientId;
+  clientesState.detailClient      = null;
   clientesState.detailSubscription = null;
-  clientesState.isDetailLoading = true;
-  clientesState.modalMode = 'view';
+  clientesState.isDetailLoading   = true;
+  clientesState.modalMode         = 'view';
   renderClientModal();
   loadClientDetails(clientId);
 }
 
 function openCreateClientModal() {
-  clientesState.activeClientId = null;
-  clientesState.detailClient = null;
+  clientesState.activeClientId    = null;
+  clientesState.detailClient      = null;
   clientesState.detailSubscription = null;
-  clientesState.isDetailLoading = false;
-  clientesState.modalMode = 'create';
+  clientesState.isDetailLoading   = false;
+  clientesState.modalMode         = 'create';
   renderClientModal();
 }
 
 function openEditClientModal(clientId) {
-  clientesState.activeClientId = clientId;
+  clientesState.activeClientId  = clientId;
   clientesState.isDetailLoading = false;
-  clientesState.modalMode = 'edit';
+  clientesState.modalMode       = 'edit';
   renderClientModal();
 }
 
 function closeClientModal() {
-  const modal = document.getElementById('client-details-modal');
+  const modal   = document.getElementById('client-details-modal');
   const content = document.getElementById('client-details-content');
   if (!modal) return;
-
-  clientesState.modalMode = 'closed';
-  clientesState.activeClientId = null;
-  clientesState.detailClient = null;
+  clientesState.modalMode         = 'closed';
+  clientesState.activeClientId    = null;
+  clientesState.detailClient      = null;
   clientesState.detailSubscription = null;
-  clientesState.isDetailLoading = false;
+  clientesState.isDetailLoading   = false;
   modal.classList.remove('open');
   modal.style.display = 'none';
-
   if (content) content.innerHTML = '';
 }
 
 function collectClientFormData() {
   const form = document.getElementById('client-form');
   const formData = new FormData(form);
-
   return {
-    name: String(formData.get('name') || '').trim(),
-    phone: String(formData.get('phone') || '').trim(),
+    name:     String(formData.get('name')     || '').trim(),
+    phone:    String(formData.get('phone')    || '').trim(),
     whatsapp: String(formData.get('whatsapp') || '').trim(),
-    status: String(formData.get('status') || 'active').trim(),
-    notes: String(formData.get('notes') || '').trim(),
+    status:   String(formData.get('status')   || 'active').trim(),
+    notes:    String(formData.get('notes')    || '').trim(),
   };
 }
 
 async function handleClientFormSubmit(event) {
   event.preventDefault();
-
   const data = collectClientFormData();
-
-  if (!data.name) {
-    setClientFormFeedback('Informe o nome do cliente.', 'error');
-    return;
-  }
-
-  if (data.name.length > CLIENT_NAME_MAX_LENGTH) {
-    setClientFormFeedback(`O nome deve ter no máximo ${CLIENT_NAME_MAX_LENGTH} caracteres.`, 'error');
-    return;
-  }
-
-  if (data.whatsapp.length > CLIENT_WHATSAPP_MAX_LENGTH) {
-    setClientFormFeedback(`O WhatsApp deve ter no máximo ${CLIENT_WHATSAPP_MAX_LENGTH} caracteres.`, 'error');
-    return;
-  }
-
-  if (data.phone.length > CLIENT_PHONE_MAX_LENGTH) {
-    setClientFormFeedback(`O telefone deve ter no máximo ${CLIENT_PHONE_MAX_LENGTH} caracteres.`, 'error');
-    return;
-  }
-
-  if (data.notes.length > CLIENT_NOTES_MAX_LENGTH) {
-    setClientFormFeedback(`As observações devem ter no máximo ${CLIENT_NOTES_MAX_LENGTH} caracteres.`, 'error');
-    return;
-  }
+  if (!data.name) { setClientFormFeedback('Informe o nome do cliente.', 'error'); return; }
+  if (data.name.length     > CLIENT_NAME_MAX_LENGTH)     { setClientFormFeedback(`O nome deve ter no máximo ${CLIENT_NAME_MAX_LENGTH} caracteres.`, 'error'); return; }
+  if (data.whatsapp.length > CLIENT_WHATSAPP_MAX_LENGTH) { setClientFormFeedback(`O WhatsApp deve ter no máximo ${CLIENT_WHATSAPP_MAX_LENGTH} caracteres.`, 'error'); return; }
+  if (data.phone.length    > CLIENT_PHONE_MAX_LENGTH)    { setClientFormFeedback(`O telefone deve ter no máximo ${CLIENT_PHONE_MAX_LENGTH} caracteres.`, 'error'); return; }
+  if (data.notes.length    > CLIENT_NOTES_MAX_LENGTH)    { setClientFormFeedback(`As observações devem ter no máximo ${CLIENT_NOTES_MAX_LENGTH} caracteres.`, 'error'); return; }
 
   const payload = {
-    name: data.name,
-    phone: data.phone || null,
-    whatsapp: data.whatsapp || null,
-    notes: data.notes || null,
-    is_active: data.status !== 'inactive',
-    is_vip: data.status === 'vip',
+    name: data.name, phone: data.phone || null,
+    whatsapp: data.whatsapp || null, notes: data.notes || null,
+    is_active: data.status !== 'inactive', is_vip: data.status === 'vip',
   };
 
   try {
     setClientFormFeedback(clientesState.modalMode === 'edit' ? 'Salvando alterações...' : 'Criando cliente...', 'neutral');
-
     if (clientesState.modalMode === 'create') {
-      const createdClient = await createClient(payload);
+      const created = await createClient(payload);
       await loadClientsData();
-      openClientModal(createdClient.id);
+      openClientModal(created.id);
       return;
     }
-
     if (clientesState.modalMode === 'edit' && clientesState.activeClientId) {
       await updateClient(clientesState.activeClientId, payload);
       await loadClientsData();
       openClientModal(clientesState.activeClientId);
     }
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível salvar o cliente.';
-    setClientFormFeedback(message, 'error');
+    setClientFormFeedback(error instanceof Error ? error.message : 'Não foi possível salvar o cliente.', 'error');
   }
 }
 
+// ─── Actions ──────────────────────────────────────────────────────────────────
+
 async function handleSubscriptionAction(subscriptionId, action) {
   const buttons = document.querySelectorAll('.clients-subscription-action');
-
   try {
-    buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    buttons.forEach(b => b.setAttribute('disabled', 'disabled'));
     setClientDetailFeedback('Executando ação na assinatura...', 'neutral');
-
-    if (action === 'activate') await activateSubscription(subscriptionId);
-    if (action === 'pause') await pauseSubscription(subscriptionId);
+    if (action === 'activate')   await activateSubscription(subscriptionId);
+    if (action === 'pause')      await pauseSubscription(subscriptionId);
     if (action === 'reactivate') await reactivateSubscription(subscriptionId);
-    if (action === 'cancel') await cancelSubscription(subscriptionId);
-
+    if (action === 'cancel')     await cancelSubscription(subscriptionId);
     if (!clientesState.activeClientId) return;
-
     clientesState.isDetailLoading = true;
     renderClientModal();
     await loadClientsData();
     await loadClientDetails(clientesState.activeClientId);
-
-    setTimeout(() => {
-      setClientDetailFeedback('Assinatura atualizada com sucesso.', 'success');
-    }, 0);
+    setTimeout(() => setClientDetailFeedback('Assinatura atualizada com sucesso.', 'success'), 0);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível atualizar a assinatura.';
     clientesState.isDetailLoading = false;
     renderClientModal();
-    setClientDetailFeedback(message, 'error');
+    setClientDetailFeedback(error instanceof Error ? error.message : 'Não foi possível atualizar a assinatura.', 'error');
   } finally {
-    buttons.forEach((button) => button.removeAttribute('disabled'));
+    buttons.forEach(b => b.removeAttribute('disabled'));
   }
 }
 
 async function handleInvoiceAction(invoiceId, action) {
   const buttons = document.querySelectorAll('.clients-invoice-action');
-
   try {
-    buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    buttons.forEach(b => b.setAttribute('disabled', 'disabled'));
     setClientDetailFeedback('Executando ação na cobrança...', 'neutral');
-
-    if (action === 'markPaid') await markInvoicePaid(invoiceId);
+    if (action === 'markPaid')   await markInvoicePaid(invoiceId);
     if (action === 'markFailed') await markInvoiceFailed(invoiceId);
-    if (action === 'cancel') await cancelInvoice(invoiceId);
-
+    if (action === 'cancel')     await cancelInvoice(invoiceId);
     if (!clientesState.activeClientId) return;
-
     clientesState.isDetailLoading = true;
     renderClientModal();
     await loadClientsData();
     await loadClientDetails(clientesState.activeClientId);
-
-    setTimeout(() => {
-      setClientDetailFeedback('Cobrança atualizada com sucesso.', 'success');
-    }, 0);
+    setTimeout(() => setClientDetailFeedback('Cobrança atualizada com sucesso.', 'success'), 0);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível atualizar a cobrança.';
     clientesState.isDetailLoading = false;
     renderClientModal();
-    setClientDetailFeedback(message, 'error');
+    setClientDetailFeedback(error instanceof Error ? error.message : 'Não foi possível atualizar a cobrança.', 'error');
   } finally {
-    buttons.forEach((button) => button.removeAttribute('disabled'));
+    buttons.forEach(b => b.removeAttribute('disabled'));
   }
 }
 
 async function handleGenerateMercadoPagoCharge(subscriptionId) {
-  const triggerButtons = document.querySelectorAll(
-    '.clients-generate-charge-action, .clients-invoice-action, .clients-invoice-copy-link'
-  );
-
+  const triggerButtons = document.querySelectorAll('.clients-generate-charge-action, .clients-invoice-action, .clients-invoice-copy-link');
   try {
-    triggerButtons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    triggerButtons.forEach(b => b.setAttribute('disabled', 'disabled'));
     setClientDetailFeedback('Gerando cobrança Mercado Pago...', 'neutral');
-
-    if (!clientesState.detailSubscription || clientesState.detailSubscription.id !== subscriptionId) {
+    if (!clientesState.detailSubscription || clientesState.detailSubscription.id !== subscriptionId)
       throw new Error('Assinatura não encontrada para gerar a cobrança.');
-    }
-
     const subscription = clientesState.detailSubscription;
     const amountCents = getSubscriptionAmountCents(subscription);
-
-    if (!amountCents) {
-      throw new Error('Não foi possível identificar o valor do plano para gerar a cobrança.');
-    }
-
-    const customerName = clientesState.detailClient?.name || 'Cliente';
+    if (!amountCents) throw new Error('Não foi possível identificar o valor do plano para gerar a cobrança.');
+    const customerName      = clientesState.detailClient?.name || 'Cliente';
     const externalReference = `sub_${subscription.id}_${Date.now()}`;
-
     const preference = await createMercadoPagoPreference({
       title: `${subscription.planName} - ${customerName}`,
       quantity: 1,
       unitPrice: Number((amountCents / 100).toFixed(2)),
       externalReference,
     });
-
     await createMercadoPagoInvoice(subscription, preference, externalReference);
-
     if (!clientesState.activeClientId) return;
-
     clientesState.isDetailLoading = true;
     renderClientModal();
     await loadClientsData();
     await loadClientDetails(clientesState.activeClientId);
-
-    setTimeout(() => {
-      setClientDetailFeedback('Cobrança Mercado Pago gerada com sucesso.', 'success');
-    }, 0);
+    setTimeout(() => setClientDetailFeedback('Cobrança Mercado Pago gerada com sucesso.', 'success'), 0);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Não foi possível gerar a cobrança Mercado Pago.';
     clientesState.isDetailLoading = false;
     renderClientModal();
-    setClientDetailFeedback(message, 'error');
+    setClientDetailFeedback(error instanceof Error ? error.message : 'Não foi possível gerar a cobrança Mercado Pago.', 'error');
   } finally {
-    triggerButtons.forEach((button) => button.removeAttribute('disabled'));
+    triggerButtons.forEach(b => b.removeAttribute('disabled'));
   }
 }
 
@@ -1465,13 +1032,14 @@ async function handleCopyInvoiceLink(paymentUrl) {
     await copyTextToClipboard(paymentUrl);
     setClientDetailFeedback('Link de pagamento copiado com sucesso.', 'success');
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível copiar o link de pagamento.';
-    setClientDetailFeedback(message, 'error');
+    setClientDetailFeedback(error instanceof Error ? error.message : 'Não foi possível copiar o link de pagamento.', 'error');
   }
 }
 
+// ─── Modal render ─────────────────────────────────────────────────────────────
+
 function renderClientModal() {
-  const modal = document.getElementById('client-details-modal');
+  const modal   = document.getElementById('client-details-modal');
   const content = document.getElementById('client-details-content');
   if (!modal || !content) return;
 
@@ -1483,94 +1051,57 @@ function renderClientModal() {
   }
 
   const summaryClient = clientesState.activeClientId ? getClientSummaryById(clientesState.activeClientId) : null;
-  const detailClient = clientesState.detailClient || summaryClient;
+  const detailClient  = clientesState.detailClient || summaryClient;
 
   if (clientesState.modalMode === 'view') {
-    if (clientesState.isDetailLoading || !detailClient) {
-      content.innerHTML = renderClientModalLoading();
-    } else {
-      content.innerHTML = renderClientDetails(detailClient, clientesState.detailSubscription);
-    }
+    content.innerHTML = (clientesState.isDetailLoading || !detailClient)
+      ? renderClientModalLoading()
+      : renderClientDetails(detailClient, clientesState.detailSubscription);
   }
-
-  if (clientesState.modalMode === 'edit') {
-    content.innerHTML = renderClientForm('edit', detailClient);
-  }
-
-  if (clientesState.modalMode === 'create') {
-    content.innerHTML = renderClientForm('create');
-  }
+  if (clientesState.modalMode === 'edit')   content.innerHTML = renderClientForm('edit', detailClient);
+  if (clientesState.modalMode === 'create') content.innerHTML = renderClientForm('create');
 
   modal.style.display = 'flex';
   modal.classList.add('open');
-
   bindClientModalEvents();
   initClientFormEnhancements();
 }
 
-function bindClientsRowsEvents() {
-  document.querySelectorAll('.client-row[data-client-id]').forEach((row) => {
-    row.addEventListener('click', () => {
-      openClientModal(row.dataset.clientId);
-    });
+// ─── Event binding ────────────────────────────────────────────────────────────
 
-    row.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') {
-        event.preventDefault();
-        openClientModal(row.dataset.clientId);
-      }
+function bindClientsRowsEvents() {
+  document.querySelectorAll('.client-row[data-client-id]').forEach(row => {
+    row.addEventListener('click', () => openClientModal(row.dataset.clientId));
+    row.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openClientModal(row.dataset.clientId); }
     });
   });
 }
 
 function bindClientModalEvents() {
   document.getElementById('client-modal-close')?.addEventListener('click', closeClientModal);
-
   document.getElementById('client-edit-button')?.addEventListener('click', () => {
     if (!clientesState.activeClientId) return;
     openEditClientModal(clientesState.activeClientId);
   });
-
   document.getElementById('client-form-back')?.addEventListener('click', () => {
     if (!clientesState.activeClientId) return;
     openClientModal(clientesState.activeClientId);
   });
-
   document.getElementById('client-form-cancel')?.addEventListener('click', closeClientModal);
   document.getElementById('client-form')?.addEventListener('submit', handleClientFormSubmit);
 
-  document.querySelectorAll('.clients-subscription-action').forEach((button) => {
-    button.addEventListener('click', () => {
-      const subscriptionId = button.dataset.subscriptionId;
-      const action = button.dataset.action;
-      if (!subscriptionId || !action) return;
-      handleSubscriptionAction(subscriptionId, action);
-    });
+  document.querySelectorAll('.clients-subscription-action').forEach(btn => {
+    btn.addEventListener('click', () => handleSubscriptionAction(btn.dataset.subscriptionId, btn.dataset.action));
   });
-
-  document.querySelectorAll('.clients-invoice-action').forEach((button) => {
-    button.addEventListener('click', () => {
-      const invoiceId = button.dataset.invoiceId;
-      const action = button.dataset.action;
-      if (!invoiceId || !action) return;
-      handleInvoiceAction(invoiceId, action);
-    });
+  document.querySelectorAll('.clients-invoice-action').forEach(btn => {
+    btn.addEventListener('click', () => handleInvoiceAction(btn.dataset.invoiceId, btn.dataset.action));
   });
-
-  document.querySelectorAll('.clients-generate-charge-action').forEach((button) => {
-    button.addEventListener('click', () => {
-      const subscriptionId = button.dataset.subscriptionId;
-      if (!subscriptionId) return;
-      handleGenerateMercadoPagoCharge(subscriptionId);
-    });
+  document.querySelectorAll('.clients-generate-charge-action').forEach(btn => {
+    btn.addEventListener('click', () => handleGenerateMercadoPagoCharge(btn.dataset.subscriptionId));
   });
-
-  document.querySelectorAll('.clients-invoice-copy-link').forEach((button) => {
-    button.addEventListener('click', () => {
-      const paymentUrl = button.dataset.paymentUrl;
-      if (!paymentUrl) return;
-      handleCopyInvoiceLink(paymentUrl);
-    });
+  document.querySelectorAll('.clients-invoice-copy-link').forEach(btn => {
+    btn.addEventListener('click', () => handleCopyInvoiceLink(btn.dataset.paymentUrl));
   });
 }
 
@@ -1578,25 +1109,24 @@ function bindClientesStaticEvents() {
   document.getElementById('client-new-button')?.addEventListener('click', openCreateClientModal);
   document.getElementById('client-invite-button')?.addEventListener('click', openInviteModal);
 
-  document.getElementById('client-search-input')?.addEventListener('input', (event) => {
+  document.getElementById('client-search-input')?.addEventListener('input', event => {
     clientesState.searchTerm = event.target.value || '';
     rerenderClientesTable();
   });
 
-  document.getElementById('client-details-modal')?.addEventListener('click', (event) => {
-    if (event.target?.id === 'client-details-modal') {
-      closeClientModal();
-    }
+  document.getElementById('client-details-modal')?.addEventListener('click', event => {
+    if (event.target?.id === 'client-details-modal') closeClientModal();
   });
 }
 
 function rerenderClientesTable() {
   const tbody = document.getElementById('clients-table-body');
   if (!tbody) return;
-
   tbody.innerHTML = renderClientsTableBody();
   bindClientsRowsEvents();
 }
+
+// ─── Export ───────────────────────────────────────────────────────────────────
 
 export function renderClientes() {
   return /* html */ `
@@ -1612,16 +1142,12 @@ export function renderClientes() {
         value="${escapeHtml(clientesState.searchTerm)}"
       />
     </div>
-
-
     <button type="button" class="clients-invite-btn" id="client-invite-button">
-      📨 Convidar cliente 
+      📨 Convidar cliente
     </button>
-    
     <button type="button" class="btn-primary-gradient" id="client-new-button">
       + Novo cliente
     </button>
-    
   </div>
 
   <div class="card">
@@ -1637,9 +1163,7 @@ export function renderClientes() {
         </tr>
       </thead>
       <tbody id="clients-table-body">
-        <tr>
-          <td colspan="6" class="clients-empty">Carregando clientes...</td>
-        </tr>
+        <tr><td colspan="6" class="clients-empty">Carregando clientes...</td></tr>
       </tbody>
     </table>
   </div>
