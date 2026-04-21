@@ -323,6 +323,140 @@
     border-radius: 999px;
   }
 
+  /* ── Modal de convite ─────────────────────────────────────────────────────── */
+
+  #client-invite-modal .modal {
+    width: min(92vw, 580px);
+    max-height: 88vh;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(79, 195, 247, 0.35) rgba(255, 255, 255, 0.04);
+  }
+
+  .invite-modal-body {
+    display: grid;
+    gap: 14px;
+  }
+
+  .invite-link-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-top: 6px;
+  }
+
+  .invite-link-input {
+    flex: 1;
+    min-width: 0;
+    margin: 0;
+    background: rgba(79, 195, 247, 0.06);
+    color: #7dd3fc;
+    font-size: 12px;
+  }
+
+  .invite-copy-link-btn {
+    flex-shrink: 0;
+    min-height: 38px;
+    padding: 0 14px;
+  }
+
+  .invite-feedback {
+    min-height: 16px;
+    font-size: 10px;
+    margin-top: 4px;
+    color: #5a6888;
+  }
+
+  .invite-message-textarea {
+    width: 100%;
+    min-height: 150px;
+    border-radius: 12px;
+    border: 1px solid rgba(79, 195, 247, 0.16);
+    background: rgba(255, 255, 255, 0.04);
+    color: #f5f9ff;
+    padding: 12px;
+    font: inherit;
+    font-size: 12px;
+    resize: vertical;
+    box-sizing: border-box;
+  }
+
+  .invite-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 4px;
+  }
+
+  .invite-btn-copy-msg {
+    background: rgba(79, 195, 247, 0.14);
+    color: #7dd3fc;
+    border: 1px solid rgba(79, 195, 247, 0.25);
+  }
+
+  .invite-btn-whatsapp {
+    background: linear-gradient(90deg, #00b4ff, #6c3fff);
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Botão de convite na toolbar ─────────────────────────────────────────── */
+
+  .clients-invite-btn {
+    background: rgba(79, 195, 247, 0.12);
+    color: #7dd3fc;
+    border: 1px solid rgba(79, 195, 247, 0.25);
+    min-height: 44px;
+    padding: 0 16px;
+    border-radius: 9px;
+    font: inherit;
+    font-weight: 700;
+    font-size: 12px;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: background 0.18s;
+  }
+
+  .clients-invite-btn:hover {
+    background: rgba(79, 195, 247, 0.2);
+  }
+
+  /* ── Link de convite em Configurações ────────────────────────────────────── */
+
+  .cfg-invite-link-box {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    flex-wrap: wrap;
+    padding: 10px 12px;
+    border: 1px solid rgba(79, 195, 247, 0.14);
+    border-radius: 10px;
+    background: rgba(79, 195, 247, 0.04);
+    margin-top: 6px;
+  }
+
+  .cfg-invite-link-text {
+    flex: 1;
+    min-width: 0;
+    font-size: 11px;
+    color: #7dd3fc;
+    word-break: break-all;
+  }
+
+  .cfg-invite-copy-btn {
+    flex-shrink: 0;
+    min-height: 34px;
+    padding: 7px 14px;
+    font-size: 11px;
+    white-space: nowrap;
+    background: rgba(79, 195, 247, 0.12);
+    color: #7dd3fc;
+    border: 1px solid rgba(79, 195, 247, 0.25);
+  }
+
   @media (max-width: 768px) {
     .clients-modal-grid,
     .clients-form-grid,
@@ -334,6 +468,22 @@
     .clients-invoice-row,
     .clients-history-row {
       flex-direction: column;
+    }
+
+    .invite-link-row {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .invite-actions {
+      flex-direction: column;
+    }
+
+    .invite-actions .btn-cancel,
+    .invite-actions .btn-save,
+    .invite-actions a {
+      width: 100%;
+      text-align: center;
     }
   }
 }
