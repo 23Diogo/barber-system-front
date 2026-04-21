@@ -9,6 +9,8 @@ import { renderClientAgendamentos, initClientAgendamentosPage } from './modules/
 import { renderClientPlanos, initClientPlanosPage } from './modules/planos.js';
 import { renderClientAssinatura, initClientAssinaturaPage } from './modules/assinatura.js';
 import { renderClientDados, initClientDadosPage } from './modules/dados.js';
+import { renderClientPagamentos, initClientPagamentosPage } from './modules/pagamentos.js';
+import { renderClientSuporte, initClientSuportePage } from './modules/suporte.js';
 
 const CLIENT_BASE = '/client';
 
@@ -422,21 +424,17 @@ const routes = {
   },
   pagamentos: {
     path: '/client/pagamentos',
-    render: renderPagamentosPage,
+    render: renderClientPagamentos,
+    init: () => initClientPagamentosPage(),
     protected: true,
-    layoutOptions: {
-      variant: 'dashboard',
-      title: 'PAGAMENTOS',
-    },
+    layoutOptions: { variant: 'dashboard', title: 'PAGAMENTOS' },
   },
   suporte: {
     path: '/client/suporte',
-    render: renderSuportePage,
+    render: renderClientSuporte,
+    init: () => initClientSuportePage(),
     protected: true,
-    layoutOptions: {
-      variant: 'dashboard',
-      title: 'SUPORTE',
-    },
+    layoutOptions: { variant: 'dashboard', title: 'SUPORTE' },
   },
 };
 
