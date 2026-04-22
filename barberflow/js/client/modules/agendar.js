@@ -52,6 +52,11 @@ function formatDuration(m) {
 
 function formatDateTime(v) {
   if (!v) return '—';
+  // Extrai data e hora direto da string ISO — evita conversão de timezone
+  const match = String(v).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/);
+  if (match) {
+    return `${match[3]}/${match[2]}/${match[1]} ${match[4]}:${match[5]}`;
+  }
   const d = new Date(v);
   if (isNaN(d)) return '—';
   return d.toLocaleString('pt-BR', {
@@ -62,6 +67,9 @@ function formatDateTime(v) {
 
 function formatTime(v) {
   if (!v) return '—';
+  // Extrai HH:MM direto da string ISO — evita conversão de timezone
+  const match = String(v).match(/T(\d{2}:\d{2})/);
+  if (match) return match[1];
   const d = new Date(v);
   if (isNaN(d)) return v;
   return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
