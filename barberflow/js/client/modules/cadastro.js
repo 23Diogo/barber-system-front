@@ -1,13 +1,28 @@
 import { registerClient } from '../../services/client-auth.js';
 
-// ─── Slug da barbearia ────────────────────────────────────────────────────────
-// Lê ?slug=nome-da-barbearia da URL atual
-// Exemplo: /client/cadastro?slug=barbearia-do-henrique
+const SLUG_STORAGE_KEY = 'barberflow.inviteSlug';
 
-function getBarbershopSlug() {
+// ─── Slug da barbearia ────────────────────────────────────────────────────────
+// Lê ?slug= da URL e salva no sessionStorage imediatamente
+// Assim o slug persiste mesmo que o router mude a URL com pushState
+
+function captureAndGetSlug() {
+  // Tenta pegar da URL primeiro
   const params = new URLSearchParams(window.location.search);
-  const slug   = params.get('slug') || params.get('barbershop') || '';
-  return String(slug).trim().toLowerCase();
+  const fromUrl = (params.get('slug') || params.get('barbershop') || '').trim().toLowerCase();
+
+  if (fromUrl) {
+    // Salva no sessionStorage para não perder após pushState
+    sessionStorage.setItem(SLUG_STORAGE_KEY, fromUrl);
+    return fromUrl;
+  }
+
+  // Fallback: pega do sessionStorage
+  return (sessionStorage.getItem(SLUG_STORAGE_KEY) || '').trim().toLowerCase();
+}
+
+function clearSlug() {
+  sessionStorage.removeItem(SLUG_STORAGE_KEY);
 }
 
 // ─── Feedback ─────────────────────────────────────────────────────────────────
@@ -25,12 +40,11 @@ function setFeedback(message, variant = 'neutral') {
 // ─── Render ───────────────────────────────────────────────────────────────────
 
 export function renderClientRegister() {
-  const slug = getBarbershopSlug();
+  // Captura e salva o slug ANTES do router fazer pushState
+  captureAndGetSlug();
 
   return `
     <form id="client-register-form" class="client-form">
-      ${slug ? `<input type="hidden" id="client-register-slug" value="${slug}"/>` : ''}
-
       <div class="client-form-grid">
         <div class="client-form-field">
           <label class="client-form-label" for="client-register-name">Nome completo</label>
@@ -112,8 +126,8 @@ export function initClientRegisterPage({ navigate }) {
     const password        = document.getElementById('client-register-password')?.value                 || '';
     const confirmPassword = document.getElementById('client-register-password-confirm')?.value         || '';
 
-    // Slug: tenta o hidden input primeiro, depois lê da URL novamente
-    const slug = document.getElementById('client-register-slug')?.value?.trim() || getBarbershopSlug();
+    // Pega o slug — URL ou sessionStorage
+    const slug = captureAndGetSlug();
 
     // Validações
     if (!name) {
@@ -156,6 +170,9 @@ export function initClientRegisterPage({ navigate }) {
         password,
         barbershopSlug: slug,
       });
+
+      // Limpa o slug após cadastro bem-sucedido
+      clearSlug();
 
       setFeedback(
         `Conta criada com sucesso. Bem-vindo, ${data?.client?.name || 'cliente'}!`,
