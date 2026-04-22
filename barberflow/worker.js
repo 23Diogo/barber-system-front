@@ -2,8 +2,24 @@ export default {
   async fetch(request, env) {
     const url = new URL(request.url);
 
-    // ── /client/* → portal do cliente (SPA)
-    // Intercepta ANTES dos assets para evitar servir os index.html das subpastas
+    // ── /client/cadastro/:slug → salva slug em cookie e serve client.html
+    // Formato: /client/cadastro/barbearia-do-henrique
+    const cadastroMatch = url.pathname.match(/^\/client\/cadastro\/([^/]+)\/?$/);
+    if (cadastroMatch) {
+      const slug = cadastroMatch[1];
+      const clientUrl = new URL('/client.html', url.origin);
+      const response = await env.ASSETS.fetch(new Request(clientUrl.toString(), request));
+
+      // Clona a resposta adicionando o cookie com o slug
+      const newResponse = new Response(response.body, response);
+      newResponse.headers.set(
+        'Set-Cookie',
+        `bf_invite_slug=${encodeURIComponent(slug)}; Path=/; SameSite=Lax; Max-Age=3600`
+      );
+      return newResponse;
+    }
+
+    // ── /client/* → portal do cliente (SPA) — intercepta ANTES dos assets
     if (url.pathname === '/client' || url.pathname.startsWith('/client/')) {
       const clientUrl = new URL('/client.html', url.origin);
       return env.ASSETS.fetch(new Request(clientUrl.toString(), request));
