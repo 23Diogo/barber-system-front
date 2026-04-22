@@ -33,7 +33,9 @@ const state = {
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function esc(v) {
-  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
+  return String(v ?? '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
 function formatCurrency(v) {
@@ -52,14 +54,17 @@ function formatDateTime(v) {
   if (!v) return '—';
   const d = new Date(v);
   if (isNaN(d)) return '—';
-  return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
 }
 
 function formatTime(v) {
   if (!v) return '—';
   const d = new Date(v);
   if (isNaN(d)) return v;
-  return d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  return d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
 }
 
 function barberName(b) {
@@ -68,7 +73,7 @@ function barberName(b) {
 }
 
 function barberInitials(b) {
-  return barberName(b).split(' ').slice(0,2).map(p => p[0]?.toUpperCase()||'').join('');
+  return barberName(b).split(' ').slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('');
 }
 
 function setFeedback(msg, variant = 'neutral') {
@@ -76,6 +81,23 @@ function setFeedback(msg, variant = 'neutral') {
   if (!el) return;
   el.textContent = msg || '';
   el.style.color = variant === 'error' ? '#ff7b91' : variant === 'success' ? '#00e676' : '#8fa3c7';
+}
+
+// ─── Ícone por categoria (mesmo padrão do servicos.js) ────────────────────────
+
+function getCategoryIcon(category) {
+  const map = {
+    corte:      '✂️',
+    barba:      '🪒',
+    combo:      '✂️',
+    coloracao:  '🎨',
+    estetica:   '✨',
+    tratamento: '💆',
+    acabamento: '💈',
+  };
+  const key = String(category || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return Object.entries(map).find(([k]) => key.includes(k))?.[1] || '✂️';
 }
 
 // ─── Re-render ────────────────────────────────────────────────────────────────
@@ -93,7 +115,7 @@ function rerender() {
 
 // ─── Steps bar ────────────────────────────────────────────────────────────────
 
-const STEPS = ['Serviço','Profissional','Data e hora','Confirmar'];
+const STEPS = ['Serviço', 'Profissional', 'Data e hora', 'Confirmar'];
 
 function renderStepsHtml() {
   return STEPS.map((label, i) => {
@@ -109,7 +131,7 @@ function renderStepsHtml() {
   }).join('');
 }
 
-// ─── Step content ─────────────────────────────────────────────────────────────
+// ─── Step content wrapper ─────────────────────────────────────────────────────
 
 function renderStepContent() {
   const titles = [
@@ -120,11 +142,10 @@ function renderStepContent() {
   ];
   const [title, sub] = titles[state.step - 1];
 
-  const canNext = (
+  const canNext =
     (state.step === 1 && !!state.selectedService) ||
-    (state.step === 2 && !!state.selectedBarber) ||
-    (state.step === 3 && !!state.selectedDate && !!state.selectedSlot)
-  );
+    (state.step === 2 && !!state.selectedBarber)  ||
+    (state.step === 3 && !!state.selectedDate && !!state.selectedSlot);
 
   return `
     <div class="card" style="display:grid;gap:18px;">
@@ -144,7 +165,9 @@ function renderStepContent() {
           ? `<button type="button" class="agendar-btn-back" id="btn-back">← Voltar</button>`
           : `<div></div>`}
         ${state.step < 4
-          ? `<button type="button" class="agendar-btn-next" id="btn-next" ${!canNext ? 'disabled' : ''}>Próximo →</button>`
+          ? `<button type="button" class="agendar-btn-next" id="btn-next" ${!canNext ? 'disabled' : ''}>
+               Próximo →
+             </button>`
           : `<button type="button" class="agendar-btn-confirm" id="btn-confirm" ${state.isSubmitting ? 'disabled' : ''}>
                ${state.isSubmitting ? 'Confirmando...' : '✓ Confirmar reserva'}
              </button>`}
@@ -159,77 +182,75 @@ function renderStepBody() {
   return renderSummary();
 }
 
-// ─── Step 1 ───────────────────────────────────────────────────────────────────
-
-function getCategoryIcon(category) {
-  const map = {
-    corte:      '✂️',
-    barba:      '🪒',
-    combo:      '✂️',
-    coloracao:  '🎨',
-    estetica:   '✨',
-    tratamento: '💆',
-    acabamento: '💈',
-  };
-  const key = String(category || '').toLowerCase()
-    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  return Object.entries(map).find(([k]) => key.includes(k))?.[1] || '✂️';
-}
+// ─── Step 1: Serviços ─────────────────────────────────────────────────────────
 
 function renderServices() {
-  if (state.isLoadingServices) return `<div class="agendar-empty"><strong>Carregando serviços...</strong></div>`;
-  if (!state.services.length) return `
-    <div class="agendar-empty">
-      <strong>Nenhum serviço disponível</strong>
-      A barbearia ainda não cadastrou serviços ativos.
-    </div>`;
+  if (state.isLoadingServices) {
+    return `<div class="agendar-empty"><strong>Carregando serviços...</strong></div>`;
+  }
 
-  return `<div class="agendar-cards">
-    ${state.services.map(s => `
-      <div class="agendar-card ${state.selectedService?.id === s.id ? 'is-selected' : ''}" data-srv="${esc(s.id)}">
-        <div class="agendar-card-icon">${getCategoryIcon(s.category)}</div>
-        <div class="agendar-card-name">${esc(s.name)}</div>
-        <div class="agendar-card-meta">
-          <div class="agendar-card-price">${esc(formatCurrency(s.price))}</div>
-          ${s.duration_min ? `<div class="agendar-card-duration">${esc(formatDuration(s.duration_min))}</div>` : ''}
-        </div>
-        ${s.includedInPlan ? `<div class="agendar-card-badge">✓ Incluso no plano</div>` : ''}
-      </div>`).join('')}
-  </div>`;
+  if (!state.services.length) {
+    return `
+      <div class="agendar-empty">
+        <strong>Nenhum serviço disponível</strong>
+        A barbearia ainda não cadastrou serviços ativos. Acesse o painel em Serviços para cadastrá-los.
+      </div>`;
+  }
+
+  return `
+    <div class="agendar-cards">
+      ${state.services.map(s => `
+        <div class="agendar-card ${state.selectedService?.id === s.id ? 'is-selected' : ''}" data-srv="${esc(s.id)}">
+          <div class="agendar-card-icon">${getCategoryIcon(s.category)}</div>
+          <div class="agendar-card-name">${esc(s.name)}</div>
+          <div class="agendar-card-meta">
+            <div class="agendar-card-price">${esc(formatCurrency(s.price))}</div>
+            ${s.duration_min ? `<div class="agendar-card-duration">${esc(formatDuration(s.duration_min))}</div>` : ''}
+          </div>
+          ${s.includedInPlan ? `<div class="agendar-card-badge">✓ Incluso no plano</div>` : ''}
+        </div>`).join('')}
+    </div>`;
 }
 
-
-// ─── Step 2 ───────────────────────────────────────────────────────────────────
+// ─── Step 2: Profissionais ────────────────────────────────────────────────────
 
 function renderBarbers() {
-  if (state.isLoadingBarbers) return `<div class="agendar-empty"><strong>Carregando profissionais...</strong></div>`;
-  if (!state.barbers.length) return `
-    <div class="agendar-empty">
-      <strong>Nenhum profissional disponível</strong>
-      Não há profissionais disponíveis para este serviço.
-    </div>`;
+  if (state.isLoadingBarbers) {
+    return `<div class="agendar-empty"><strong>Carregando profissionais...</strong></div>`;
+  }
 
-  return `<div class="agendar-barber-cards">
-    ${state.barbers.map(b => {
-      const price = b.customPrice != null ? formatCurrency(b.customPrice)
-        : state.selectedService ? formatCurrency(state.selectedService.price) : '';
-      return `
-        <div class="agendar-barber-card ${state.selectedBarber?.id === b.id ? 'is-selected' : ''}" data-barber="${esc(b.id)}">
-          <div class="agendar-barber-avatar">${esc(barberInitials(b))}</div>
-          <div class="agendar-barber-name">${esc(barberName(b))}</div>
-          ${price ? `<div class="agendar-barber-price">${esc(price)}</div>` : ''}
-        </div>`;
-    }).join('')}
-  </div>`;
+  if (!state.barbers.length) {
+    return `
+      <div class="agendar-empty">
+        <strong>Nenhum profissional disponível</strong>
+        Não há profissionais disponíveis para este serviço.
+      </div>`;
+  }
+
+  return `
+    <div class="agendar-barber-cards">
+      ${state.barbers.map(b => {
+        const price = b.customPrice != null
+          ? formatCurrency(b.customPrice)
+          : state.selectedService ? formatCurrency(state.selectedService.price) : '';
+        return `
+          <div class="agendar-barber-card ${state.selectedBarber?.id === b.id ? 'is-selected' : ''}" data-barber="${esc(b.id)}">
+            <div class="agendar-barber-avatar">${esc(barberInitials(b))}</div>
+            <div class="agendar-barber-name">${esc(barberName(b))}</div>
+            ${price ? `<div class="agendar-barber-price">${esc(price)}</div>` : ''}
+          </div>`;
+      }).join('')}
+    </div>`;
 }
 
-// ─── Step 3 ───────────────────────────────────────────────────────────────────
+// ─── Step 3: Data e hora ──────────────────────────────────────────────────────
 
 function renderDateTime() {
-  const days = Number(state.context?.barbershop?.booking_advance_days || 30);
-  const today = new Date().toISOString().slice(0,10);
-  const maxD  = new Date(); maxD.setDate(maxD.getDate() + days);
-  const max   = maxD.toISOString().slice(0,10);
+  const days  = Number(state.context?.barbershop?.booking_advance_days || 30);
+  const today = new Date().toISOString().slice(0, 10);
+  const maxD  = new Date();
+  maxD.setDate(maxD.getDate() + days);
+  const max = maxD.toISOString().slice(0, 10);
 
   const slotsHtml = state.isLoadingSlots
     ? `<div class="agendar-empty"><strong>Buscando horários...</strong></div>`
@@ -239,7 +260,9 @@ function renderDateTime() {
     ? `<div class="agendar-empty"><strong>Sem horários nesta data</strong>Tente outro dia ou outro profissional.</div>`
     : `<div class="agendar-slots">
         ${state.slots.map(slot => `
-          <button type="button" class="agendar-slot-btn ${state.selectedSlot === slot ? 'is-selected':''}" data-slot="${esc(slot)}">
+          <button type="button"
+            class="agendar-slot-btn ${state.selectedSlot === slot ? 'is-selected' : ''}"
+            data-slot="${esc(slot)}">
             ${esc(formatTime(slot))}
           </button>`).join('')}
        </div>`;
@@ -249,7 +272,8 @@ function renderDateTime() {
       <div>
         <div class="cfg-label" style="margin-bottom:8px;">📅 Data</div>
         <input type="date" id="agendar-date" class="agendar-date-input"
-          value="${esc(state.selectedDate)}" min="${esc(today)}" max="${esc(max)}"/>
+          value="${esc(state.selectedDate)}"
+          min="${esc(today)}" max="${esc(max)}"/>
       </div>
       <div>
         <div class="cfg-label" style="margin-bottom:8px;">🕐 Horários disponíveis</div>
@@ -258,12 +282,13 @@ function renderDateTime() {
     </div>`;
 }
 
-// ─── Step 4 ───────────────────────────────────────────────────────────────────
+// ─── Step 4: Resumo ───────────────────────────────────────────────────────────
 
 function renderSummary() {
-  const s = state.selectedService;
-  const b = state.selectedBarber;
+  const s    = state.selectedService;
+  const b    = state.selectedBarber;
   const shop = state.context?.barbershop || {};
+
   const price = s?.includedInPlan ? 'Incluso no plano'
     : b?.customPrice != null ? formatCurrency(b.customPrice)
     : s ? formatCurrency(s.price) : '—';
@@ -276,7 +301,9 @@ function renderSummary() {
       </div>
       <div class="agendar-summary-row">
         <div class="agendar-summary-label">Serviço</div>
-        <div class="agendar-summary-value is-highlight">${esc(s?.name || '—')}</div>
+        <div class="agendar-summary-value is-highlight">
+          ${getCategoryIcon(s?.category)} ${esc(s?.name || '—')}
+        </div>
       </div>
       <div class="agendar-summary-row">
         <div class="agendar-summary-label">Profissional</div>
@@ -384,7 +411,9 @@ async function loadServices() {
   try {
     const payload = await getClientPortalServices();
     state.services = Array.isArray(payload?.items) ? payload.items : [];
-  } catch { state.services = []; }
+  } catch {
+    state.services = [];
+  }
   state.isLoadingServices = false;
   rerender();
 }
@@ -396,7 +425,9 @@ async function loadBarbers() {
   try {
     const payload = await getClientPortalBarbers({ serviceId: state.selectedService.id });
     state.barbers = Array.isArray(payload?.items) ? payload.items : [];
-  } catch { state.barbers = []; }
+  } catch {
+    state.barbers = [];
+  }
   state.isLoadingBarbers = false;
   rerender();
 }
@@ -414,7 +445,9 @@ async function loadSlots() {
       date:      state.selectedDate,
     });
     state.slots = Array.isArray(payload?.slots) ? payload.slots : [];
-  } catch { state.slots = []; }
+  } catch {
+    state.slots = [];
+  }
   state.isLoadingSlots = false;
   rerender();
 }
@@ -431,7 +464,10 @@ async function handleSubmit() {
       scheduledAt: state.selectedSlot,
       notes:       state.notes,
     });
-    setFeedback(`✓ Agendado para ${formatDateTime(res?.appointment?.scheduled_at || state.selectedSlot)}`, 'success');
+    setFeedback(
+      `✓ Agendado para ${formatDateTime(res?.appointment?.scheduled_at || state.selectedSlot)}`,
+      'success'
+    );
     setTimeout(() => {
       window.history.pushState({ clientRoute: 'agendamentos' }, '', '/client/agendamentos');
       window.dispatchEvent(new PopStateEvent('popstate'));
@@ -443,26 +479,38 @@ async function handleSubmit() {
   }
 }
 
+// ─── Troca de barbearia ───────────────────────────────────────────────────────
+
 async function switchBarbershop(slug) {
   try {
     const profile    = getClientProfile();
     const identifier = profile?.email || profile?.whatsapp;
     if (!identifier) throw new Error('Sessão inválida.');
+
     const password = window.prompt('Digite sua senha para trocar de barbearia:');
     if (!password) {
       const sel = document.getElementById('client-barbershop-select');
       if (sel) sel.value = state.context?.barbershop?.slug || '';
       return;
     }
+
     const data = await loginClient({ identifier, password, barbershopSlug: slug });
     if (data?.token) setClientToken(data.token);
     if (data?.client) setClientProfile(data.client);
-    state.step = 1; state.selectedService = null; state.selectedBarber = null;
-    state.selectedDate = ''; state.selectedSlot = ''; state.slots = [];
-    state.services = []; state.barbers = [];
+
+    state.step            = 1;
+    state.selectedService = null;
+    state.selectedBarber  = null;
+    state.selectedDate    = '';
+    state.selectedSlot    = '';
+    state.slots           = [];
+    state.services        = [];
+    state.barbers         = [];
+
     const context = await getClientPortalContext();
-    state.context = context || null;
+    state.context           = context || null;
     state.linkedBarbershops = getClientProfile()?.barbershops || [];
+
     await loadServices();
   } catch (err) {
     const sel = document.getElementById('client-barbershop-select');
@@ -477,12 +525,16 @@ function renderBarbershopSelectorHtml() {
   const shops     = state.linkedBarbershops;
   const currentId = state.context?.barbershop?.id;
   if (!shops || shops.length <= 1) return '';
+
   return `
     <div style="padding:12px 14px;border-radius:14px;background:rgba(79,195,247,.04);border:1px solid rgba(79,195,247,.12);display:grid;gap:8px;">
       <div class="cfg-label">🏪 Agendar em qual barbearia?</div>
       <select id="client-barbershop-select"
         style="min-height:44px;border-radius:10px;border:1px solid rgba(79,195,247,.20);background:rgba(79,195,247,.06);color:#f5f9ff;padding:0 12px;font:inherit;font-weight:700;">
-        ${shops.map(s => `<option value="${esc(s.slug)}" ${s.id === currentId ? 'selected' : ''}>${esc(s.name)}${s.id === currentId ? ' ✓' : ''}</option>`).join('')}
+        ${shops.map(s => `
+          <option value="${esc(s.slug)}" ${s.id === currentId ? 'selected' : ''}>
+            ${esc(s.name)}${s.id === currentId ? ' ✓' : ''}
+          </option>`).join('')}
       </select>
     </div>`;
 }
@@ -506,13 +558,16 @@ export function renderClientAgendar() {
 
 export function initClientAgendarPage({ navigate }) {
   const root = document.getElementById('agendar-root');
-  if (root) { root.innerHTML = renderStepContent(); bindEvents(); }
+  if (root) {
+    root.innerHTML = renderStepContent();
+    bindEvents();
+  }
 
   (async () => {
     try {
       setFeedback('Carregando...', 'neutral');
       const context = await getClientPortalContext();
-      state.context = context || null;
+      state.context           = context || null;
       state.linkedBarbershops = getClientProfile()?.barbershops || [];
       rerender();
       await loadServices();
