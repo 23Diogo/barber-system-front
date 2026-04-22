@@ -81,7 +81,50 @@ function getStatusMeta(isAccepting) {
     : { label: '● Não aceitando', color: '#ff6b81', bg: 'rgba(255,107,129,.1)', border: 'rgba(255,107,129,.18)' };
 }
 
+function getWorkingHours(barber) {
+  const wh = barber.working_hours || {};
+  return {
+    start:       wh.start       || '08:00',
+    lunch_start: wh.lunch_start || '12:00',
+    lunch_end:   wh.lunch_end   || '13:00',
+    end:         wh.end         || '19:00',
+  };
+}
+
+function formatWorkingHoursLabel(barber) {
+  const wh = getWorkingHours(barber);
+  return `${wh.start} – ${wh.end} (almoço ${wh.lunch_start}–${wh.lunch_end})`;
+}
+
 // ─── Compressão de imagem via Canvas ─────────────────────────────────────────
+
+function compressImage(file, maxSize = 600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > height && width > maxSize) {
+        height = Math.round((height * maxSize) / width);
+        width  = maxSize;
+      } else if (height > maxSize) {
+        width  = Math.round((width * maxSize) / height);
+        height = maxSize;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+      canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+
+    img.onerror = () => reject(new Error('Não foi possível processar a imagem.'));
+    img.src = url;
+  });
+}
+
 // ─── Avatar render helper ─────────────────────────────────────────────────────
 
 function renderAvatar(barber, index, size) {
@@ -155,6 +198,7 @@ function renderBarberDetails(barber, index) {
         </div>
       </div>
 
+      <!-- Upload de foto -->
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border-radius:12px;background:rgba(79,195,247,.04);border:1px solid rgba(79,195,247,.10);">
         <div>
           <div class="color-section-label" style="margin-bottom:2px;">📸 Foto do profissional</div>
@@ -164,7 +208,7 @@ function renderBarberDetails(barber, index) {
           style="min-height:34px;padding:0 14px;border-radius:10px;border:1px solid rgba(79,195,247,.25);background:rgba(79,195,247,.08);color:#7dd3fc;font:inherit;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;">
           ${avatarUrl ? '🔄 Trocar foto' : '📤 Enviar foto'}
         </label>
-        <input type="file" id="barber-avatar-input" accept="image/jpeg,image/png,image/webp,image/*"
+        <input type="file" id="barber-avatar-input" accept="image/*"
           style="display:none;" data-barber-id="${escapeHtml(barber.id)}"/>
         <div id="barber-avatar-feedback" style="min-height:14px;font-size:10px;color:#5a6888;width:100%;"></div>
       </div>
@@ -183,8 +227,8 @@ function renderBarberDetails(barber, index) {
           <div class="mini-val" style="color:#00e676">${escapeHtml(barber.rating_count || 0)}</div>
         </div>
         <div class="mini-card">
-          <div class="mini-lbl">Status</div>
-          <div class="mini-val" style="font-size:13px;color:${status.color}">${escapeHtml(status.label)}</div>
+          <div class="mini-lbl">Horário</div>
+          <div class="mini-val" style="font-size:11px;color:#dce8ff;">${escapeHtml(formatWorkingHoursLabel(barber))}</div>
         </div>
       </div>
 
@@ -226,7 +270,8 @@ function renderBarberDetails(barber, index) {
 
 function renderBarberForm(mode, barber = null) {
   const isEdit = mode === 'edit';
-  const b = barber || {};
+  const b  = barber || {};
+  const wh = isEdit ? getWorkingHours(barber) : { start: '08:00', lunch_start: '12:00', lunch_end: '13:00', end: '19:00' };
 
   return `
     <div class="barber-modal-body">
@@ -283,6 +328,36 @@ function renderBarberForm(mode, barber = null) {
           <div class="color-section-label">Bio</div>
           <textarea class="modal-input barber-textarea" name="bio"
             placeholder="Breve descrição do profissional">${escapeHtml(b.bio || '')}</textarea>
+        </div>
+
+        <!-- Horário de trabalho -->
+        <div style="padding:12px 14px;border-radius:12px;background:rgba(79,195,247,.04);border:1px solid rgba(79,195,247,.10);display:grid;gap:12px;">
+          <div>
+            <div class="color-section-label" style="margin-bottom:2px;">🕐 Horário de trabalho</div>
+            <div style="font-size:10px;color:#5a6888;">Define quais slots aparecem para o cliente ao agendar</div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div>
+              <div class="color-section-label">Início</div>
+              <input class="modal-input" name="wh_start" type="time"
+                value="${escapeHtml(wh.start)}" style="margin:0;" />
+            </div>
+            <div>
+              <div class="color-section-label">Término</div>
+              <input class="modal-input" name="wh_end" type="time"
+                value="${escapeHtml(wh.end)}" style="margin:0;" />
+            </div>
+            <div>
+              <div class="color-section-label">Início do almoço</div>
+              <input class="modal-input" name="wh_lunch_start" type="time"
+                value="${escapeHtml(wh.lunch_start)}" style="margin:0;" />
+            </div>
+            <div>
+              <div class="color-section-label">Fim do almoço</div>
+              <input class="modal-input" name="wh_lunch_end" type="time"
+                value="${escapeHtml(wh.lunch_end)}" style="margin:0;" />
+            </div>
+          </div>
         </div>
 
         <div id="barber-form-feedback" class="barber-form-feedback"></div>
@@ -381,51 +456,13 @@ async function loadBarbeirosData() {
   }
 }
 
-// ─── Compressão de imagem via Canvas ─────────────────────────────────────────
-
-function compressImage(file, maxSize = 600, quality = 0.82) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-
-      let { width, height } = img;
-
-      if (width > height && width > maxSize) {
-        height = Math.round((height * maxSize) / width);
-        width  = maxSize;
-      } else if (height > maxSize) {
-        width  = Math.round((width * maxSize) / height);
-        height = maxSize;
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-
-    img.onerror = () => reject(new Error('Não foi possível processar a imagem.'));
-    img.src = url;
-  });
-}
-
 async function handleAvatarUpload(file, barberId) {
   const fb = document.getElementById('barber-avatar-feedback');
   if (!file || !barberId) return;
 
   try {
     if (fb) { fb.textContent = 'Processando imagem...'; fb.style.color = '#5a6888'; }
-
-    // Comprime automaticamente — qualquer tamanho de foto funciona
     const compressedBase64 = await compressImage(file);
-
     if (fb) { fb.textContent = 'Enviando foto...'; fb.style.color = '#5a6888'; }
 
     await apiFetch(`/api/barbers/${barberId}/avatar`, {
@@ -434,7 +471,6 @@ async function handleAvatarUpload(file, barberId) {
     });
 
     if (fb) { fb.textContent = '✓ Foto atualizada!'; fb.style.color = '#00e676'; }
-
     await loadBarbeirosData();
     if (barbeirosState.activeBarberId) openBarberModal(barbeirosState.activeBarberId);
   } catch (error) {
@@ -460,6 +496,14 @@ async function handleCreateBarber(event) {
   const specialties = String(formData.get('specialties') || '')
     .split(',').map(s => s.trim()).filter(Boolean);
 
+  const working_hours = {
+    start:       String(formData.get('wh_start')       || '08:00'),
+    end:         String(formData.get('wh_end')         || '19:00'),
+    lunch_start: String(formData.get('wh_lunch_start') || '12:00'),
+    lunch_end:   String(formData.get('wh_lunch_end')   || '13:00'),
+    slot_interval: 30,
+  };
+
   try {
     if (btn) btn.disabled = true;
     setFeedback('barber-form-feedback', 'Salvando...', 'neutral');
@@ -474,6 +518,7 @@ async function handleCreateBarber(event) {
         specialties,
         bio:          String(formData.get('bio') || '').trim() || null,
         is_accepting: String(formData.get('is_accepting')) === 'true',
+        working_hours,
       }),
     });
 
@@ -495,6 +540,14 @@ async function handleEditBarber(event) {
   const specialties = String(formData.get('specialties') || '')
     .split(',').map(s => s.trim()).filter(Boolean);
 
+  const working_hours = {
+    start:       String(formData.get('wh_start')       || '08:00'),
+    end:         String(formData.get('wh_end')         || '19:00'),
+    lunch_start: String(formData.get('wh_lunch_start') || '12:00'),
+    lunch_end:   String(formData.get('wh_lunch_end')   || '13:00'),
+    slot_interval: 30,
+  };
+
   try {
     if (btn) btn.disabled = true;
     setFeedback('barber-form-feedback', 'Salvando...', 'neutral');
@@ -507,6 +560,7 @@ async function handleEditBarber(event) {
         specialties,
         bio:          String(formData.get('bio') || '').trim() || null,
         is_accepting: String(formData.get('is_accepting')) === 'true',
+        working_hours,
       }),
     });
 
