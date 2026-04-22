@@ -33,6 +33,7 @@ const notifDefaults = {
   subscription_reminder_days: [5, 3, 1, 0],
   stock_alert:                true,
   daily_jobs_hour:            18,
+  new_client_alert:           true,  // ← alerta de novo cliente cadastrado
 };
 
 function getSettings() {
@@ -283,6 +284,9 @@ function renderNotificationSettings() {
       <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;padding:12px 0 8px;">Operacional</div>
       ${renderToggle('stock_alert', '📦 Alerta de estoque baixo', 'Envia resumo diário de itens abaixo do mínimo')}
       ${renderHourInput()}
+
+      <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;padding:12px 0 8px;">Clientes</div>
+      ${renderToggle('new_client_alert', '🎉 Novo cliente cadastrado', 'Receba uma msg no WhatsApp quando um cliente se cadastrar pelo link de convite')}
 
       <div id="cfg-notif-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
       <div style="display:flex;justify-content:flex-end;margin-top:4px;">
