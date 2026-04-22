@@ -81,6 +81,44 @@ function getStatusMeta(isAccepting) {
     : { label: '● Não aceitando', color: '#ff6b81', bg: 'rgba(255,107,129,.1)', border: 'rgba(255,107,129,.18)' };
 }
 
+// ─── Compressão de imagem via Canvas ─────────────────────────────────────────
+// Redimensiona para no máximo 600px e converte para JPEG
+// O dono pode enviar qualquer foto — o sistema cuida do tamanho
+
+function compressImage(file, maxSize = 600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let { width, height } = img;
+
+      // Mantém proporção, limita ao maxSize
+      if (width > height && width > maxSize) {
+        height = Math.round((height * maxSize) / width);
+        width  = maxSize;
+      } else if (height > maxSize) {
+        width  = Math.round((width * maxSize) / height);
+        height = maxSize;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+
+    img.onerror = () => reject(new Error('Não foi possível processar a imagem.'));
+    img.src = url;
+  });
+}
+
 // ─── Avatar render helper ─────────────────────────────────────────────────────
 
 function renderAvatar(barber, index, size) {
@@ -157,13 +195,13 @@ function renderBarberDetails(barber, index) {
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border-radius:12px;background:rgba(79,195,247,.04);border:1px solid rgba(79,195,247,.10);">
         <div>
           <div class="color-section-label" style="margin-bottom:2px;">📸 Foto do profissional</div>
-          <div style="font-size:10px;color:#5a6888;">JPG, PNG ou WEBP · máximo 2MB</div>
+          <div style="font-size:10px;color:#5a6888;">Qualquer tamanho · o sistema comprime automaticamente</div>
         </div>
         <label for="barber-avatar-input"
           style="min-height:34px;padding:0 14px;border-radius:10px;border:1px solid rgba(79,195,247,.25);background:rgba(79,195,247,.08);color:#7dd3fc;font:inherit;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;">
           ${avatarUrl ? '🔄 Trocar foto' : '📤 Enviar foto'}
         </label>
-        <input type="file" id="barber-avatar-input" accept="image/jpeg,image/png,image/webp"
+        <input type="file" id="barber-avatar-input" accept="image/jpeg,image/png,image/webp,image/*"
           style="display:none;" data-barber-id="${escapeHtml(barber.id)}"/>
         <div id="barber-avatar-feedback" style="min-height:14px;font-size:10px;color:#5a6888;width:100%;"></div>
       </div>
@@ -380,35 +418,68 @@ async function loadBarbeirosData() {
   }
 }
 
+// ─── Compressão de imagem via Canvas ─────────────────────────────────────────
+
+function compressImage(file, maxSize = 600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+
+      let { width, height } = img;
+
+      if (width > height && width > maxSize) {
+        height = Math.round((height * maxSize) / width);
+        width  = maxSize;
+      } else if (height > maxSize) {
+        width  = Math.round((width * maxSize) / height);
+        height = maxSize;
+      }
+
+      const canvas = document.createElement('canvas');
+      canvas.width  = width;
+      canvas.height = height;
+
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, width, height);
+
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+
+    img.onerror = () => reject(new Error('Não foi possível processar a imagem.'));
+    img.src = url;
+  });
+}
+
 async function handleAvatarUpload(file, barberId) {
   const fb = document.getElementById('barber-avatar-feedback');
   if (!file || !barberId) return;
 
-  if (file.size > 2 * 1024 * 1024) {
-    if (fb) { fb.textContent = 'Arquivo muito grande. Máximo 2MB.'; fb.style.color = '#ff8a8a'; }
-    return;
-  }
+  try {
+    if (fb) { fb.textContent = 'Processando imagem...'; fb.style.color = '#5a6888'; }
 
-  if (fb) { fb.textContent = 'Enviando foto...'; fb.style.color = '#5a6888'; }
+    // Comprime automaticamente — qualquer tamanho de foto funciona
+    const compressedBase64 = await compressImage(file);
 
-  const reader = new FileReader();
-  reader.onload = async (e) => {
-    try {
-      await apiFetch(`/api/barbers/${barberId}/avatar`, {
-        method: 'POST',
-        body: JSON.stringify({ imageBase64: e.target.result, mimeType: file.type }),
-      });
-      if (fb) { fb.textContent = '✓ Foto atualizada!'; fb.style.color = '#00e676'; }
-      await loadBarbeirosData();
-      if (barbeirosState.activeBarberId) openBarberModal(barbeirosState.activeBarberId);
-    } catch (error) {
-      if (fb) {
-        fb.textContent = error instanceof Error ? error.message : 'Erro ao enviar foto.';
-        fb.style.color = '#ff8a8a';
-      }
+    if (fb) { fb.textContent = 'Enviando foto...'; fb.style.color = '#5a6888'; }
+
+    await apiFetch(`/api/barbers/${barberId}/avatar`, {
+      method: 'POST',
+      body: JSON.stringify({ imageBase64: compressedBase64, mimeType: 'image/jpeg' }),
+    });
+
+    if (fb) { fb.textContent = '✓ Foto atualizada!'; fb.style.color = '#00e676'; }
+
+    await loadBarbeirosData();
+    if (barbeirosState.activeBarberId) openBarberModal(barbeirosState.activeBarberId);
+  } catch (error) {
+    if (fb) {
+      fb.textContent = error instanceof Error ? error.message : 'Erro ao enviar foto.';
+      fb.style.color = '#ff8a8a';
     }
-  };
-  reader.readAsDataURL(file);
+  }
 }
 
 async function handleCreateBarber(event) {
@@ -521,7 +592,6 @@ function bindBarberModalEvents() {
     });
   });
 
-  // Upload de avatar
   document.getElementById('barber-avatar-input')?.addEventListener('change', (e) => {
     const file     = e.target.files?.[0];
     const barberId = e.target.dataset.barberId;
@@ -566,6 +636,8 @@ function rerenderBarbeirosGrid() {
 
   bindBarbeirosGridEvents();
 }
+
+// ─── Export ───────────────────────────────────────────────────────────────────
 
 export function renderBarbeiros() {
   return /* html */ `
