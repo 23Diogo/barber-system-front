@@ -37,6 +37,25 @@ function renderClientNavItem({ route, label, icon, isActive = false, badge = '' 
   `;
 }
 
+function renderMenuIcon() {
+  return `
+    <svg fill="none" height="18" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" width="18" aria-hidden="true">
+      <line x1="4" y1="6" x2="20" y2="6"></line>
+      <line x1="4" y1="12" x2="20" y2="12"></line>
+      <line x1="4" y1="18" x2="20" y2="18"></line>
+    </svg>
+  `;
+}
+
+function renderCloseIcon() {
+  return `
+    <svg fill="none" height="18" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" width="18" aria-hidden="true">
+      <line x1="18" y1="6" x2="6" y2="18"></line>
+      <line x1="6" y1="6" x2="18" y2="18"></line>
+    </svg>
+  `;
+}
+
 export function renderClientLayout(content, options = {}) {
   const {
     variant = 'auth',
@@ -54,8 +73,29 @@ export function renderClientLayout(content, options = {}) {
 
   if (variant === 'dashboard') {
     return `
-      <div class="app">
-        <div class="sidebar">
+      <div class="app client-dashboard-app">
+        <button
+          type="button"
+          class="client-sidebar-overlay"
+          id="client-sidebar-overlay"
+          aria-label="Fechar menu lateral"
+        ></button>
+
+        <aside
+          class="sidebar client-dashboard-sidebar"
+          id="client-dashboard-sidebar"
+          aria-label="Menu da área do cliente"
+          aria-hidden="true"
+        >
+          <button
+            type="button"
+            class="client-sidebar-close-btn"
+            id="client-sidebar-close-btn"
+            aria-label="Fechar menu"
+          >
+            ${renderCloseIcon()}
+          </button>
+
           <div class="logo-area">
             <div class="logo-mark">
               <span class="logo-mark-text">B</span>
@@ -210,13 +250,26 @@ export function renderClientLayout(content, options = {}) {
               <span>🚪 Sair da conta</span>
             </div>
           </div>
-        </div>
+        </aside>
 
-        <div class="main">
-          <div class="topbar">
-            <div class="topbar-title" id="pageTitle">${escapeHtml(title)}</div>
+        <div class="main client-dashboard-main">
+          <div class="topbar client-dashboard-topbar">
+            <div class="client-topbar-leading">
+              <button
+                type="button"
+                class="client-mobile-menu-btn"
+                id="client-mobile-menu-btn"
+                aria-label="Abrir menu"
+                aria-expanded="false"
+                aria-controls="client-dashboard-sidebar"
+              >
+                ${renderMenuIcon()}
+              </button>
 
-            <div class="search-box">
+              <div class="topbar-title" id="pageTitle">${escapeHtml(title)}</div>
+            </div>
+
+            <div class="search-box client-dashboard-search-box">
               <svg fill="none" height="12" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" width="12">
                 <circle cx="11" cy="11" r="8"></circle>
                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
@@ -224,18 +277,20 @@ export function renderClientLayout(content, options = {}) {
               Barbearia atual: ${escapeHtml(activeBarbershopName)}
             </div>
 
-            <div class="notif-btn" title="Notificações">
-              <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
-                <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
-              </svg>
-              <div class="notif-dot"></div>
-            </div>
+            <div class="client-topbar-actions">
+              <div class="notif-btn" title="Notificações">
+                <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                  <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                  <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                </svg>
+                <div class="notif-dot"></div>
+              </div>
 
-            <div class="avatar">${escapeHtml(initials)}</div>
+              <div class="avatar">${escapeHtml(initials)}</div>
+            </div>
           </div>
 
-          <div class="content">
+          <div class="content client-dashboard-content">
             ${content}
           </div>
         </div>
