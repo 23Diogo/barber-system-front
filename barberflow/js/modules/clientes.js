@@ -248,7 +248,7 @@ async function loadInviteShopData() {
 }
 
 function buildInviteLink(slug) {
-  return `https://bbarberflow.com.br/client/cadastro?slug=${encodeURIComponent(slug)}`;
+  return `https://bbarberflow.com.br/client/cadastro/${encodeURIComponent(slug)}`;
 }
 
 function getDefaultInviteMessage(shopName, link) {
