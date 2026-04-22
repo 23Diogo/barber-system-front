@@ -15,15 +15,6 @@ import { renderClientBarbearias, initClientBarbeariasPage } from './modules/barb
 
 const CLIENT_BASE = '/client';
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
-}
-
 function getActiveBarbershopName(profile) {
   const shops = Array.isArray(profile?.barbershops) ? profile.barbershops : [];
   const preferred = shops.find((item) => item?.is_active || item?.is_selected) || shops[0];
@@ -129,7 +120,6 @@ function getClientRouteFromPath(pathname = window.location.pathname) {
 
   if (normalized === CLIENT_BASE || normalized === `${CLIENT_BASE}/login`) return 'login';
 
-  // /client/cadastro ou /client/cadastro/:slug → rota cadastro (link de convite)
   if (normalized.startsWith(`${CLIENT_BASE}/cadastro`)) return 'cadastro';
 
   const entry = Object.entries(routes).find(([, config]) => normalizePath(config.path) === normalized);
@@ -140,6 +130,37 @@ function getPathForRoute(route) {
   return routes[route]?.path || `${CLIENT_BASE}/login`;
 }
 
+function setClientMenuState(isOpen) {
+  const sidebar = document.getElementById('client-dashboard-sidebar');
+  const openBtn = document.getElementById('client-mobile-menu-btn');
+
+  if (!sidebar) return;
+
+  document.body.classList.toggle('client-menu-open', Boolean(isOpen));
+  sidebar.setAttribute('aria-hidden', isOpen ? 'false' : 'true');
+  openBtn?.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+}
+
+function closeClientMenu() {
+  setClientMenuState(false);
+}
+
+function bindClientDashboardMenu() {
+  const openBtn = document.getElementById('client-mobile-menu-btn');
+  const closeBtn = document.getElementById('client-sidebar-close-btn');
+  const overlay = document.getElementById('client-sidebar-overlay');
+
+  if (!openBtn) return;
+
+  openBtn.addEventListener('click', () => {
+    const isOpen = document.body.classList.contains('client-menu-open');
+    setClientMenuState(!isOpen);
+  });
+
+  closeBtn?.addEventListener('click', closeClientMenu);
+  overlay?.addEventListener('click', closeClientMenu);
+}
+
 function bindClientRouteTriggers(currentRoute) {
   document.querySelectorAll('[data-client-route]').forEach((element) => {
     const targetRoute = element.getAttribute('data-client-route');
@@ -147,10 +168,17 @@ function bindClientRouteTriggers(currentRoute) {
 
     if (targetRoute === currentRoute) element.classList.add('active');
 
-    const onNavigate = () => navigateClient(targetRoute);
+    const onNavigate = () => {
+      closeClientMenu();
+      navigateClient(targetRoute);
+    };
+
     element.addEventListener('click', onNavigate);
     element.addEventListener('keydown', (event) => {
-      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); onNavigate(); }
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        onNavigate();
+      }
     });
   });
 }
@@ -161,13 +189,17 @@ function bindClientGlobalActions() {
   });
 
   const logoutHandler = () => {
+    closeClientMenu();
     logoutClient();
     navigateClient('login', { replace: true });
   };
 
   document.getElementById('client-logout-btn')?.addEventListener('click', logoutHandler);
   document.getElementById('client-logout-btn')?.addEventListener('keydown', (event) => {
-    if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); logoutHandler(); }
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      logoutHandler();
+    }
   });
 }
 
@@ -198,6 +230,8 @@ function renderClientPage(route) {
     routeConfig.init?.(navigateClient);
     bindClientRouteTriggers(safeRoute);
     bindClientGlobalActions();
+    bindClientDashboardMenu();
+    closeClientMenu();
   });
 }
 
