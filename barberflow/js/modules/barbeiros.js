@@ -82,43 +82,6 @@ function getStatusMeta(isAccepting) {
 }
 
 // ─── Compressão de imagem via Canvas ─────────────────────────────────────────
-// Redimensiona para no máximo 600px e converte para JPEG
-// O dono pode enviar qualquer foto — o sistema cuida do tamanho
-
-function compressImage(file, maxSize = 600, quality = 0.82) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    const url = URL.createObjectURL(file);
-
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-
-      let { width, height } = img;
-
-      // Mantém proporção, limita ao maxSize
-      if (width > height && width > maxSize) {
-        height = Math.round((height * maxSize) / width);
-        width  = maxSize;
-      } else if (height > maxSize) {
-        width  = Math.round((width * maxSize) / height);
-        height = maxSize;
-      }
-
-      const canvas = document.createElement('canvas');
-      canvas.width  = width;
-      canvas.height = height;
-
-      const ctx = canvas.getContext('2d');
-      ctx.drawImage(img, 0, 0, width, height);
-
-      resolve(canvas.toDataURL('image/jpeg', quality));
-    };
-
-    img.onerror = () => reject(new Error('Não foi possível processar a imagem.'));
-    img.src = url;
-  });
-}
-
 // ─── Avatar render helper ─────────────────────────────────────────────────────
 
 function renderAvatar(barber, index, size) {
