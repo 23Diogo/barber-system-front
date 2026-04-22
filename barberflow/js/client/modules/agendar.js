@@ -214,6 +214,12 @@ function renderServices() {
 
 // ─── Step 2: Profissionais ────────────────────────────────────────────────────
 
+function barberAvatarUrl(b) {
+  const u = b?.user || b?.users || {};
+  if (Array.isArray(u)) return u[0]?.avatar_url || null;
+  return u.avatar_url || null;
+}
+
 function renderBarbers() {
   if (state.isLoadingBarbers) {
     return `<div class="agendar-empty"><strong>Carregando profissionais...</strong></div>`;
@@ -230,12 +236,21 @@ function renderBarbers() {
   return `
     <div class="agendar-barber-cards">
       ${state.barbers.map(b => {
-        const price = b.customPrice != null
+        const price     = b.customPrice != null
           ? formatCurrency(b.customPrice)
           : state.selectedService ? formatCurrency(state.selectedService.price) : '';
+        const avatarUrl = barberAvatarUrl(b);
+        const initials  = esc(barberInitials(b));
+        const avatarHtml = avatarUrl
+          ? `<div class="agendar-barber-avatar" style="padding:0;overflow:hidden;">
+               <img src="${esc(avatarUrl)}" alt="${esc(barberName(b))}"
+                 style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>
+             </div>`
+          : `<div class="agendar-barber-avatar">${initials}</div>`;
+
         return `
           <div class="agendar-barber-card ${state.selectedBarber?.id === b.id ? 'is-selected' : ''}" data-barber="${esc(b.id)}">
-            <div class="agendar-barber-avatar">${esc(barberInitials(b))}</div>
+            ${avatarHtml}
             <div class="agendar-barber-name">${esc(barberName(b))}</div>
             ${price ? `<div class="agendar-barber-price">${esc(price)}</div>` : ''}
           </div>`;
