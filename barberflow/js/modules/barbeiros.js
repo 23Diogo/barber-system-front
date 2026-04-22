@@ -22,18 +22,13 @@ const barbeirosState = {
 
 function escapeHtml(value) {
   return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 }
 
 function formatCurrency(value) {
   return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    maximumFractionDigits: 0,
+    style: 'currency', currency: 'BRL', maximumFractionDigits: 0,
   }).format(Number(value || 0));
 }
 
@@ -41,10 +36,7 @@ function setFeedback(id, message, variant = 'neutral') {
   const el = document.getElementById(id);
   if (!el) return;
   el.textContent = message || '';
-  el.style.color =
-    variant === 'error' ? '#ff8a8a' :
-    variant === 'success' ? '#00e676' :
-    '#5a6888';
+  el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
 function getBarberById(id) {
@@ -57,14 +49,15 @@ function getBarberName(barber) {
   return users?.name || 'Barbeiro';
 }
 
+function getBarberAvatarUrl(barber) {
+  const users = barber.users;
+  if (Array.isArray(users)) return users[0]?.avatar_url || null;
+  return users?.avatar_url || null;
+}
+
 function getBarberInitials(name) {
-  return String(name || 'B')
-    .trim()
-    .split(/\s+/)
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(p => p[0]?.toUpperCase() || '')
-    .join('') || 'BB';
+  return String(name || 'B').trim().split(/\s+/).filter(Boolean)
+    .slice(0, 2).map(p => p[0]?.toUpperCase() || '').join('') || 'BB';
 }
 
 function getBarberTheme(index) {
@@ -84,16 +77,37 @@ function getCommissionLabel(barber) {
 
 function getStatusMeta(isAccepting) {
   return isAccepting
-    ? { label: '● Disponível',      color: '#00e676', bg: 'rgba(0,230,118,.1)',    border: 'rgba(0,230,118,.18)' }
-    : { label: '● Não aceitando',   color: '#ff6b81', bg: 'rgba(255,107,129,.1)',  border: 'rgba(255,107,129,.18)' };
+    ? { label: '● Disponível',    color: '#00e676', bg: 'rgba(0,230,118,.1)',   border: 'rgba(0,230,118,.18)' }
+    : { label: '● Não aceitando', color: '#ff6b81', bg: 'rgba(255,107,129,.1)', border: 'rgba(255,107,129,.18)' };
+}
+
+// ─── Avatar render helper ─────────────────────────────────────────────────────
+
+function renderAvatar(barber, index, size) {
+  const theme     = getBarberTheme(index);
+  const name      = getBarberName(barber);
+  const initials  = getBarberInitials(name);
+  const avatarUrl = getBarberAvatarUrl(barber);
+  const cls       = size === 'lg' ? 'row-avatar barber-avatar barber-avatar--lg' : 'row-avatar barber-avatar';
+
+  if (avatarUrl) {
+    return `
+      <div class="${cls}" style="background:none;padding:0;overflow:hidden;">
+        <img src="${escapeHtml(avatarUrl)}" alt="${escapeHtml(name)}"
+          style="width:100%;height:100%;object-fit:cover;border-radius:50%;"/>
+      </div>`;
+  }
+
+  return `
+    <div class="${cls}" style="background:${theme.gradient};color:${theme.color};">
+      ${escapeHtml(initials)}
+    </div>`;
 }
 
 // ─── Render ───────────────────────────────────────────────────────────────────
 
 function renderBarberCard(barber, index) {
-  const theme = getBarberTheme(index);
-  const name = getBarberName(barber);
-  const initials = getBarberInitials(name);
+  const name   = getBarberName(barber);
   const status = getStatusMeta(barber.is_accepting !== false);
 
   return `
@@ -101,10 +115,7 @@ function renderBarberCard(barber, index) {
       data-barber-id="${escapeHtml(barber.id)}"
       title="Ver detalhes de ${escapeHtml(name)}">
       <div class="card barber-card">
-        <div class="row-avatar barber-avatar"
-          style="background:${theme.gradient};color:${theme.color};">
-          ${escapeHtml(initials)}
-        </div>
+        ${renderAvatar(barber, index, 'md')}
         <div class="barber-name">${escapeHtml(name)}</div>
         <div class="barber-role">Comissão: ${escapeHtml(getCommissionLabel(barber))}</div>
         <div class="barber-stats">
@@ -126,27 +137,35 @@ function renderBarberCard(barber, index) {
           ${status.label}
         </div>
       </div>
-    </button>
-  `;
+    </button>`;
 }
 
 function renderBarberDetails(barber, index) {
-  const theme = getBarberTheme(index);
-  const name = getBarberName(barber);
-  const initials = getBarberInitials(name);
-  const status = getStatusMeta(barber.is_accepting !== false);
+  const avatarUrl = getBarberAvatarUrl(barber);
+  const status    = getStatusMeta(barber.is_accepting !== false);
 
   return `
     <div class="barber-modal-body">
       <div class="barber-modal-header">
-        <div class="row-avatar barber-avatar barber-avatar--lg"
-          style="background:${theme.gradient};color:${theme.color};">
-          ${escapeHtml(initials)}
-        </div>
+        ${renderAvatar(barber, index, 'lg')}
         <div>
-          <div class="modal-title" style="margin:0;">${escapeHtml(name)}</div>
+          <div class="modal-title" style="margin:0;">${escapeHtml(getBarberName(barber))}</div>
           <div class="modal-sub" style="margin-top:4px;">Comissão: ${escapeHtml(getCommissionLabel(barber))}</div>
         </div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 12px;border-radius:12px;background:rgba(79,195,247,.04);border:1px solid rgba(79,195,247,.10);">
+        <div>
+          <div class="color-section-label" style="margin-bottom:2px;">📸 Foto do profissional</div>
+          <div style="font-size:10px;color:#5a6888;">JPG, PNG ou WEBP · máximo 2MB</div>
+        </div>
+        <label for="barber-avatar-input"
+          style="min-height:34px;padding:0 14px;border-radius:10px;border:1px solid rgba(79,195,247,.25);background:rgba(79,195,247,.08);color:#7dd3fc;font:inherit;font-size:11px;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;">
+          ${avatarUrl ? '🔄 Trocar foto' : '📤 Enviar foto'}
+        </label>
+        <input type="file" id="barber-avatar-input" accept="image/jpeg,image/png,image/webp"
+          style="display:none;" data-barber-id="${escapeHtml(barber.id)}"/>
+        <div id="barber-avatar-feedback" style="min-height:14px;font-size:10px;color:#5a6888;width:100%;"></div>
       </div>
 
       <div class="barber-modal-grid">
@@ -201,14 +220,12 @@ function renderBarberDetails(barber, index) {
           Editar informações
         </button>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderBarberForm(mode, barber = null) {
   const isEdit = mode === 'edit';
   const b = barber || {};
-  const name = isEdit ? getBarberName(barber) : '';
 
   return `
     <div class="barber-modal-body">
@@ -276,8 +293,7 @@ function renderBarberForm(mode, barber = null) {
           <button type="submit" class="btn-save">${isEdit ? 'Salvar alterações' : 'Cadastrar barbeiro'}</button>
         </div>
       </form>
-    </div>
-  `;
+    </div>`;
 }
 
 // ─── Modal control ────────────────────────────────────────────────────────────
@@ -305,11 +321,10 @@ function openEditBarberModal(id) {
 }
 
 function closeBarberModal() {
-  const modal = document.getElementById('barber-details-modal');
+  const modal   = document.getElementById('barber-details-modal');
   const content = document.getElementById('barber-details-content');
   if (!modal) return;
-
-  barbeirosState.modalMode = 'closed';
+  barbeirosState.modalMode      = 'closed';
   barbeirosState.activeBarberId = null;
   modal.classList.remove('open');
   modal.style.display = 'none';
@@ -317,7 +332,7 @@ function closeBarberModal() {
 }
 
 function renderBarberModal() {
-  const modal = document.getElementById('barber-details-modal');
+  const modal   = document.getElementById('barber-details-modal');
   const content = document.getElementById('barber-details-content');
   if (!modal || !content) return;
 
@@ -329,18 +344,16 @@ function renderBarberModal() {
   }
 
   const barber = barbeirosState.activeBarberId ? getBarberById(barbeirosState.activeBarberId) : null;
-  const index = barbeirosState.activeBarberId ? getBarberIndex(barbeirosState.activeBarberId) : 0;
+  const index  = barbeirosState.activeBarberId ? getBarberIndex(barbeirosState.activeBarberId) : 0;
 
   if (barbeirosState.modalMode === 'view') {
     if (!barber) { closeBarberModal(); return; }
     content.innerHTML = renderBarberDetails(barber, index);
   }
-
   if (barbeirosState.modalMode === 'edit') {
     if (!barber) { closeBarberModal(); return; }
     content.innerHTML = renderBarberForm('edit', barber);
   }
-
   if (barbeirosState.modalMode === 'create') {
     content.innerHTML = renderBarberForm('create');
   }
@@ -355,10 +368,9 @@ function renderBarberModal() {
 async function loadBarbeirosData() {
   barbeirosState.isLoading = true;
   rerenderBarbeirosGrid();
-
   try {
     const data = await apiFetch('/api/barbers');
-    barbeirosState.items = Array.isArray(data) ? data : [];
+    barbeirosState.items    = Array.isArray(data) ? data : [];
     barbeirosState.isLoaded = true;
   } catch (error) {
     console.error('Erro ao carregar barbeiros:', error);
@@ -368,20 +380,51 @@ async function loadBarbeirosData() {
   }
 }
 
+async function handleAvatarUpload(file, barberId) {
+  const fb = document.getElementById('barber-avatar-feedback');
+  if (!file || !barberId) return;
+
+  if (file.size > 2 * 1024 * 1024) {
+    if (fb) { fb.textContent = 'Arquivo muito grande. Máximo 2MB.'; fb.style.color = '#ff8a8a'; }
+    return;
+  }
+
+  if (fb) { fb.textContent = 'Enviando foto...'; fb.style.color = '#5a6888'; }
+
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      await apiFetch(`/api/barbers/${barberId}/avatar`, {
+        method: 'POST',
+        body: JSON.stringify({ imageBase64: e.target.result, mimeType: file.type }),
+      });
+      if (fb) { fb.textContent = '✓ Foto atualizada!'; fb.style.color = '#00e676'; }
+      await loadBarbeirosData();
+      if (barbeirosState.activeBarberId) openBarberModal(barbeirosState.activeBarberId);
+    } catch (error) {
+      if (fb) {
+        fb.textContent = error instanceof Error ? error.message : 'Erro ao enviar foto.';
+        fb.style.color = '#ff8a8a';
+      }
+    }
+  };
+  reader.readAsDataURL(file);
+}
+
 async function handleCreateBarber(event) {
   event.preventDefault();
-  const form = document.getElementById('barber-form');
+  const form     = document.getElementById('barber-form');
   const formData = new FormData(form);
-  const btn = form.querySelector('button[type="submit"]');
+  const btn      = form.querySelector('button[type="submit"]');
 
-  const name = String(formData.get('name') || '').trim();
+  const name  = String(formData.get('name')  || '').trim();
   const email = String(formData.get('email') || '').trim();
 
-  if (!name) { setFeedback('barber-form-feedback', 'Informe o nome do barbeiro.', 'error'); return; }
+  if (!name)  { setFeedback('barber-form-feedback', 'Informe o nome do barbeiro.', 'error'); return; }
   if (!email) { setFeedback('barber-form-feedback', 'Informe o e-mail.', 'error'); return; }
 
-  const specialtiesRaw = String(formData.get('specialties') || '');
-  const specialties = specialtiesRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const specialties = String(formData.get('specialties') || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
 
   try {
     if (btn) btn.disabled = true;
@@ -390,13 +433,12 @@ async function handleCreateBarber(event) {
     await apiFetch('/api/barbers', {
       method: 'POST',
       body: JSON.stringify({
-        name,
-        email,
-        phone: String(formData.get('phone') || '').trim() || null,
-        commission_type: String(formData.get('commission_type') || 'percentage'),
+        name, email,
+        phone:            String(formData.get('phone') || '').trim() || null,
+        commission_type:  String(formData.get('commission_type')  || 'percentage'),
         commission_value: Number(formData.get('commission_value') || 0),
         specialties,
-        bio: String(formData.get('bio') || '').trim() || null,
+        bio:          String(formData.get('bio') || '').trim() || null,
         is_accepting: String(formData.get('is_accepting')) === 'true',
       }),
     });
@@ -411,13 +453,13 @@ async function handleCreateBarber(event) {
 
 async function handleEditBarber(event) {
   event.preventDefault();
-  const form = document.getElementById('barber-form');
+  const form     = document.getElementById('barber-form');
   const formData = new FormData(form);
-  const btn = form.querySelector('button[type="submit"]');
+  const btn      = form.querySelector('button[type="submit"]');
   const barberId = barbeirosState.activeBarberId;
 
-  const specialtiesRaw = String(formData.get('specialties') || '');
-  const specialties = specialtiesRaw.split(',').map(s => s.trim()).filter(Boolean);
+  const specialties = String(formData.get('specialties') || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
 
   try {
     if (btn) btn.disabled = true;
@@ -426,10 +468,10 @@ async function handleEditBarber(event) {
     await apiFetch(`/api/barbers/${barberId}`, {
       method: 'PATCH',
       body: JSON.stringify({
-        commission_type: String(formData.get('commission_type') || 'percentage'),
+        commission_type:  String(formData.get('commission_type')  || 'percentage'),
         commission_value: Number(formData.get('commission_value') || 0),
         specialties,
-        bio: String(formData.get('bio') || '').trim() || null,
+        bio:          String(formData.get('bio') || '').trim() || null,
         is_accepting: String(formData.get('is_accepting')) === 'true',
       }),
     });
@@ -445,12 +487,10 @@ async function handleEditBarber(event) {
 async function handleToggleAccepting(barberId, isAccepting) {
   try {
     setFeedback('barber-modal-feedback', 'Atualizando...', 'neutral');
-
     await apiFetch(`/api/barbers/${barberId}`, {
       method: 'PATCH',
       body: JSON.stringify({ is_accepting: isAccepting }),
     });
-
     await loadBarbeirosData();
     openBarberModal(barberId);
   } catch (error) {
@@ -475,10 +515,17 @@ function bindBarberModalEvents() {
 
   document.querySelectorAll('.barber-status-action').forEach(btn => {
     btn.addEventListener('click', () => {
-      const id = btn.dataset.barberId;
+      const id          = btn.dataset.barberId;
       const isAccepting = btn.dataset.isAccepting === 'true';
       if (id) handleToggleAccepting(id, isAccepting);
     });
+  });
+
+  // Upload de avatar
+  document.getElementById('barber-avatar-input')?.addEventListener('change', (e) => {
+    const file     = e.target.files?.[0];
+    const barberId = e.target.dataset.barberId;
+    if (file && barberId) handleAvatarUpload(file, barberId);
   });
 
   const form = document.getElementById('barber-form');
