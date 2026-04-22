@@ -1,6 +1,8 @@
 import { apiFetch, hasAuthToken, hasApiConfig, formatDateForApi } from '../services/api.js';
 
-const BADGE_REFRESH_MS = 5 * 60 * 1000; // 5 minutos
+const BADGE_REFRESH_MS     = 5 * 60 * 1000; // 5 minutos
+const CLIENTS_SEEN_KEY     = 'barberflow.clientsSeenCount';
+
 let badgeRefreshTimer = null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -8,13 +10,11 @@ let badgeRefreshTimer = null;
 function setBadge(id, count) {
   const el = document.getElementById(id);
   if (!el) return;
-
   if (!count || count <= 0) {
     el.style.display = 'none';
     el.textContent = '0';
     return;
   }
-
   el.style.display = '';
   el.textContent = count > 99 ? '99+' : String(count);
 }
@@ -24,16 +24,37 @@ function hideBadge(id) {
   if (el) el.style.display = 'none';
 }
 
+// ─── Lógica de novos clientes ─────────────────────────────────────────────────
+
+function getSeenClientsCount() {
+  try {
+    return Number(localStorage.getItem(CLIENTS_SEEN_KEY) || 0);
+  } catch { return 0; }
+}
+
+function saveSeenClientsCount(count) {
+  try { localStorage.setItem(CLIENTS_SEEN_KEY, String(count)); } catch {}
+}
+
+function clearClientsBadge(totalCount) {
+  hideBadge('badge-clientes');
+  // Salva o total atual como "visto"
+  if (totalCount !== null) saveSeenClientsCount(totalCount);
+}
+
 // ─── Fetch e cálculo ──────────────────────────────────────────────────────────
+
+let _lastKnownClientCount = null;
 
 async function fetchBadgeData() {
   const today = formatDateForApi(new Date());
 
-  const [agendaRes, dashRes, campaignsRes, reviewsRes] = await Promise.allSettled([
+  const [agendaRes, dashRes, campaignsRes, reviewsRes, clientsRes] = await Promise.allSettled([
     apiFetch(`/api/appointments?date=${today}`),
     apiFetch('/api/dashboard'),
     apiFetch('/api/marketing/campaigns'),
     apiFetch('/api/reviews'),
+    apiFetch('/api/clients?limit=1'),
   ]);
 
   // ── Agenda: agendamentos de hoje não cancelados ──
@@ -64,16 +85,37 @@ async function fetchBadgeData() {
     const count = reviews.filter(r => new Date(r.created_at) >= cutoff).length;
     setBadge('badge-aval', count);
   }
+
+  // ── Clientes: novos desde a última visita ──
+  if (clientsRes.status === 'fulfilled') {
+    const payload  = clientsRes.value;
+
+    // Suporta total como número direto, em payload.total ou payload.count
+    const total =
+      typeof payload === 'number' ? payload :
+      Number(payload?.total ?? payload?.count ?? payload?.length ?? 0);
+
+    _lastKnownClientCount = total;
+
+    const seen = getSeenClientsCount();
+
+    // Primeira vez que abre (seen = 0): salva o total atual sem mostrar badge
+    if (seen === 0) {
+      saveSeenClientsCount(total);
+    } else {
+      const novos = Math.max(0, total - seen);
+      setBadge('badge-clientes', novos);
+    }
+  }
 }
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 
 export async function refreshNavBadges() {
   if (!hasApiConfig() || !hasAuthToken()) {
-    ['badge-agenda', 'badge-estoque', 'badge-mkt', 'badge-aval'].forEach(hideBadge);
+    ['badge-agenda', 'badge-estoque', 'badge-mkt', 'badge-aval', 'badge-clientes'].forEach(hideBadge);
     return;
   }
-
   try {
     await fetchBadgeData();
   } catch (error) {
@@ -82,13 +124,19 @@ export async function refreshNavBadges() {
 }
 
 export function initNavBadges() {
-  // Oculta todos os badges enquanto não há sessão
-  ['badge-agenda', 'badge-estoque', 'badge-mkt', 'badge-aval'].forEach(hideBadge);
+  ['badge-agenda', 'badge-estoque', 'badge-mkt', 'badge-aval', 'badge-clientes'].forEach(hideBadge);
 
-  // Atualiza quando o usuário faz login
+  // Zera badge de clientes ao clicar no menu
   document.addEventListener('click', (event) => {
     const t = event.target;
     if (!(t instanceof Element)) return;
+
+    // Clique em qualquer elemento dentro do nav-item de clientes
+    if (t.closest('[data-nav-target="clientes"]')) {
+      clearClientsBadge(_lastKnownClientCount);
+    }
+
+    // Atualiza badges após login/logout
     if (t.closest('#authConnectBtn') || t.closest('#authDisconnectBtn')) {
       setTimeout(refreshNavBadges, 1500);
     }
