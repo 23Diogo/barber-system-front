@@ -111,6 +111,16 @@
   box-shadow: 0 0 0 3px rgba(79,195,247,.12);
 }
 
+/* ── Ícone do serviço (emoji) ─────────────────────────────────────────────── */
+
+.agendar-card-icon {
+  font-size: 28px;
+  line-height: 1;
+  margin-bottom: 2px;
+}
+
+/* ── ─────────────────────────────────────────────────────────────────────── */
+
 .agendar-card-name {
   font-size: 14px;
   font-weight: 800;
