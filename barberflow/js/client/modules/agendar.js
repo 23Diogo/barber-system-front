@@ -161,38 +161,19 @@ function renderStepBody() {
 
 // ─── Step 1 ───────────────────────────────────────────────────────────────────
 
-function getServiceIcon(service) {
-  const name = String(service?.name || service?.category || '').toLowerCase();
-
-  if (/barba|beard|shav/.test(name)) return `
-    <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <path d="M4 4l4 4m0 0c1-1 3-1 4 0l6-6"/>
-      <path d="M8 8l2 8c.5 2 2 3 4 3s3.5-1 4-3l1-4"/>
-      <circle cx="8" cy="8" r="1.5" fill="currentColor" stroke="none"/>
-    </svg>`;
-
-  if (/sobrancelh|brow/.test(name)) return `
-    <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <path d="M3 9c3-3 9-3 12 0"/>
-      <path d="M15 9c2-2 5-2 6 0"/>
-      <line x1="12" y1="12" x2="12" y2="20"/>
-    </svg>`;
-
-  if (/hidrat|tratam|mascara|mask/.test(name)) return `
-    <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <path d="M12 2C6.5 2 3 7 3 12a9 9 0 0018 0c0-5-3.5-10-9-10z"/>
-      <path d="M12 6v6l4 2"/>
-    </svg>`;
-
-  // Default → tesoura (corte)
-  return `
-    <svg width="28" height="28" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
-      <circle cx="6" cy="6" r="3"/>
-      <circle cx="6" cy="18" r="3"/>
-      <line x1="20" y1="4" x2="8.12" y2="15.88"/>
-      <line x1="14.47" y1="14.48" x2="20" y2="20"/>
-      <line x1="8.12" y1="8.12" x2="12" y2="12"/>
-    </svg>`;
+function getCategoryIcon(category) {
+  const map = {
+    corte:      '✂️',
+    barba:      '🪒',
+    combo:      '✂️',
+    coloracao:  '🎨',
+    estetica:   '✨',
+    tratamento: '💆',
+    acabamento: '💈',
+  };
+  const key = String(category || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  return Object.entries(map).find(([k]) => key.includes(k))?.[1] || '✂️';
 }
 
 function renderServices() {
@@ -206,7 +187,7 @@ function renderServices() {
   return `<div class="agendar-cards">
     ${state.services.map(s => `
       <div class="agendar-card ${state.selectedService?.id === s.id ? 'is-selected' : ''}" data-srv="${esc(s.id)}">
-        <div class="agendar-card-icon">${getServiceIcon(s)}</div>
+        <div class="agendar-card-icon">${getCategoryIcon(s.category)}</div>
         <div class="agendar-card-name">${esc(s.name)}</div>
         <div class="agendar-card-meta">
           <div class="agendar-card-price">${esc(formatCurrency(s.price))}</div>
@@ -216,6 +197,7 @@ function renderServices() {
       </div>`).join('')}
   </div>`;
 }
+
 
 // ─── Step 2 ───────────────────────────────────────────────────────────────────
 
