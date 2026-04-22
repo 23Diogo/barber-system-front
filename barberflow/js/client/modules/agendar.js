@@ -10,664 +10,498 @@ import {
   setClientProfile,
 } from '../../services/client-auth.js';
 
+// ─── State ────────────────────────────────────────────────────────────────────
+
 const state = {
+  step: 1,
   context: null,
   services: [],
   barbers: [],
+  slots: [],
   linkedBarbershops: [],
-  selectedServiceId: '',
-  selectedBarberId: '',
+  selectedService: null,
+  selectedBarber: null,
   selectedDate: '',
   selectedSlot: '',
-  isSwitchingBarbershop: false,
+  notes: '',
+  isLoadingServices: false,
+  isLoadingBarbers: false,
+  isLoadingSlots: false,
+  isSubmitting: false,
 };
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+function esc(v) {
+  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;');
 }
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(value || 0));
+function formatCurrency(v) {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
 }
 
-function formatDuration(minutes) {
-  const total = Number(minutes || 0);
-  if (!total) return '-';
-  if (total < 60) return `${total} min`;
-  const hours = Math.floor(total / 60);
-  const mins  = total % 60;
-  if (!mins) return `${hours}h`;
-  return `${hours}h ${mins}min`;
+function formatDuration(m) {
+  const t = Number(m || 0);
+  if (!t) return '';
+  if (t < 60) return `${t} min`;
+  const h = Math.floor(t / 60), r = t % 60;
+  return r ? `${h}h ${r}min` : `${h}h`;
 }
 
-function formatDateTime(value) {
-  if (!value) return '-';
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return '-';
-  return date.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+function formatDateTime(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return '—';
+  return d.toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', year:'numeric', hour:'2-digit', minute:'2-digit' });
 }
 
-function getSelectedService() {
-  return state.services.find(item => item.id === state.selectedServiceId) || null;
+function formatTime(v) {
+  if (!v) return '—';
+  const d = new Date(v);
+  if (isNaN(d)) return v;
+  return d.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
 }
 
-function getSelectedBarber() {
-  return state.barbers.find(item => item.id === state.selectedBarberId) || null;
+function barberName(b) {
+  const u = b?.user || b?.users || {};
+  return u.name || 'Profissional';
 }
 
-function getNotesValue() {
-  return document.getElementById('client-agendar-notes')?.value?.trim() || '';
+function barberInitials(b) {
+  return barberName(b).split(' ').slice(0,2).map(p => p[0]?.toUpperCase()||'').join('');
 }
 
-function setFeedback(message, variant = 'neutral') {
-  const el = document.getElementById('client-agendar-feedback');
+function setFeedback(msg, variant = 'neutral') {
+  const el = document.getElementById('agendar-feedback');
   if (!el) return;
-  el.textContent = message || '';
+  el.textContent = msg || '';
   el.style.color = variant === 'error' ? '#ff7b91' : variant === 'success' ? '#00e676' : '#8fa3c7';
 }
 
-// ─── Dropdown de barbearia ─────────────────────────────────────────────────────
+// ─── Re-render ────────────────────────────────────────────────────────────────
 
-function renderBarbershopSelector() {
-  const container = document.getElementById('client-agendar-barbershop-selector');
-  if (!container) return;
+function rerender() {
+  const steps = document.getElementById('agendar-steps');
+  if (steps) steps.innerHTML = renderStepsHtml();
 
-  const shops = state.linkedBarbershops;
-  const currentId = state.context?.barbershop?.id;
-
-  // Só mostra se tiver mais de uma barbearia vinculada
-  if (!shops || shops.length <= 1) {
-    container.innerHTML = '';
-    return;
+  const root = document.getElementById('agendar-root');
+  if (root) {
+    root.innerHTML = renderStepContent();
+    bindEvents();
   }
+}
 
-  container.innerHTML = `
-    <div class="cfg-row" style="flex-wrap:wrap;gap:10px;">
-      <div style="flex:1;">
-        <div class="cfg-label">🏪 Selecionar barbearia</div>
-        <div class="cfg-sub">Você tem vínculo com ${escapeHtml(String(shops.length))} barbearias. Escolha em qual quer agendar.</div>
+// ─── Steps bar ────────────────────────────────────────────────────────────────
+
+const STEPS = ['Serviço','Profissional','Data e hora','Confirmar'];
+
+function renderStepsHtml() {
+  return STEPS.map((label, i) => {
+    const n = i + 1;
+    const cls = n < state.step ? 'is-done' : n === state.step ? 'is-active' : '';
+    const icon = n < state.step ? '✓' : String(n);
+    return `
+      ${i > 0 ? '<div class="agendar-step-sep"></div>' : ''}
+      <div class="agendar-step ${cls}">
+        <div class="agendar-step-num">${icon}</div>
+        <div class="agendar-step-label">${esc(label)}</div>
+      </div>`;
+  }).join('');
+}
+
+// ─── Step content ─────────────────────────────────────────────────────────────
+
+function renderStepContent() {
+  const titles = [
+    ['Escolha o serviço',      'Selecione o que você quer fazer'],
+    ['Escolha o profissional', 'Quem vai te atender?'],
+    ['Data e horário',         'Quando você quer ser atendido?'],
+    ['Confirme sua reserva',   'Revise os detalhes antes de confirmar'],
+  ];
+  const [title, sub] = titles[state.step - 1];
+
+  const canNext = (
+    (state.step === 1 && !!state.selectedService) ||
+    (state.step === 2 && !!state.selectedBarber) ||
+    (state.step === 3 && !!state.selectedDate && !!state.selectedSlot)
+  );
+
+  return `
+    <div class="card" style="display:grid;gap:18px;">
+      <div id="agendar-feedback" class="agendar-feedback"></div>
+
+      <div>
+        <div class="agendar-section-title">${esc(title)}</div>
+        <div class="agendar-section-sub">${esc(sub)}</div>
       </div>
-    </div>
-    <select id="client-barbershop-select"
-      style="width:100%;min-height:50px;border-radius:14px;border:1px solid rgba(79,195,247,.28);background:rgba(79,195,247,.06);color:#f5f9ff;padding:0 14px;font:inherit;font-weight:700;">
-      ${shops.map(shop => `
-        <option value="${escapeHtml(shop.slug)}" ${shop.id === currentId ? 'selected' : ''}>
-          ${escapeHtml(shop.name)}${shop.id === currentId ? ' (atual)' : ''}
-        </option>
-      `).join('')}
-    </select>
-    <div id="client-barbershop-switch-feedback" style="min-height:14px;font-size:11px;color:#8fa3c7;"></div>
-  `;
 
-  document.getElementById('client-barbershop-select')?.addEventListener('change', async (event) => {
-    const slug = event.target.value;
+      <div id="agendar-step-body">
+        ${renderStepBody()}
+      </div>
+
+      <div class="agendar-nav">
+        ${state.step > 1
+          ? `<button type="button" class="agendar-btn-back" id="btn-back">← Voltar</button>`
+          : `<div></div>`}
+        ${state.step < 4
+          ? `<button type="button" class="agendar-btn-next" id="btn-next" ${!canNext ? 'disabled' : ''}>Próximo →</button>`
+          : `<button type="button" class="agendar-btn-confirm" id="btn-confirm" ${state.isSubmitting ? 'disabled' : ''}>
+               ${state.isSubmitting ? 'Confirmando...' : '✓ Confirmar reserva'}
+             </button>`}
+      </div>
+    </div>`;
+}
+
+function renderStepBody() {
+  if (state.step === 1) return renderServices();
+  if (state.step === 2) return renderBarbers();
+  if (state.step === 3) return renderDateTime();
+  return renderSummary();
+}
+
+// ─── Step 1 ───────────────────────────────────────────────────────────────────
+
+function renderServices() {
+  if (state.isLoadingServices) return `<div class="agendar-empty"><strong>Carregando serviços...</strong></div>`;
+  if (!state.services.length) return `
+    <div class="agendar-empty">
+      <strong>Nenhum serviço disponível</strong>
+      A barbearia ainda não cadastrou serviços ativos. Acesse o painel da barbearia em Serviços para cadastrá-los.
+    </div>`;
+
+  return `<div class="agendar-cards">
+    ${state.services.map(s => `
+      <div class="agendar-card ${state.selectedService?.id === s.id ? 'is-selected' : ''}" data-srv="${esc(s.id)}">
+        <div class="agendar-card-name">${esc(s.name)}</div>
+        <div class="agendar-card-meta">
+          <div class="agendar-card-price">${esc(formatCurrency(s.price))}</div>
+          ${s.duration_min ? `<div class="agendar-card-duration">${esc(formatDuration(s.duration_min))}</div>` : ''}
+        </div>
+        ${s.includedInPlan ? `<div class="agendar-card-badge">✓ Incluso no plano</div>` : ''}
+      </div>`).join('')}
+  </div>`;
+}
+
+// ─── Step 2 ───────────────────────────────────────────────────────────────────
+
+function renderBarbers() {
+  if (state.isLoadingBarbers) return `<div class="agendar-empty"><strong>Carregando profissionais...</strong></div>`;
+  if (!state.barbers.length) return `
+    <div class="agendar-empty">
+      <strong>Nenhum profissional disponível</strong>
+      Não há profissionais disponíveis para este serviço.
+    </div>`;
+
+  return `<div class="agendar-barber-cards">
+    ${state.barbers.map(b => {
+      const price = b.customPrice != null ? formatCurrency(b.customPrice)
+        : state.selectedService ? formatCurrency(state.selectedService.price) : '';
+      return `
+        <div class="agendar-barber-card ${state.selectedBarber?.id === b.id ? 'is-selected' : ''}" data-barber="${esc(b.id)}">
+          <div class="agendar-barber-avatar">${esc(barberInitials(b))}</div>
+          <div class="agendar-barber-name">${esc(barberName(b))}</div>
+          ${price ? `<div class="agendar-barber-price">${esc(price)}</div>` : ''}
+        </div>`;
+    }).join('')}
+  </div>`;
+}
+
+// ─── Step 3 ───────────────────────────────────────────────────────────────────
+
+function renderDateTime() {
+  const days = Number(state.context?.barbershop?.booking_advance_days || 30);
+  const today = new Date().toISOString().slice(0,10);
+  const maxD  = new Date(); maxD.setDate(maxD.getDate() + days);
+  const max   = maxD.toISOString().slice(0,10);
+
+  const slotsHtml = state.isLoadingSlots
+    ? `<div class="agendar-empty"><strong>Buscando horários...</strong></div>`
+    : !state.selectedDate
+    ? `<div class="agendar-empty"><strong>Selecione uma data</strong>Os horários disponíveis aparecerão aqui.</div>`
+    : !state.slots.length
+    ? `<div class="agendar-empty"><strong>Sem horários nesta data</strong>Tente outro dia ou outro profissional.</div>`
+    : `<div class="agendar-slots">
+        ${state.slots.map(slot => `
+          <button type="button" class="agendar-slot-btn ${state.selectedSlot === slot ? 'is-selected':''}" data-slot="${esc(slot)}">
+            ${esc(formatTime(slot))}
+          </button>`).join('')}
+       </div>`;
+
+  return `
+    <div style="display:grid;gap:18px;">
+      <div>
+        <div class="cfg-label" style="margin-bottom:8px;">📅 Data</div>
+        <input type="date" id="agendar-date" class="agendar-date-input"
+          value="${esc(state.selectedDate)}" min="${esc(today)}" max="${esc(max)}"/>
+      </div>
+      <div>
+        <div class="cfg-label" style="margin-bottom:8px;">🕐 Horários disponíveis</div>
+        ${slotsHtml}
+      </div>
+    </div>`;
+}
+
+// ─── Step 4 ───────────────────────────────────────────────────────────────────
+
+function renderSummary() {
+  const s = state.selectedService;
+  const b = state.selectedBarber;
+  const shop = state.context?.barbershop || {};
+  const price = s?.includedInPlan ? 'Incluso no plano'
+    : b?.customPrice != null ? formatCurrency(b.customPrice)
+    : s ? formatCurrency(s.price) : '—';
+
+  return `
+    <div class="agendar-summary">
+      <div class="agendar-summary-row">
+        <div class="agendar-summary-label">Barbearia</div>
+        <div class="agendar-summary-value">${esc(shop.name || '—')}</div>
+      </div>
+      <div class="agendar-summary-row">
+        <div class="agendar-summary-label">Serviço</div>
+        <div class="agendar-summary-value is-highlight">${esc(s?.name || '—')}</div>
+      </div>
+      <div class="agendar-summary-row">
+        <div class="agendar-summary-label">Profissional</div>
+        <div class="agendar-summary-value">${esc(barberName(b))}</div>
+      </div>
+      <div class="agendar-summary-row">
+        <div class="agendar-summary-label">Data e hora</div>
+        <div class="agendar-summary-value is-highlight">${esc(formatDateTime(state.selectedSlot))}</div>
+      </div>
+      <div class="agendar-summary-row">
+        <div class="agendar-summary-label">Cobrança</div>
+        <div class="agendar-summary-value">${esc(price)}</div>
+      </div>
+      <div style="display:grid;gap:6px;">
+        <div class="cfg-label">📝 Observação (opcional)</div>
+        <textarea id="agendar-notes" class="agendar-notes" maxlength="280"
+          placeholder="Ex.: quero degradê mais baixo">${esc(state.notes)}</textarea>
+        <div class="agendar-notes-count" id="agendar-notes-count">${state.notes.length}/280</div>
+      </div>
+    </div>`;
+}
+
+// ─── Bind events ──────────────────────────────────────────────────────────────
+
+function bindEvents() {
+  // Serviços
+  document.querySelectorAll('[data-srv]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-srv');
+      state.selectedService = state.services.find(s => s.id === id) || null;
+      state.selectedBarber  = null;
+      state.selectedDate    = '';
+      state.selectedSlot    = '';
+      state.slots           = [];
+      rerender();
+    });
+  });
+
+  // Barbeiros
+  document.querySelectorAll('[data-barber]').forEach(el => {
+    el.addEventListener('click', () => {
+      const id = el.getAttribute('data-barber');
+      state.selectedBarber = state.barbers.find(b => b.id === id) || null;
+      state.selectedDate   = '';
+      state.selectedSlot   = '';
+      state.slots          = [];
+      rerender();
+    });
+  });
+
+  // Data
+  document.getElementById('agendar-date')?.addEventListener('change', async e => {
+    state.selectedDate   = e.target.value || '';
+    state.selectedSlot   = '';
+    state.slots          = [];
+    state.isLoadingSlots = true;
+    rerender();
+    await loadSlots();
+  });
+
+  // Slots
+  document.querySelectorAll('[data-slot]').forEach(el => {
+    el.addEventListener('click', () => {
+      state.selectedSlot = el.getAttribute('data-slot') || '';
+      rerender();
+    });
+  });
+
+  // Notas
+  document.getElementById('agendar-notes')?.addEventListener('input', e => {
+    state.notes = e.target.value || '';
+    const c = document.getElementById('agendar-notes-count');
+    if (c) c.textContent = `${state.notes.length}/280`;
+  });
+
+  // Próximo
+  document.getElementById('btn-next')?.addEventListener('click', async () => {
+    state.step++;
+    if (state.step === 2) await loadBarbers();
+    rerender();
+  });
+
+  // Voltar
+  document.getElementById('btn-back')?.addEventListener('click', () => {
+    state.step--;
+    rerender();
+  });
+
+  // Confirmar
+  document.getElementById('btn-confirm')?.addEventListener('click', handleSubmit);
+
+  // Barbershop selector
+  document.getElementById('client-barbershop-select')?.addEventListener('change', async e => {
+    const slug = e.target.value;
     if (!slug || slug === state.context?.barbershop?.slug) return;
     await switchBarbershop(slug);
   });
 }
 
-async function switchBarbershop(slug) {
-  const fb = document.getElementById('client-barbershop-switch-feedback');
-  if (fb) fb.textContent = 'Trocando barbearia...';
-
-  state.isSwitchingBarbershop = true;
-
-  try {
-    const profile = getClientProfile();
-    const identifier = profile?.email || profile?.whatsapp;
-    if (!identifier) throw new Error('Sessão inválida. Faça login novamente.');
-
-    // Mostra campo de senha para confirmar troca
-    renderPasswordConfirm(slug, identifier);
-  } catch (error) {
-    if (fb) fb.textContent = error instanceof Error ? error.message : 'Erro ao trocar barbearia.';
-    state.isSwitchingBarbershop = false;
-  }
-}
-
-function renderPasswordConfirm(slug, identifier) {
-  const container = document.getElementById('client-agendar-barbershop-selector');
-  if (!container) return;
-
-  const shop = state.linkedBarbershops.find(s => s.slug === slug);
-
-  container.innerHTML += `
-    <div id="client-switch-confirm-box"
-      style="border:1px solid rgba(79,195,247,.20);border-radius:14px;background:rgba(79,195,247,.06);padding:14px;display:grid;gap:10px;margin-top:8px;">
-      <div class="cfg-label">Confirme sua senha para agendar em ${escapeHtml(shop?.name || slug)}</div>
-      <input id="client-switch-password" type="password" placeholder="Sua senha"
-        style="min-height:44px;border-radius:10px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#f5f9ff;padding:0 12px;font:inherit;width:100%;box-sizing:border-box;"/>
-      <div id="client-switch-error" style="min-height:14px;font-size:11px;color:#ff7b91;"></div>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
-        <button type="button" id="client-switch-confirm-btn"
-          style="min-height:40px;padding:0 16px;border-radius:10px;border:0;background:linear-gradient(135deg,#5dc8ff,#1468ff);color:#fff;font:inherit;font-weight:800;cursor:pointer;">
-          Confirmar troca
-        </button>
-        <button type="button" id="client-switch-cancel-btn"
-          style="min-height:40px;padding:0 14px;border-radius:10px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#dce8ff;font:inherit;font-weight:700;cursor:pointer;">
-          Cancelar
-        </button>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('client-switch-cancel-btn')?.addEventListener('click', () => {
-    state.isSwitchingBarbershop = false;
-    // Reverte o select para a barbearia atual
-    const sel = document.getElementById('client-barbershop-select');
-    if (sel) sel.value = state.context?.barbershop?.slug || '';
-    document.getElementById('client-switch-confirm-box')?.remove();
-  });
-
-  document.getElementById('client-switch-confirm-btn')?.addEventListener('click', async () => {
-    const password = document.getElementById('client-switch-password')?.value || '';
-    const errEl    = document.getElementById('client-switch-error');
-
-    if (!password) {
-      if (errEl) errEl.textContent = 'Informe sua senha.';
-      return;
-    }
-
-    const btn = document.getElementById('client-switch-confirm-btn');
-    if (btn) btn.disabled = true;
-    if (errEl) errEl.textContent = '';
-
-    try {
-      setFeedback('Trocando para a barbearia selecionada...', 'neutral');
-
-      const data = await loginClient({
-        identifier,
-        password,
-        barbershopSlug: slug,
-      });
-
-      if (data?.token) setClientToken(data.token);
-      if (data?.client) setClientProfile(data.client);
-
-      // Recarrega o contexto da nova barbearia
-      resetAgendamentoState();
-      const context = await getClientPortalContext();
-      state.context = context || null;
-      state.linkedBarbershops = getClientProfile()?.barbershops || [];
-
-      renderBarbershopSelector();
-      renderContextBlock();
-      updateDateLimits();
-      await loadServices();
-      renderSlots([], false);
-
-      document.getElementById('client-switch-confirm-box')?.remove();
-      state.isSwitchingBarbershop = false;
-
-      setFeedback(`Agendando em ${escapeHtml(state.context?.barbershop?.name || slug)}.`, 'success');
-    } catch (error) {
-      if (errEl) errEl.textContent = error instanceof Error ? error.message : 'Senha incorreta.';
-      if (btn) btn.disabled = false;
-    }
-  });
-}
-
-function resetAgendamentoState() {
-  state.services         = [];
-  state.barbers          = [];
-  state.selectedServiceId = '';
-  state.selectedBarberId  = '';
-  state.selectedDate      = '';
-  state.selectedSlot      = '';
-
-  const dateInput = document.getElementById('client-agendar-date');
-  if (dateInput) dateInput.value = '';
-}
-
-// ─── Context block ─────────────────────────────────────────────────────────────
-
-function renderContextBlock() {
-  const container = document.getElementById('client-agendar-context');
-  if (!container) return;
-
-  const barbershop   = state.context?.barbershop || {};
-  const subscription = state.context?.subscription || null;
-
-  container.innerHTML = `
-    <div class="cfg-row">
-      <div>
-        <div class="cfg-label">Barbearia atual</div>
-        <div class="cfg-sub">${escapeHtml(barbershop.name || 'Barbearia')}</div>
-      </div>
-      <span class="pill">Portal atual</span>
-    </div>
-
-    <div class="cfg-row">
-      <div>
-        <div class="cfg-label">Antecedência máxima</div>
-        <div class="cfg-sub">${escapeHtml(String(barbershop.booking_advance_days || 30))} dia(s)</div>
-      </div>
-      <span class="pill">Agenda</span>
-    </div>
-
-    <div class="cfg-row">
-      <div>
-        <div class="cfg-label">Cancelamento</div>
-        <div class="cfg-sub">Até ${escapeHtml(String(barbershop.cancellation_hours || 0))} hora(s) antes</div>
-      </div>
-      <span class="pill">Regra</span>
-    </div>
-
-    <div class="cfg-row">
-      <div>
-        <div class="cfg-label">Plano ativo</div>
-        <div class="cfg-sub">${escapeHtml(subscription?.planName || 'Nenhum plano ativo')}</div>
-      </div>
-      <span class="pill">${escapeHtml(subscription?.status || 'Sem plano')}</span>
-    </div>
-  `;
-}
-
-function populateServices() {
-  const select = document.getElementById('client-agendar-service');
-  if (!select) return;
-
-  select.innerHTML = [
-    '<option value="">Selecione um serviço</option>',
-    ...state.services.map(service => {
-      const tag = service.includedInPlan ? ' • incluído no plano' : '';
-      return `<option value="${escapeHtml(service.id)}">${escapeHtml(service.name)} • ${escapeHtml(formatCurrency(service.price))} • ${escapeHtml(formatDuration(service.duration_min))}${escapeHtml(tag)}</option>`;
-    }),
-  ].join('');
-  select.value = state.selectedServiceId || '';
-}
-
-function populateBarbers() {
-  const select = document.getElementById('client-agendar-barber');
-  if (!select) return;
-
-  select.innerHTML = [
-    '<option value="">Selecione um profissional</option>',
-    ...state.barbers.map(barber => {
-      const user  = barber.user || barber.users || {};
-      const extra = barber.customPrice != null ? ` • preço personalizado ${formatCurrency(barber.customPrice)}` : '';
-      return `<option value="${escapeHtml(barber.id)}">${escapeHtml(user.name || 'Profissional')}${escapeHtml(extra)}</option>`;
-    }),
-  ].join('');
-  select.value = state.selectedBarberId || '';
-}
-
-function renderServiceMeta() {
-  const container = document.getElementById('client-agendar-service-meta');
-  if (!container) return;
-
-  const service = getSelectedService();
-
-  if (!service) {
-    container.innerHTML = `
-      <div class="cfg-row">
-        <div><div class="cfg-label">Serviço</div><div class="cfg-sub">Selecione um serviço para ver duração, preço e cobertura do plano.</div></div>
-        <span class="pill">Pendente</span>
-      </div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <div class="cfg-row">
-      <div><div class="cfg-label">Duração</div><div class="cfg-sub">${escapeHtml(formatDuration(service.duration_min))}</div></div>
-      <span class="pill">Tempo</span>
-    </div>
-    <div class="cfg-row">
-      <div><div class="cfg-label">Preço base</div><div class="cfg-sub">${escapeHtml(formatCurrency(service.price))}</div></div>
-      <span class="pill">Preço</span>
-    </div>
-    <div class="cfg-row">
-      <div>
-        <div class="cfg-label">Plano</div>
-        <div class="cfg-sub">
-          ${service.includedInPlan
-            ? `Incluído no plano${service.planRemainingQuantity != null ? ` • saldo ${service.planRemainingQuantity}` : ''}`
-            : 'Cobrança avulsa'}
-        </div>
-      </div>
-      <span class="pill">${service.includedInPlan ? 'Incluso' : 'Avulso'}</span>
-    </div>`;
-}
-
-function renderSlots(slots = [], loading = false) {
-  const container = document.getElementById('client-agendar-slots');
-  if (!container) return;
-
-  if (loading) {
-    container.innerHTML = `<div class="cfg-row"><div><div class="cfg-label">Horários</div><div class="cfg-sub">Buscando horários disponíveis...</div></div><span class="pill">Carregando</span></div>`;
-    return;
-  }
-
-  if (!state.selectedServiceId || !state.selectedBarberId || !state.selectedDate) {
-    container.innerHTML = `<div class="cfg-row"><div><div class="cfg-label">Horários</div><div class="cfg-sub">Escolha serviço, profissional e data para liberar os horários.</div></div><span class="pill">Aguardando</span></div>`;
-    return;
-  }
-
-  if (!slots.length) {
-    container.innerHTML = `<div class="cfg-row"><div><div class="cfg-label">Horários</div><div class="cfg-sub">Nenhum horário disponível para esta combinação.</div></div><span class="pill">Sem vagas</span></div>`;
-    return;
-  }
-
-  container.innerHTML = `
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;">
-      ${slots.map(slot => {
-        const active = state.selectedSlot === slot;
-        const date   = new Date(slot);
-        const label  = Number.isNaN(date.getTime()) ? slot : date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        return `
-          <button type="button" class="client-slot-btn" data-slot-value="${escapeHtml(slot)}"
-            style="min-height:46px;border-radius:12px;border:1px solid ${active ? 'rgba(79,195,247,.48)' : 'rgba(79,195,247,.18)'};background:${active ? 'rgba(79,195,247,.14)' : 'rgba(255,255,255,.04)'};color:${active ? '#7dd3fc' : '#dce8ff'};font:inherit;font-weight:700;cursor:pointer;">
-            ${escapeHtml(label)}
-          </button>`;
-      }).join('')}
-    </div>`;
-
-  container.querySelectorAll('[data-slot-value]').forEach(button => {
-    button.addEventListener('click', () => {
-      state.selectedSlot = button.getAttribute('data-slot-value') || '';
-      renderSlots(slots, false);
-      renderSummary();
-    });
-  });
-}
-
-function renderSummary() {
-  const container = document.getElementById('client-agendar-summary');
-  if (!container) return;
-
-  const service    = getSelectedService();
-  const barber     = getSelectedBarber();
-  const barberUser = barber?.user || barber?.users || {};
-  const notes      = getNotesValue();
-
-  const effectivePrice = service?.includedInPlan ? 0
-    : barber?.customPrice != null ? Number(barber.customPrice)
-    : Number(service?.price || 0);
-
-  container.innerHTML = `
-    <div class="cfg-row">
-      <div><div class="cfg-label">Barbearia</div><div class="cfg-sub">${escapeHtml(state.context?.barbershop?.name || '—')}</div></div>
-      <span class="pill">Local</span>
-    </div>
-    <div class="cfg-row">
-      <div><div class="cfg-label">Serviço</div><div class="cfg-sub">${escapeHtml(service?.name || 'Selecione')}</div></div>
-      <span class="pill">${escapeHtml(formatDuration(service?.duration_min || 0))}</span>
-    </div>
-    <div class="cfg-row">
-      <div><div class="cfg-label">Profissional</div><div class="cfg-sub">${escapeHtml(barberUser?.name || 'Selecione')}</div></div>
-      <span class="pill">Barbeiro</span>
-    </div>
-    <div class="cfg-row">
-      <div><div class="cfg-label">Horário</div><div class="cfg-sub">${escapeHtml(formatDateTime(state.selectedSlot))}</div></div>
-      <span class="pill">Reserva</span>
-    </div>
-    <div class="cfg-row">
-      <div>
-        <div class="cfg-label">Cobrança</div>
-        <div class="cfg-sub">${service?.includedInPlan ? 'Incluído no plano' : `Cobrança avulsa • ${formatCurrency(effectivePrice)}`}</div>
-      </div>
-      <span class="pill">${service?.includedInPlan ? 'Plano' : 'Avulso'}</span>
-    </div>
-    <div class="cfg-row">
-      <div><div class="cfg-label">Observação</div><div class="cfg-sub">${escapeHtml(notes || 'Nenhuma observação')}</div></div>
-      <span class="pill">${escapeHtml(String(notes.length))}/280</span>
-    </div>`;
-}
-
-function updateDateLimits() {
-  const input = document.getElementById('client-agendar-date');
-  const days  = Number(state.context?.barbershop?.booking_advance_days || 30);
-  if (!input) return;
-
-  const today   = new Date();
-  const maxDate = new Date();
-  maxDate.setDate(maxDate.getDate() + days);
-
-  input.min = today.toISOString().slice(0, 10);
-  input.max = maxDate.toISOString().slice(0, 10);
-}
+// ─── API ──────────────────────────────────────────────────────────────────────
 
 async function loadServices() {
-  const payload = await getClientPortalServices();
-  state.services = Array.isArray(payload?.items) ? payload.items : [];
-  populateServices();
-  renderServiceMeta();
-  renderSummary();
+  state.isLoadingServices = true;
+  rerender();
+  try {
+    const payload = await getClientPortalServices();
+    state.services = Array.isArray(payload?.items) ? payload.items : [];
+  } catch { state.services = []; }
+  state.isLoadingServices = false;
+  rerender();
 }
 
 async function loadBarbers() {
-  state.barbers          = [];
-  state.selectedBarberId = '';
-  state.selectedSlot     = '';
-  populateBarbers();
-  renderSlots([], false);
-  renderSummary();
-
-  if (!state.selectedServiceId) return;
-
-  const payload = await getClientPortalBarbers({ serviceId: state.selectedServiceId });
-  state.barbers = Array.isArray(payload?.items) ? payload.items : [];
-  populateBarbers();
-  renderSummary();
+  if (!state.selectedService) return;
+  state.isLoadingBarbers = true;
+  rerender();
+  try {
+    const payload = await getClientPortalBarbers({ serviceId: state.selectedService.id });
+    state.barbers = Array.isArray(payload?.items) ? payload.items : [];
+  } catch { state.barbers = []; }
+  state.isLoadingBarbers = false;
+  rerender();
 }
 
 async function loadSlots() {
-  state.selectedSlot = '';
-  renderSummary();
-  renderSlots([], true);
-
-  if (!state.selectedServiceId || !state.selectedBarberId || !state.selectedDate) {
-    renderSlots([], false);
+  if (!state.selectedService || !state.selectedBarber || !state.selectedDate) {
+    state.isLoadingSlots = false;
+    rerender();
     return;
   }
-
-  const payload = await getClientPortalAvailableSlots({
-    serviceId: state.selectedServiceId,
-    barberId:  state.selectedBarberId,
-    date:      state.selectedDate,
-  });
-
-  renderSlots(Array.isArray(payload?.slots) ? payload.slots : [], false);
+  try {
+    const payload = await getClientPortalAvailableSlots({
+      serviceId: state.selectedService.id,
+      barberId:  state.selectedBarber.id,
+      date:      state.selectedDate,
+    });
+    state.slots = Array.isArray(payload?.slots) ? payload.slots : [];
+  } catch { state.slots = []; }
+  state.isLoadingSlots = false;
+  rerender();
 }
 
-async function handleSubmit(navigate) {
-  const service = getSelectedService();
-  const barber  = getSelectedBarber();
-  const notes   = getNotesValue();
-
-  if (!service)              { setFeedback('Selecione um serviço.', 'error'); return; }
-  if (!barber)               { setFeedback('Selecione um profissional.', 'error'); return; }
-  if (!state.selectedDate)   { setFeedback('Selecione uma data.', 'error'); return; }
-  if (!state.selectedSlot)   { setFeedback('Selecione um horário.', 'error'); return; }
-
+async function handleSubmit() {
+  if (!state.selectedService || !state.selectedBarber || !state.selectedSlot) return;
+  state.isSubmitting = true;
+  rerender();
+  setFeedback('Confirmando seu agendamento...', 'neutral');
   try {
-    const submitBtn = document.getElementById('client-agendar-submit');
-    if (submitBtn) submitBtn.disabled = true;
-
-    setFeedback('Confirmando seu agendamento...', 'neutral');
-
-    const response = await createClientPortalAppointment({
-      serviceId:   state.selectedServiceId,
-      barberId:    state.selectedBarberId,
+    const res = await createClientPortalAppointment({
+      serviceId:   state.selectedService.id,
+      barberId:    state.selectedBarber.id,
       scheduledAt: state.selectedSlot,
-      notes,
+      notes:       state.notes,
     });
-
-    setFeedback(
-      `Agendamento confirmado para ${formatDateTime(response?.appointment?.scheduled_at || state.selectedSlot)}.`,
-      'success'
-    );
-
-    setTimeout(() => navigate('agendamentos'), 800);
-  } catch (error) {
-    setFeedback(error instanceof Error ? error.message : 'Não foi possível confirmar o agendamento.', 'error');
-  } finally {
-    const submitBtn = document.getElementById('client-agendar-submit');
-    if (submitBtn) submitBtn.disabled = false;
+    setFeedback(`✓ Agendado para ${formatDateTime(res?.appointment?.scheduled_at || state.selectedSlot)}`, 'success');
+    setTimeout(() => {
+      window.history.pushState({ clientRoute: 'agendamentos' }, '', '/client/agendamentos');
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    }, 1000);
+  } catch (err) {
+    setFeedback(err instanceof Error ? err.message : 'Não foi possível confirmar.', 'error');
+    state.isSubmitting = false;
+    rerender();
   }
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────────
+async function switchBarbershop(slug) {
+  try {
+    const profile    = getClientProfile();
+    const identifier = profile?.email || profile?.whatsapp;
+    if (!identifier) throw new Error('Sessão inválida.');
+    const password = window.prompt('Digite sua senha para trocar de barbearia:');
+    if (!password) {
+      const sel = document.getElementById('client-barbershop-select');
+      if (sel) sel.value = state.context?.barbershop?.slug || '';
+      return;
+    }
+    const data = await loginClient({ identifier, password, barbershopSlug: slug });
+    if (data?.token) setClientToken(data.token);
+    if (data?.client) setClientProfile(data.client);
+    state.step = 1; state.selectedService = null; state.selectedBarber = null;
+    state.selectedDate = ''; state.selectedSlot = ''; state.slots = [];
+    state.services = []; state.barbers = [];
+    const context = await getClientPortalContext();
+    state.context = context || null;
+    state.linkedBarbershops = getClientProfile()?.barbershops || [];
+    await loadServices();
+  } catch (err) {
+    const sel = document.getElementById('client-barbershop-select');
+    if (sel) sel.value = state.context?.barbershop?.slug || '';
+    setFeedback(err instanceof Error ? err.message : 'Erro ao trocar.', 'error');
+  }
+}
+
+// ─── Barbershop selector ──────────────────────────────────────────────────────
+
+function renderBarbershopSelectorHtml() {
+  const shops     = state.linkedBarbershops;
+  const currentId = state.context?.barbershop?.id;
+  if (!shops || shops.length <= 1) return '';
+  return `
+    <div style="padding:12px 14px;border-radius:14px;background:rgba(79,195,247,.04);border:1px solid rgba(79,195,247,.12);display:grid;gap:8px;">
+      <div class="cfg-label">🏪 Agendar em qual barbearia?</div>
+      <select id="client-barbershop-select"
+        style="min-height:44px;border-radius:10px;border:1px solid rgba(79,195,247,.20);background:rgba(79,195,247,.06);color:#f5f9ff;padding:0 12px;font:inherit;font-weight:700;">
+        ${shops.map(s => `<option value="${esc(s.slug)}" ${s.id === currentId ? 'selected' : ''}>${esc(s.name)}${s.id === currentId ? ' ✓' : ''}</option>`).join('')}
+      </select>
+    </div>`;
+}
+
+// ─── Export ───────────────────────────────────────────────────────────────────
 
 export function renderClientAgendar() {
   return `
     <div id="pages" style="display:block">
       <div class="page active">
-        <div style="display:grid;grid-template-columns:minmax(0,1.25fr) minmax(340px,.75fr);gap:18px;align-items:start;">
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Agendar horário</div>
-              <div class="card-action" data-client-route="agendamentos">Ver meus agendamentos</div>
-            </div>
-
-            <div id="client-agendar-feedback" style="min-height:20px;margin-bottom:14px;color:#8fa3c7;"></div>
-
-            <div style="display:grid;gap:14px;">
-              <!-- Seletor de barbearia (aparece só se tiver múltiplas) -->
-              <div id="client-agendar-barbershop-selector" style="display:grid;gap:10px;"></div>
-
-              <div id="client-agendar-context" style="display:grid;gap:12px;"></div>
-
-              <div style="display:grid;gap:8px;">
-                <label style="font-size:12px;font-weight:700;color:#dbe7ff;">Serviço</label>
-                <select id="client-agendar-service"
-                  style="min-height:50px;border-radius:14px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#f5f9ff;padding:0 14px;font:inherit;"></select>
-              </div>
-
-              <div id="client-agendar-service-meta" style="display:grid;gap:12px;"></div>
-
-              <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">
-                <div style="display:grid;gap:8px;">
-                  <label style="font-size:12px;font-weight:700;color:#dbe7ff;">Profissional</label>
-                  <select id="client-agendar-barber"
-                    style="min-height:50px;border-radius:14px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#f5f9ff;padding:0 14px;font:inherit;"></select>
-                </div>
-                <div style="display:grid;gap:8px;">
-                  <label style="font-size:12px;font-weight:700;color:#dbe7ff;">Data</label>
-                  <input id="client-agendar-date" type="date"
-                    style="min-height:50px;border-radius:14px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#f5f9ff;padding:0 14px;font:inherit;"/>
-                </div>
-              </div>
-
-              <div style="display:grid;gap:8px;">
-                <label style="font-size:12px;font-weight:700;color:#dbe7ff;">Horários disponíveis</label>
-                <div id="client-agendar-slots" style="display:grid;gap:12px;"></div>
-              </div>
-
-              <div style="display:grid;gap:8px;">
-                <label style="font-size:12px;font-weight:700;color:#dbe7ff;">Observação curta</label>
-                <textarea id="client-agendar-notes" maxlength="280" placeholder="Ex.: quero degradê mais baixo"
-                  style="min-height:92px;border-radius:14px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#f5f9ff;padding:14px;font:inherit;resize:vertical;"></textarea>
-              </div>
-
-              <div style="display:flex;gap:12px;flex-wrap:wrap;">
-                <button id="client-agendar-submit" type="button"
-                  style="min-height:50px;padding:0 18px;border-radius:14px;border:0;background:linear-gradient(135deg,#5dc8ff 0%,#2f8cff 55%,#1468ff 100%);color:#fff;font:inherit;font-weight:800;cursor:pointer;">
-                  Confirmar reserva
-                </button>
-                <button type="button" data-client-route="home"
-                  style="min-height:50px;padding:0 18px;border-radius:14px;border:1px solid rgba(79,195,247,.16);background:rgba(255,255,255,.04);color:#dce8ff;font:inherit;font-weight:700;cursor:pointer;">
-                  Voltar
-                </button>
-              </div>
-            </div>
+        <div class="agendar-wizard">
+          <div class="agendar-steps" id="agendar-steps">
+            ${renderStepsHtml()}
           </div>
-
-          <div class="card">
-            <div class="card-header">
-              <div class="card-title">Resumo da reserva</div>
-            </div>
-            <div id="client-agendar-summary" style="display:grid;gap:12px;"></div>
-          </div>
+          ${renderBarbershopSelectorHtml()}
+          <div id="agendar-root"></div>
         </div>
       </div>
-    </div>
-  `;
+    </div>`;
 }
 
-// ─── Init ─────────────────────────────────────────────────────────────────────
-
 export function initClientAgendarPage({ navigate }) {
-  const serviceSelect = document.getElementById('client-agendar-service');
-  const barberSelect  = document.getElementById('client-agendar-barber');
-  const dateInput     = document.getElementById('client-agendar-date');
-  const notesInput    = document.getElementById('client-agendar-notes');
-  const submitBtn     = document.getElementById('client-agendar-submit');
+  const root = document.getElementById('agendar-root');
+  if (root) { root.innerHTML = renderStepContent(); bindEvents(); }
 
   (async () => {
     try {
-      setFeedback('Carregando agenda...', 'neutral');
-
+      setFeedback('Carregando...', 'neutral');
       const context = await getClientPortalContext();
       state.context = context || null;
-
-      // Carrega barbearias vinculadas do perfil local
-      const profile = getClientProfile();
-      state.linkedBarbershops = Array.isArray(profile?.barbershops) ? profile.barbershops : [];
-
-      renderBarbershopSelector();
-      renderContextBlock();
-      updateDateLimits();
+      state.linkedBarbershops = getClientProfile()?.barbershops || [];
+      rerender();
       await loadServices();
-      renderSlots([], false);
-
-      setFeedback('Escolha serviço, profissional, data e horário.', 'neutral');
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Não foi possível carregar a agenda.', 'error');
+      setFeedback('', 'neutral');
+    } catch (err) {
+      setFeedback(err instanceof Error ? err.message : 'Erro ao carregar.', 'error');
     }
   })();
-
-  serviceSelect?.addEventListener('change', async event => {
-    state.selectedServiceId = event.target.value || '';
-    state.selectedBarberId  = '';
-    state.selectedDate      = '';
-    state.selectedSlot      = '';
-    if (dateInput) dateInput.value = '';
-
-    renderServiceMeta();
-    renderSummary();
-
-    try {
-      if (!state.selectedServiceId) {
-        state.barbers = [];
-        populateBarbers();
-        renderSlots([], false);
-        return;
-      }
-      setFeedback('Carregando profissionais...', 'neutral');
-      await loadBarbers();
-      setFeedback('Agora escolha o profissional e a data.', 'neutral');
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Não foi possível carregar os profissionais.', 'error');
-    }
-  });
-
-  barberSelect?.addEventListener('change', async event => {
-    state.selectedBarberId = event.target.value || '';
-    state.selectedSlot     = '';
-    renderSummary();
-    try {
-      await loadSlots();
-      setFeedback('Selecione um horário disponível.', 'neutral');
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Não foi possível carregar os horários.', 'error');
-    }
-  });
-
-  dateInput?.addEventListener('change', async event => {
-    state.selectedDate = event.target.value || '';
-    state.selectedSlot = '';
-    renderSummary();
-    try {
-      await loadSlots();
-      setFeedback('Selecione um horário disponível.', 'neutral');
-    } catch (error) {
-      setFeedback(error instanceof Error ? error.message : 'Não foi possível carregar os horários.', 'error');
-    }
-  });
-
-  notesInput?.addEventListener('input', () => renderSummary());
-  submitBtn?.addEventListener('click', () => handleSubmit(navigate));
 }
