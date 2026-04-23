@@ -336,73 +336,7 @@ body.client-area::before {
   margin-top: 6px;
 }
 
-@media (max-width: 720px) {
-  .client-header {
-    width: calc(100% - 24px);
-    margin-top: 18px;
-  }
-
-  .client-main {
-    width: calc(100% - 24px);
-    padding: 20px 0 32px;
-    align-items: flex-start;
-  }
-
-  .client-card {
-    width: 100%;
-    padding: 22px 18px;
-    margin-bottom: 20px;
-    border-radius: 20px;
-  }
-
-  .client-card-top {
-    flex-direction: column;
-    align-items: flex-start;
-  }
-
-  .client-title {
-    font-size: 30px;
-  }
-
-  .client-brand-title {
-    font-size: 20px;
-  }
-
-  .client-brand-mark {
-    width: 50px;
-    height: 50px;
-    font-size: 26px;
-  }
-
-  .client-login-brand-hero {
-    gap: 12px;
-    margin-bottom: 22px;
-  }
-
-  .client-login-brand-mark {
-    width: 62px;
-    height: 62px;
-    border-radius: 18px;
-    font-size: 38px;
-  }
-
-  .client-login-brand-wordmark {
-    font-size: clamp(26px, 8vw, 40px);
-  }
-
-  .client-card-top--login {
-    align-items: center;
-    text-align: center;
-  }
-
-  .client-card-top--login .client-title {
-    font-size: 32px;
-  }
-}
-
-/* =========================
-   DASHBOARD CLIENTE - BASE
-   ========================= */
+/* ===== DASHBOARD ===== */
 
 .client-dashboard-app {
   position: relative;
@@ -498,21 +432,99 @@ body.client-area::before {
   word-break: break-word;
 }
 
-/* =========================
-   TABLET / MOBILE
-   ========================= */
+@media (max-width: 720px) {
+  .client-header {
+    width: calc(100% - 24px);
+    margin-top: 18px;
+  }
+
+  .client-main {
+    width: calc(100% - 24px);
+    padding: 20px 0 32px;
+    align-items: flex-start;
+  }
+
+  .client-card {
+    width: 100%;
+    padding: 22px 18px;
+    margin-bottom: 20px;
+    border-radius: 20px;
+  }
+
+  .client-card-top {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .client-title {
+    font-size: 30px;
+  }
+
+  .client-brand-title {
+    font-size: 20px;
+  }
+
+  .client-brand-mark {
+    width: 50px;
+    height: 50px;
+    font-size: 26px;
+  }
+
+  .client-login-brand-hero {
+    gap: 12px;
+    margin-bottom: 22px;
+  }
+
+  .client-login-brand-mark {
+    width: 62px;
+    height: 62px;
+    border-radius: 18px;
+    font-size: 38px;
+  }
+
+  .client-login-brand-wordmark {
+    font-size: clamp(26px, 8vw, 40px);
+  }
+
+  .client-card-top--login {
+    align-items: center;
+    text-align: center;
+  }
+
+  .client-card-top--login .client-title {
+    font-size: 32px;
+  }
+}
 
 @media (max-width: 980px) {
+  .client-dashboard-app {
+    --client-mobile-browser-offset: max(56px, calc(env(safe-area-inset-top, 0px) + 44px));
+  }
+
+  html,
+  body,
+  body.client-area {
+    overflow-x: hidden !important;
+  }
+
+  body.client-area {
+    min-height: 100dvh;
+  }
+
+  body.client-area.client-menu-open {
+    overflow: hidden !important;
+  }
+
   .client-mobile-menu-btn,
   .client-sidebar-close-btn {
-    display: inline-flex;
+    display: inline-flex !important;
   }
 
   .client-sidebar-overlay {
     display: block;
     position: fixed;
     inset: 0;
-    z-index: 59;
+    z-index: 89;
     border: 0;
     padding: 0;
     background: rgba(3, 8, 20, 0.72);
@@ -534,7 +546,7 @@ body.client-area::before {
     width: min(86vw, 320px);
     max-width: 320px;
     height: 100dvh;
-    z-index: 60;
+    z-index: 90;
     overflow-y: auto;
     transform: translateX(-104%);
     transition: transform 0.24s ease, box-shadow 0.24s ease;
@@ -557,36 +569,84 @@ body.client-area::before {
     right: 16px;
   }
 
+  .app,
+  .main,
+  .content,
+  .client-dashboard-main,
+  .client-dashboard-content {
+    min-width: 0 !important;
+    width: 100% !important;
+    box-sizing: border-box;
+  }
+
+  .main,
   .client-dashboard-main {
-    width: 100%;
-    min-width: 0;
+    padding-top: calc(var(--client-mobile-browser-offset) + 8px) !important;
+    padding-left: 0 !important;
+    padding-right: 0 !important;
+    padding-bottom: 24px !important;
   }
 
+  .topbar,
   .client-dashboard-topbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px;
-  }
-
-  .client-dashboard-search-box {
-    grid-column: 1 / -1;
-    order: 3;
+    position: sticky !important;
+    top: var(--client-mobile-browser-offset) !important;
+    z-index: 70 !important;
+    display: grid !important;
+    grid-template-columns: auto 1fr auto !important;
+    align-items: center !important;
+    gap: 10px !important;
+    min-height: 64px !important;
+    margin: 0 12px 12px !important;
+    padding: 10px 12px !important;
+    background: linear-gradient(180deg, rgba(5, 8, 22, 0.98) 0%, rgba(5, 8, 22, 0.92) 100%) !important;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid rgba(79, 195, 247, 0.12);
+    border-radius: 18px;
+    box-sizing: border-box;
   }
 
   .client-topbar-leading {
-    min-width: 0;
+    min-width: 0 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 10px !important;
   }
 
+  .client-mobile-menu-btn {
+    position: relative !important;
+    z-index: 80 !important;
+    width: 42px !important;
+    height: 42px !important;
+    flex: 0 0 42px !important;
+  }
+
+  .topbar-title,
   .client-topbar-leading .topbar-title {
-    font-size: clamp(18px, 4.4vw, 28px);
-    line-height: 1.1;
+    min-width: 0 !important;
+    font-size: 18px !important;
+    line-height: 1.1 !important;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .search-box,
+  .client-dashboard-search-box {
+    display: none !important;
   }
 
   .client-topbar-actions {
-    gap: 10px;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
   }
 
+  .content,
   .client-dashboard-content {
-    min-width: 0;
+    padding: 0 12px !important;
   }
 
   .client-dashboard-content .grid-3 {
@@ -608,16 +668,24 @@ body.client-area::before {
 }
 
 @media (max-width: 640px) {
+  .topbar,
   .client-dashboard-topbar {
-    gap: 10px;
+    margin-left: 10px !important;
+    margin-right: 10px !important;
+    padding: 10px !important;
   }
 
   .client-topbar-leading {
-    gap: 10px;
+    gap: 8px !important;
   }
 
   .client-topbar-actions {
-    gap: 8px;
+    gap: 8px !important;
+  }
+
+  .topbar-title,
+  .client-topbar-leading .topbar-title {
+    font-size: 16px !important;
   }
 
   .client-dashboard-search-box {
@@ -639,75 +707,5 @@ body.client-area::before {
 
   .client-dashboard-content .card-action {
     width: 100%;
-  }
-}
-
-@media (max-width: 980px) {
-  body.client-area {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-
-  .client-dashboard-app {
-    min-height: 100dvh;
-  }
-
-  .client-dashboard-main,
-  .main {
-    min-width: 0;
-    width: 100%;
-  }
-
-  .client-dashboard-topbar,
-  .topbar {
-    position: relative;
-    z-index: 25;
-    margin-top: calc(env(safe-area-inset-top, 0px) + 10px);
-    padding-left: 12px;
-    padding-right: 12px;
-    box-sizing: border-box;
-  }
-
-  .client-topbar-leading {
-    align-items: center;
-  }
-
-  .client-mobile-menu-btn {
-    position: relative;
-    z-index: 30;
-    margin: 0;
-    flex: 0 0 42px;
-  }
-
-  .client-dashboard-search-box,
-  .search-box {
-    min-width: 0;
-    width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    box-sizing: border-box;
-  }
-
-  .client-dashboard-content,
-  .content {
-    min-width: 0;
-    width: 100%;
-    padding-left: 12px;
-    padding-right: 12px;
-    box-sizing: border-box;
-  }
-}
-
-@media (max-width: 980px) {
-  .client-sidebar-overlay {
-    z-index: 89 !important;
-  }
-
-  .client-dashboard-sidebar {
-    z-index: 90 !important;
-  }
-
-  body.client-area.client-menu-open {
-    overflow: hidden !important;
   }
 }
