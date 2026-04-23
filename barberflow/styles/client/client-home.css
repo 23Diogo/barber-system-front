@@ -405,23 +405,25 @@
 
   .main,
   .client-dashboard-main {
-    padding-top: 74px !important;
+    padding-top: 0 !important;
   }
 
   .topbar,
   .client-dashboard-topbar {
-    position: fixed !important;
+    position: sticky !important;
     top: 0 !important;
-    left: 0 !important;
-    right: 0 !important;
     z-index: 70 !important;
     display: grid !important;
     grid-template-columns: auto 1fr auto !important;
     align-items: center !important;
     gap: 10px !important;
+    min-height: 64px !important;
     padding: max(10px, env(safe-area-inset-top)) 12px 10px !important;
-    background: linear-gradient(180deg, rgba(5, 8, 22, 0.96) 0%, rgba(5, 8, 22, 0.82) 100%) !important;
+    margin: 0 0 12px 0 !important;
+    background: linear-gradient(180deg, rgba(5, 8, 22, 0.98) 0%, rgba(5, 8, 22, 0.92) 100%) !important;
     backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(79, 195, 247, 0.12);
     box-sizing: border-box;
   }
 
@@ -463,30 +465,8 @@
     gap: 8px !important;
   }
 
-  .client-home-hero-card {
-    grid-template-columns: 1fr !important;
-    padding: 18px !important;
-    border-radius: 20px !important;
-  }
-
-  .client-home-hero-visual {
-    min-height: 220px !important;
-  }
-
-  .client-home-brand {
-    transform: translateX(-50%) scale(0.72) !important;
-    top: 6px !important;
-  }
-
-  .client-home-orbit--one {
-    width: 240px !important;
-    height: 120px !important;
-    top: 54px !important;
-  }
-
-  .client-home-orbit--two {
-    width: 300px !important;
-    height: 154px !important;
-    top: 38px !important;
+  .content,
+  .client-dashboard-content {
+    padding-top: 0 !important;
   }
 }
