@@ -709,3 +709,63 @@ body.client-area::before {
     width: 100%;
   }
 }
+
+
+@media (max-width: 980px) {
+  .client-dashboard-app {
+    --client-mobile-browser-offset: max(52px, calc(env(safe-area-inset-top, 0px) + 36px));
+  }
+
+  .main,
+  .client-dashboard-main {
+    padding-top: calc(var(--client-mobile-browser-offset) + 6px) !important;
+    padding-bottom: 24px !important;
+  }
+
+  .topbar,
+  .client-dashboard-topbar {
+    top: var(--client-mobile-browser-offset) !important;
+    min-height: 58px !important;
+    margin: 0 10px 10px !important;
+    padding: 8px 10px !important;
+    border-radius: 16px !important;
+    grid-template-columns: 42px minmax(0, 1fr) auto !important;
+  }
+
+  .client-mobile-menu-btn {
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px !important;
+  }
+
+  .topbar-title,
+  .client-topbar-leading .topbar-title {
+    font-size: 16px !important;
+  }
+
+  .client-topbar-actions {
+    gap: 6px !important;
+  }
+
+  .client-topbar-actions .avatar {
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 12px !important;
+  }
+
+  .client-topbar-actions .notif-btn {
+    width: 34px !important;
+    height: 34px !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .client-topbar-actions .avatar {
+    display: none !important;
+  }
+
+  .topbar,
+  .client-dashboard-topbar {
+    grid-template-columns: 40px minmax(0, 1fr) 34px !important;
+  }
+}
