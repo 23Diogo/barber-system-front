@@ -127,7 +127,7 @@ export function renderClientLayout(content, options = {}) {
           class="sidebar client-dashboard-sidebar"
           id="client-dashboard-sidebar"
           aria-label="Menu da área do cliente"
-          aria-hidden="true"
+          aria-hidden="false"
         >
           <button
             type="button"
