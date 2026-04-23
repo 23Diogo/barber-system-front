@@ -171,6 +171,47 @@ function renderWidgetTopbar(title, route) {
   `;
 }
 
+function renderDataRows(rows = []) {
+  return rows
+    .map((row) => `
+      <div class="data-row">
+        <span class="data-name">${escapeHtml(row.name || '')}</span>
+        <div class="data-bar">
+          <div class="data-fill" style="${row.fillStyle || ''}; width:${row.fillWidth || '0%'}"></div>
+        </div>
+        <span class="data-val" style="${row.valueStyle || ''}">${escapeHtml(row.value || '')}</span>
+      </div>
+    `)
+    .join('');
+}
+
+function renderHomeCard({
+  title,
+  route,
+  value,
+  subtitle,
+  rows = [],
+  module,
+  moduleStyle = '',
+  valueClass = '',
+}) {
+  return `
+    <article
+      class="analytics-card dashboard-widget client-home-card"
+      data-client-route="${escapeHtml(route)}"
+      role="button"
+      tabindex="0"
+      title="${escapeHtml(`Abrir ${title}`)}"
+    >
+      ${renderWidgetTopbar(title, route)}
+      <div class="ac-value ${valueClass}">${escapeHtml(value)}</div>
+      <div class="ac-sub">${escapeHtml(subtitle)}</div>
+      ${renderDataRows(rows)}
+      <div class="widget-module" style="${moduleStyle}">${escapeHtml(module)}</div>
+    </article>
+  `;
+}
+
 export function renderClientHome() {
   const profile = getClientProfile() || {};
   const firstName = String(profile?.name || 'Cliente').trim().split(/\s+/)[0] || 'Cliente';
@@ -183,185 +224,177 @@ export function renderClientHome() {
 
   const plan = getPlanSummary(profile);
   const barbershopSummary = buildBarbershopSummary(profile);
+  const activeShop = getActiveBarbershop(profile);
 
   return `
-    <div id="hero">
-      <div class="hero-logo">
-        <div class="hero-B">B</div>
-        <div class="hero-name">Barber<span>Flow</span></div>
-      </div>
+    <div class="client-home-shell">
+      <section class="client-home-hero-card">
+        <div class="client-home-hero-copy">
+          <div class="client-home-kicker">Área do cliente</div>
+          <h2 class="client-home-title">Olá, ${escapeHtml(firstName)}</h2>
+          <p class="client-home-text">
+            Gerencie seus horários, barbearias, plano e dados em um portal único.
+          </p>
 
-      <div class="orbit" style="width:340px;height:170px">
-        <div class="orbit-dot" style="background:#4fc3f7;color:#4fc3f7"></div>
-      </div>
-
-      <div class="orbit orbit-2" style="width:420px;height:210px">
-        <div class="orbit-dot" style="background:#9c6fff;color:#9c6fff"></div>
-      </div>
-
-      <div class="chair-wrap">
-        ${buildChairSvg()}
-        <div class="chair-glow"></div>
-        <div class="chair-ring"></div>
-      </div>
-
-      <div
-        class="analytics-card pos-tl dashboard-widget"
-        data-client-route="agendamentos"
-        role="button"
-        tabindex="0"
-        title="Abrir meus agendamentos"
-      >
-        ${renderWidgetTopbar('Próximo agendamento', 'agendamentos')}
-        <div class="ac-value">${escapeHtml(nextAppointment.title)}</div>
-        <div class="ac-sub">${escapeHtml(nextAppointment.subtitle)}</div>
-
-        <div class="data-row">
-          <span class="data-name">Status</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:68%"></div>
+          <div class="client-home-pills">
+            <span class="client-home-pill">
+              Barbearia atual: ${escapeHtml(activeShop?.name || 'Nenhuma barbearia selecionada')}
+            </span>
+            <span class="client-home-pill client-home-pill--accent">
+              ${escapeHtml(String(barbershopSummary.count))} barbearia(s) vinculada(s)
+            </span>
           </div>
-          <span class="data-val">Agenda</span>
         </div>
 
-        <div class="widget-module">Módulo: Agendamentos</div>
-      </div>
-
-      <div
-        class="analytics-card pos-tr dashboard-widget"
-        data-client-route="assinatura"
-        role="button"
-        tabindex="0"
-        title="Abrir meu plano"
-      >
-        ${renderWidgetTopbar('Meu plano', 'assinatura')}
-        <div class="ac-value" style="font-size:18px;line-height:1.3;">${escapeHtml(plan.planName)}</div>
-        <div class="ac-sub">${escapeHtml(plan.planStatus)}</div>
-
-        <div class="data-row">
-          <span class="data-name">Acompanhar</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:74%;background:linear-gradient(90deg,#9c6fff,#4fc3f7)"></div>
+        <div class="client-home-hero-visual" aria-hidden="true">
+          <div class="client-home-brand">
+            <div class="client-home-brand-mark">B</div>
+            <div class="client-home-brand-name">Barber<span>Flow</span></div>
           </div>
-          <span class="data-val">Plano</span>
-        </div>
 
-        <div class="widget-module" style="color:#d8b4fe;border-color:rgba(156,111,255,.24);background:rgba(156,111,255,.08)">
-          Módulo: Assinatura
-        </div>
-      </div>
-
-      <div
-        class="analytics-card pos-ml dashboard-widget"
-        data-client-route="agendar"
-        role="button"
-        tabindex="0"
-        title="Abrir agendamento"
-      >
-        ${renderWidgetTopbar('Agendar agora', 'agendar')}
-        <div class="ac-value">Olá, ${escapeHtml(firstName)}</div>
-        <div class="ac-sub">Escolha serviço, profissional e horário com poucos toques.</div>
-
-        <div class="data-row">
-          <span class="data-name">Corte</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:88%"></div>
+          <div class="client-home-orbit client-home-orbit--one">
+            <div class="client-home-orbit-dot"></div>
           </div>
-          <span class="data-val">Rápido</span>
-        </div>
 
-        <div class="data-row">
-          <span class="data-name">Barba</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:64%;background:linear-gradient(90deg,#ff6b00,#ff3d00)"></div>
+          <div class="client-home-orbit client-home-orbit--two">
+            <div class="client-home-orbit-dot client-home-orbit-dot--alt"></div>
           </div>
-          <span class="data-val" style="color:#ff6b00;">Prático</span>
-        </div>
 
-        <div class="widget-module">Módulo: Agendamento</div>
-      </div>
-
-      <div
-        class="analytics-card pos-mr dashboard-widget"
-        data-client-route="dados"
-        role="button"
-        tabindex="0"
-        title="Abrir meus dados"
-      >
-        ${renderWidgetTopbar('Meus dados', 'dados')}
-        <div class="ac-value" style="font-size:16px;line-height:1.5;">${escapeHtml(profile?.name || 'Cliente')}</div>
-        <div class="ac-sub">Telefone editável · E-mail protegido para rastreabilidade</div>
-
-        <div class="data-row">
-          <span class="data-name">Telefone</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:72%;background:linear-gradient(90deg,#00e676,#10b981)"></div>
+          <div class="client-home-chair-wrap">
+            ${buildChairSvg()}
+            <div class="client-home-chair-glow"></div>
+            <div class="client-home-chair-ring"></div>
           </div>
-          <span class="data-val" style="color:#00e676;">Editar</span>
         </div>
+      </section>
 
-        <div class="data-row">
-          <span class="data-name">E-mail</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:96%;background:linear-gradient(90deg,#4fc3f7,#0066ff)"></div>
-          </div>
-          <span class="data-val">Seguro</span>
-        </div>
+      <section class="client-home-grid">
+        ${renderHomeCard({
+          title: 'Próximo agendamento',
+          route: 'agendamentos',
+          value: nextAppointment.title,
+          subtitle: nextAppointment.subtitle,
+          rows: [
+            {
+              name: 'Status',
+              fillWidth: '68%',
+              fillStyle: '',
+              value: 'Agenda',
+              valueStyle: '',
+            },
+          ],
+          module: 'Módulo: Agendamentos',
+        })}
 
-        <div class="widget-module">Módulo: Dados</div>
-      </div>
+        ${renderHomeCard({
+          title: 'Meu plano',
+          route: 'assinatura',
+          value: plan.planName,
+          subtitle: plan.planStatus,
+          rows: [
+            {
+              name: 'Acompanhar',
+              fillWidth: '74%',
+              fillStyle: 'background:linear-gradient(90deg,#9c6fff,#4fc3f7)',
+              value: 'Plano',
+              valueStyle: '',
+            },
+          ],
+          module: 'Módulo: Assinatura',
+          moduleStyle: 'color:#d8b4fe;border-color:rgba(156,111,255,.24);background:rgba(156,111,255,.08)',
+          valueClass: 'client-home-card-value--compact',
+        })}
 
-      <div
-        class="analytics-card pos-bl dashboard-widget"
-        data-client-route="barbearias"
-        role="button"
-        tabindex="0"
-        title="Abrir minhas barbearias"
-      >
-        ${renderWidgetTopbar('Minhas barbearias', 'barbearias')}
-        <div class="ac-value">${escapeHtml(String(barbershopSummary.count))}</div>
-        <div class="ac-sub">${escapeHtml(barbershopSummary.supportText)}</div>
+        ${renderHomeCard({
+          title: 'Agendar agora',
+          route: 'agendar',
+          value: `Olá, ${firstName}`,
+          subtitle: 'Escolha serviço, profissional e horário com poucos toques.',
+          rows: [
+            {
+              name: 'Corte',
+              fillWidth: '88%',
+              fillStyle: '',
+              value: 'Rápido',
+              valueStyle: '',
+            },
+            {
+              name: 'Barba',
+              fillWidth: '64%',
+              fillStyle: 'background:linear-gradient(90deg,#ff6b00,#ff3d00)',
+              value: 'Prático',
+              valueStyle: 'color:#ff6b00;',
+            },
+          ],
+          module: 'Módulo: Agendamento',
+        })}
 
-        <div class="data-row">
-          <span class="data-name">Atual</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:82%;background:linear-gradient(90deg,#4fc3f7,#9c6fff)"></div>
-          </div>
-          <span class="data-val">${escapeHtml(barbershopSummary.activeShopName)}</span>
-        </div>
+        ${renderHomeCard({
+          title: 'Meus dados',
+          route: 'dados',
+          value: profile?.name || 'Cliente',
+          subtitle: 'Telefone editável · E-mail protegido para rastreabilidade',
+          rows: [
+            {
+              name: 'Telefone',
+              fillWidth: '72%',
+              fillStyle: 'background:linear-gradient(90deg,#00e676,#10b981)',
+              value: 'Editar',
+              valueStyle: 'color:#00e676;',
+            },
+            {
+              name: 'E-mail',
+              fillWidth: '96%',
+              fillStyle: 'background:linear-gradient(90deg,#4fc3f7,#0066ff)',
+              value: 'Seguro',
+              valueStyle: '',
+            },
+          ],
+          module: 'Módulo: Dados',
+          valueClass: 'client-home-card-value--compact',
+        })}
 
-        <div class="widget-module">Módulo: Barbearias</div>
-      </div>
+        ${renderHomeCard({
+          title: 'Minhas barbearias',
+          route: 'barbearias',
+          value: String(barbershopSummary.count),
+          subtitle: barbershopSummary.supportText,
+          rows: [
+            {
+              name: 'Atual',
+              fillWidth: '82%',
+              fillStyle: 'background:linear-gradient(90deg,#4fc3f7,#9c6fff)',
+              value: barbershopSummary.activeShopName,
+              valueStyle: '',
+            },
+          ],
+          module: 'Módulo: Barbearias',
+        })}
 
-      <div
-        class="analytics-card pos-br dashboard-widget"
-        data-client-route="pagamentos"
-        role="button"
-        tabindex="0"
-        title="Abrir pagamentos"
-      >
-        ${renderWidgetTopbar('Pagamentos e suporte', 'pagamentos')}
-        <div class="ac-value">Portal</div>
-        <div class="ac-sub">Acompanhe pagamentos, histórico e canais de atendimento.</div>
-
-        <div class="data-row">
-          <span class="data-name">Pagamentos</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:58%"></div>
-          </div>
-          <span class="data-val">Financeiro</span>
-        </div>
-
-        <div class="data-row">
-          <span class="data-name">Suporte</span>
-          <div class="data-bar">
-            <div class="data-fill" style="width:46%;background:linear-gradient(90deg,#9c6fff,#6c3fff)"></div>
-          </div>
-          <span class="data-val" style="color:#9c6fff;">Ajuda</span>
-        </div>
-
-        <div class="widget-module">Módulo: Portal</div>
-      </div>
+        ${renderHomeCard({
+          title: 'Pagamentos e suporte',
+          route: 'pagamentos',
+          value: 'Portal',
+          subtitle: 'Acompanhe pagamentos, histórico e canais de atendimento.',
+          rows: [
+            {
+              name: 'Pagamentos',
+              fillWidth: '58%',
+              fillStyle: '',
+              value: 'Financeiro',
+              valueStyle: '',
+            },
+            {
+              name: 'Suporte',
+              fillWidth: '46%',
+              fillStyle: 'background:linear-gradient(90deg,#9c6fff,#6c3fff)',
+              value: 'Ajuda',
+              valueStyle: 'color:#9c6fff;',
+            },
+          ],
+          module: 'Módulo: Portal',
+        })}
+      </section>
     </div>
   `;
 }
