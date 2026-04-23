@@ -12,6 +12,7 @@ import { renderClientDados, initClientDadosPage } from './modules/dados.js';
 import { renderClientPagamentos, initClientPagamentosPage } from './modules/pagamentos.js';
 import { renderClientSuporte, initClientSuportePage } from './modules/suporte.js';
 import { renderClientBarbearias, initClientBarbeariasPage } from './modules/barbearias.js';
+import { renderClientLayout, initClientThemeToggle } from './client-layout.js';
 
 const CLIENT_BASE = '/client';
 
@@ -232,6 +233,7 @@ function renderClientPage(route) {
     bindClientGlobalActions();
     bindClientDashboardMenu();
     closeClientMenu();
+    initClientThemeToggle();
   });
 }
 
