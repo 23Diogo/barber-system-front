@@ -324,11 +324,11 @@
   .client-dashboard-main {
     padding-top: 0 !important;
   }
-
+/* ===== alterei de 56 para 96px e de 0 para 20 ===== */
   .topbar,
   .client-dashboard-topbar {
     position: sticky !important;
-    top: calc(env(safe-area-inset-top, 0px) + 56px) !important;
+    top: calc(env(safe-area-inset-top, 20px) + 96px) !important;
     z-index: 70 !important;
     display: grid !important;
     grid-template-columns: auto 1fr auto !important;
