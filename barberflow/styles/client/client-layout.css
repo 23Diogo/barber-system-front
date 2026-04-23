@@ -687,3 +687,128 @@ body.client-area::before {
     width: 100%;
   }
 }
+
+/* ── Tema claro — visão cliente ──────────────────────────────────────────── */
+
+body.client-area.theme-light {
+  background:
+    radial-gradient(circle at 50% 18%, rgba(255,90,31,.08), transparent 16%),
+    radial-gradient(circle at 0% 0%, rgba(79,195,247,.08), transparent 22%),
+    radial-gradient(circle at 100% 100%, rgba(156,111,255,.10), transparent 24%),
+    linear-gradient(180deg, #f0f4ff 0%, #e8edf8 100%);
+  color: #1a2040;
+}
+
+body.client-area.theme-light::before {
+  background-image:
+    linear-gradient(rgba(79,195,247,.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,195,247,.08) 1px, transparent 1px);
+  opacity: 0.15;
+}
+
+body.client-area.theme-light .sidebar {
+  background: #fff;
+  border-right-color: rgba(79,195,247,.12);
+}
+
+body.client-area.theme-light .nav-item {
+  color: #2a3560;
+}
+
+body.client-area.theme-light .nav-item:hover,
+body.client-area.theme-light .nav-item.active {
+  background: rgba(79,195,247,.10);
+  color: #1468ff;
+}
+
+body.client-area.theme-light .nav-group-label {
+  color: #8fa3c7;
+}
+
+body.client-area.theme-light .sidebar-footer {
+  border-top-color: rgba(79,195,247,.12);
+}
+
+body.client-area.theme-light .card,
+body.client-area.theme-light .metric-card {
+  background: #fff;
+  border-color: rgba(79,195,247,.14);
+  color: #1a2040;
+}
+
+body.client-area.theme-light .topbar {
+  background: rgba(255,255,255,.95);
+  border-bottom-color: rgba(79,195,247,.12);
+}
+
+body.client-area.theme-light .topbar-title,
+body.client-area.theme-light .card-title {
+  color: #0f1736;
+}
+
+body.client-area.theme-light .cfg-label {
+  color: #2a3560;
+}
+
+body.client-area.theme-light .cfg-sub,
+body.client-area.theme-light .agendar-section-sub {
+  color: #6b7fa8;
+}
+
+body.client-area.theme-light .agendar-card {
+  background: #fff;
+  border-color: rgba(79,195,247,.18);
+}
+
+body.client-area.theme-light .agendar-card:hover {
+  background: rgba(79,195,247,.06);
+}
+
+body.client-area.theme-light .agendar-card-name,
+body.client-area.theme-light .agendar-section-title {
+  color: #0f1736;
+}
+
+body.client-area.theme-light .agendar-barber-card {
+  background: #fff;
+  border-color: rgba(79,195,247,.18);
+}
+
+body.client-area.theme-light .agendar-barber-name {
+  color: #0f1736;
+}
+
+body.client-area.theme-light .agendar-date-input,
+body.client-area.theme-light .agendar-notes {
+  background: #f5f8ff;
+  border-color: rgba(79,195,247,.25);
+  color: #1a2040;
+}
+
+body.client-area.theme-light .agendar-date-input::-webkit-calendar-picker-indicator {
+  filter: none opacity(0.6);
+}
+
+body.client-area.theme-light .agendar-slot-btn {
+  background: #f5f8ff;
+  border-color: rgba(79,195,247,.22);
+  color: #2a3560;
+}
+
+body.client-area.theme-light .agendar-summary-row {
+  background: #f5f8ff;
+  border-color: rgba(79,195,247,.14);
+}
+
+body.client-area.theme-light .agendar-summary-label {
+  color: #6b7fa8;
+}
+
+body.client-area.theme-light .agendar-summary-value {
+  color: #1a2040;
+}
+
+body.client-area.theme-light .agendar-empty {
+  border-color: rgba(79,195,247,.20);
+  color: #6b7fa8;
+}
