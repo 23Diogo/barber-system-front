@@ -497,10 +497,6 @@ body.client-area::before {
 }
 
 @media (max-width: 980px) {
-  .client-dashboard-app {
-    --client-mobile-browser-offset: max(56px, calc(env(safe-area-inset-top, 0px) + 44px));
-  }
-
   html,
   body,
   body.client-area {
@@ -509,6 +505,7 @@ body.client-area::before {
 
   body.client-area {
     min-height: 100dvh;
+    overflow-y: auto !important;
   }
 
   body.client-area.client-menu-open {
@@ -540,22 +537,22 @@ body.client-area::before {
   }
 
   .client-dashboard-sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: min(86vw, 320px);
-    max-width: 320px;
-    height: 100dvh;
-    z-index: 90;
-    overflow-y: auto;
-    transform: translateX(-104%);
-    transition: transform 0.24s ease, box-shadow 0.24s ease;
-    box-shadow: none;
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: min(86vw, 320px) !important;
+    max-width: 320px !important;
+    height: 100dvh !important;
+    z-index: 90 !important;
+    overflow-y: auto !important;
+    transform: translateX(-104%) !important;
+    transition: transform 0.24s ease, box-shadow 0.24s ease !important;
+    box-shadow: none !important;
   }
 
   body.client-area.client-menu-open .client-dashboard-sidebar {
-    transform: translateX(0);
-    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.46);
+    transform: translateX(0) !important;
+    box-shadow: 0 22px 60px rgba(0, 0, 0, 0.46) !important;
   }
 
   .client-dashboard-sidebar .logo-area {
@@ -576,12 +573,13 @@ body.client-area::before {
   .client-dashboard-content {
     min-width: 0 !important;
     width: 100% !important;
-    box-sizing: border-box;
+    box-sizing: border-box !important;
+    overflow: visible !important;
   }
 
   .main,
   .client-dashboard-main {
-    padding-top: calc(var(--client-mobile-browser-offset) + 8px) !important;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 72px) !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
     padding-bottom: 24px !important;
@@ -589,22 +587,24 @@ body.client-area::before {
 
   .topbar,
   .client-dashboard-topbar {
-    position: sticky !important;
-    top: var(--client-mobile-browser-offset) !important;
-    z-index: 70 !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    z-index: 20 !important;
     display: grid !important;
-    grid-template-columns: auto 1fr auto !important;
+    grid-template-columns: 40px minmax(0, 1fr) 34px !important;
     align-items: center !important;
     gap: 10px !important;
-    min-height: 64px !important;
-    margin: 0 12px 12px !important;
-    padding: 10px 12px !important;
+    min-height: 58px !important;
+    margin: 0 10px 12px !important;
+    padding: 8px 10px !important;
     background: linear-gradient(180deg, rgba(5, 8, 22, 0.98) 0%, rgba(5, 8, 22, 0.92) 100%) !important;
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid rgba(79, 195, 247, 0.12);
-    border-radius: 18px;
-    box-sizing: border-box;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(79, 195, 247, 0.12) !important;
+    border-radius: 16px !important;
+    box-sizing: border-box !important;
   }
 
   .client-topbar-leading {
@@ -616,20 +616,22 @@ body.client-area::before {
 
   .client-mobile-menu-btn {
     position: relative !important;
-    z-index: 80 !important;
-    width: 42px !important;
-    height: 42px !important;
-    flex: 0 0 42px !important;
+    z-index: 30 !important;
+    width: 40px !important;
+    height: 40px !important;
+    flex: 0 0 40px !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .topbar-title,
   .client-topbar-leading .topbar-title {
     min-width: 0 !important;
-    font-size: 18px !important;
+    font-size: 16px !important;
     line-height: 1.1 !important;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
   }
 
   .search-box,
@@ -641,7 +643,16 @@ body.client-area::before {
     display: flex !important;
     align-items: center !important;
     justify-content: flex-end !important;
-    gap: 8px !important;
+    gap: 6px !important;
+  }
+
+  .client-topbar-actions .avatar {
+    display: none !important;
+  }
+
+  .client-topbar-actions .notif-btn {
+    width: 34px !important;
+    height: 34px !important;
   }
 
   .content,
@@ -672,29 +683,11 @@ body.client-area::before {
   .client-dashboard-topbar {
     margin-left: 10px !important;
     margin-right: 10px !important;
-    padding: 10px !important;
-  }
-
-  .client-topbar-leading {
-    gap: 8px !important;
-  }
-
-  .client-topbar-actions {
-    gap: 8px !important;
   }
 
   .topbar-title,
   .client-topbar-leading .topbar-title {
-    font-size: 16px !important;
-  }
-
-  .client-dashboard-search-box {
-    font-size: 12px;
-    line-height: 1.4;
-    min-height: 44px;
-    box-sizing: border-box;
-    overflow-wrap: anywhere;
-    word-break: break-word;
+    font-size: 15px !important;
   }
 
   .client-dashboard-content .card,
@@ -707,65 +700,5 @@ body.client-area::before {
 
   .client-dashboard-content .card-action {
     width: 100%;
-  }
-}
-
-
-@media (max-width: 980px) {
-  .client-dashboard-app {
-    --client-mobile-browser-offset: max(52px, calc(env(safe-area-inset-top, 0px) + 36px));
-  }
-
-  .main,
-  .client-dashboard-main {
-    padding-top: calc(var(--client-mobile-browser-offset) + 6px) !important;
-    padding-bottom: 24px !important;
-  }
-
-  .topbar,
-  .client-dashboard-topbar {
-    top: var(--client-mobile-browser-offset) !important;
-    min-height: 58px !important;
-    margin: 0 10px 10px !important;
-    padding: 8px 10px !important;
-    border-radius: 16px !important;
-    grid-template-columns: 42px minmax(0, 1fr) auto !important;
-  }
-
-  .client-mobile-menu-btn {
-    width: 40px !important;
-    height: 40px !important;
-    flex: 0 0 40px !important;
-  }
-
-  .topbar-title,
-  .client-topbar-leading .topbar-title {
-    font-size: 16px !important;
-  }
-
-  .client-topbar-actions {
-    gap: 6px !important;
-  }
-
-  .client-topbar-actions .avatar {
-    width: 34px !important;
-    height: 34px !important;
-    font-size: 12px !important;
-  }
-
-  .client-topbar-actions .notif-btn {
-    width: 34px !important;
-    height: 34px !important;
-  }
-}
-
-@media (max-width: 640px) {
-  .client-topbar-actions .avatar {
-    display: none !important;
-  }
-
-  .topbar,
-  .client-dashboard-topbar {
-    grid-template-columns: 40px minmax(0, 1fr) 34px !important;
   }
 }
