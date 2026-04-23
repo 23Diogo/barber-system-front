@@ -2,6 +2,7 @@
   display: grid;
   gap: 22px;
   min-width: 0;
+  overflow: visible;
 }
 
 .client-home-hero-card {
@@ -46,6 +47,8 @@
   font-size: clamp(28px, 4vw, 42px);
   line-height: 1.05;
   color: #ffffff;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .client-home-text {
@@ -54,6 +57,8 @@
   color: #8fa3c7;
   font-size: 15px;
   line-height: 1.7;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .client-home-pills {
@@ -201,11 +206,23 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
   min-width: 0;
+  overflow: visible;
 }
 
 .client-home-card {
+  position: relative !important;
+  inset: auto !important;
+  top: auto !important;
+  right: auto !important;
+  bottom: auto !important;
+  left: auto !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  transform: none !important;
+  margin: 0 !important;
   min-width: 0;
-  width: 100%;
   box-sizing: border-box;
   cursor: pointer;
 }
@@ -216,10 +233,20 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
+  min-width: 0;
 }
 
 .client-home-card .widget-actions {
   flex: 0 0 auto;
+}
+
+.client-home-card .data-row {
+  min-width: 0;
+}
+
+.client-home-card .data-bar {
+  min-width: 0;
+  width: 100%;
 }
 
 .client-home-card .ac-title,
@@ -239,48 +266,6 @@
 .client-home-card-value--compact {
   font-size: clamp(24px, 3vw, 34px) !important;
   line-height: 1.25 !important;
-}
-
-/* ===== HOTFIX PARA ANULAR LAYOUT ANTIGO DO DASHBOARD ===== */
-
-.client-home-grid > .client-home-card {
-  position: relative !important;
-  inset: auto !important;
-  top: auto !important;
-  right: auto !important;
-  bottom: auto !important;
-  left: auto !important;
-  width: 100% !important;
-  max-width: 100% !important;
-  height: auto !important;
-  min-height: 0 !important;
-  transform: none !important;
-  margin: 0 !important;
-}
-
-.client-home-grid,
-.client-home-shell {
-  min-width: 0 !important;
-  overflow: visible !important;
-}
-
-.client-home-card .data-row,
-.client-home-card .widget-topbar {
-  min-width: 0;
-}
-
-.client-home-card .data-bar {
-  min-width: 0;
-  width: 100%;
-}
-
-.client-home-card .data-val,
-.client-home-card .ac-title,
-.client-home-card .ac-sub,
-.client-home-card .ac-value,
-.client-home-pill {
-  overflow-wrap: anywhere;
-  word-break: break-word;
 }
 
 @media (max-width: 1080px) {
@@ -306,6 +291,7 @@
   }
 
   body.client-area {
+    overflow-x: hidden !important;
     overflow-y: auto !important;
     min-height: 100dvh !important;
   }
@@ -318,17 +304,18 @@
     min-width: 0 !important;
     width: 100% !important;
     overflow: visible !important;
+    box-sizing: border-box;
   }
 
   .main,
   .client-dashboard-main {
-    padding-top: 0 !important;
+    padding-top: max(92px, calc(env(safe-area-inset-top, 0px) + 64px)) !important;
   }
-/* ===== alterei de 56 para 96px e de 0 para 20 ===== */
+
   .topbar,
   .client-dashboard-topbar {
     position: sticky !important;
-    top: calc(env(safe-area-inset-top, 20px) + 96px) !important;
+    top: 0 !important;
     z-index: 70 !important;
     display: grid !important;
     grid-template-columns: auto 1fr auto !important;
@@ -358,6 +345,8 @@
     width: 42px !important;
     height: 42px !important;
     flex: 0 0 42px !important;
+    align-items: center !important;
+    justify-content: center !important;
   }
 
   .topbar-title,
