@@ -697,3 +697,17 @@ body.client-area::before {
     box-sizing: border-box;
   }
 }
+
+@media (max-width: 980px) {
+  .client-sidebar-overlay {
+    z-index: 89 !important;
+  }
+
+  .client-dashboard-sidebar {
+    z-index: 90 !important;
+  }
+
+  body.client-area.client-menu-open {
+    overflow: hidden !important;
+  }
+}
