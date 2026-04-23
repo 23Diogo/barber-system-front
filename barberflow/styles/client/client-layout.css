@@ -579,7 +579,7 @@ body.client-area::before {
 
   .main,
   .client-dashboard-main {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 72px) !important;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 92px) !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
     padding-bottom: 24px !important;
@@ -593,7 +593,7 @@ body.client-area::before {
     right: auto !important;
     z-index: 20 !important;
     display: grid !important;
-    grid-template-columns: 40px minmax(0, 1fr) 34px !important;
+    grid-template-columns: 40px minmax(0, 1fr) !important;
     align-items: center !important;
     gap: 10px !important;
     min-height: 58px !important;
@@ -635,24 +635,9 @@ body.client-area::before {
   }
 
   .search-box,
-  .client-dashboard-search-box {
-    display: none !important;
-  }
-
+  .client-dashboard-search-box,
   .client-topbar-actions {
-    display: flex !important;
-    align-items: center !important;
-    justify-content: flex-end !important;
-    gap: 6px !important;
-  }
-
-  .client-topbar-actions .avatar {
     display: none !important;
-  }
-
-  .client-topbar-actions .notif-btn {
-    width: 34px !important;
-    height: 34px !important;
   }
 
   .content,
