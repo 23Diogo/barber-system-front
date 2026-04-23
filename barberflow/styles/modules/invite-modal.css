@@ -1,0 +1,494 @@
+/* ─────────────────────────────────────────────────────────────
+   invite-modal.css
+   Estilos do modal de convite de clientes (redesenhado)
+   Importar no HTML após os outros CSS do painel do dono:
+   <link href="/styles/invite-modal.css" rel="stylesheet" />
+   ───────────────────────────────────────────────────────────── */
+
+/* ── Overlay ── */
+
+.invite-modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(3, 6, 18, 0.72);
+  backdrop-filter: blur(6px);
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.invite-modal-box {
+  width: min(92vw, 480px);
+  background: #0d1020;
+  border: 1px solid #1e2440;
+  border-radius: 24px;
+  overflow: hidden;
+  max-height: 92dvh;
+  overflow-y: auto;
+}
+
+.invite-modal-box::-webkit-scrollbar { display: none; }
+
+/* ── Header ── */
+
+.invite-modal-header {
+  padding: 22px 22px 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.invite-modal-icon {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: #0e1e38;
+  border: 1px solid #1a3a60;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.invite-modal-title-block {
+  flex: 1;
+  padding: 0 10px;
+}
+
+.invite-modal-title {
+  font-size: 16px;
+  font-weight: 800;
+  color: #e8f0fe;
+  letter-spacing: -0.01em;
+}
+
+.invite-modal-sub {
+  font-size: 12px;
+  color: #4a5880;
+  margin-top: 2px;
+}
+
+.invite-modal-close {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: 1px solid #1e2440;
+  background: transparent;
+  color: #4a5880;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: .15s;
+}
+
+.invite-modal-close:hover {
+  background: #1a1f38;
+  color: #c0cce8;
+}
+
+/* ── Channels ── */
+
+.invite-channels {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  padding: 18px 22px 0;
+}
+
+.invite-ch {
+  border-radius: 12px;
+  border: 1px solid #1e2440;
+  padding: 12px 8px;
+  cursor: pointer;
+  transition: .15s;
+  text-align: center;
+  background: transparent;
+  user-select: none;
+}
+
+.invite-ch:hover {
+  border-color: #2a3a60;
+  background: #0e1220;
+}
+
+.invite-ch.active {
+  border-color: #4fc3f7;
+  background: rgba(79, 195, 247, .07);
+}
+
+.invite-ch-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 9px;
+  margin: 0 auto 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.invite-ch-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: #8fa3c7;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.invite-ch.active .invite-ch-label { color: #4fc3f7; }
+
+/* ── Panels ── */
+
+.invite-panel {
+  padding: 18px 22px 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* ── Field label ── */
+
+.invite-field-label {
+  font-size: 10px;
+  font-weight: 700;
+  color: #3a4568;
+  text-transform: uppercase;
+  letter-spacing: .1em;
+  margin-bottom: 6px;
+}
+
+/* ── Link row ── */
+
+.invite-link-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.invite-link-input {
+  flex: 1;
+  min-width: 0;
+  background: #080b18;
+  border: 1px solid #1a2040;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-size: 12px;
+  font-family: inherit;
+  color: #7dd3fc;
+  outline: none;
+  cursor: default;
+}
+
+.invite-copy-link-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 10px;
+  border: 1px solid #1a3a60;
+  background: #0e1e38;
+  color: #4fc3f7;
+  font-size: 12px;
+  font-weight: 700;
+  padding: 0 16px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: .15s;
+  font-family: inherit;
+}
+
+.invite-copy-link-btn:hover {
+  background: #163050;
+  border-color: #2a5080;
+}
+
+/* ── Feedback ── */
+
+.invite-feedback {
+  min-height: 18px;
+  font-size: 12px;
+  color: #4a5880;
+  margin-top: 4px;
+}
+
+/* ── Textarea ── */
+
+.invite-msg-textarea {
+  width: 100%;
+  background: #080b18;
+  border: 1px solid #1a2040;
+  border-radius: 12px;
+  padding: 12px 14px;
+  font-size: 13px;
+  font-family: inherit;
+  color: #c0cce8;
+  resize: none;
+  outline: none;
+  line-height: 1.6;
+  transition: .15s;
+  min-height: 110px;
+  box-sizing: border-box;
+}
+
+.invite-msg-textarea:focus { border-color: #2a4068; }
+
+.invite-char-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+
+.invite-char-row span {
+  font-size: 11px;
+  color: #3a4568;
+}
+
+/* ── Action buttons ── */
+
+.invite-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.invite-btn-ghost {
+  flex: 1;
+  border-radius: 11px;
+  border: 1px solid #1e2440;
+  background: transparent;
+  color: #4a5880;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: .15s;
+}
+
+.invite-btn-ghost:hover {
+  border-color: #2a3a60;
+  color: #c0cce8;
+}
+
+.invite-btn-secondary {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 11px;
+  border: 1px solid #1a3a60;
+  background: #0e1e38;
+  color: #4fc3f7;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: .15s;
+}
+
+.invite-btn-secondary:hover { background: #163050; }
+
+.invite-btn-whatsapp {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 11px;
+  border: none;
+  background: #128C7E;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: .15s;
+  text-decoration: none;
+}
+
+.invite-btn-whatsapp:hover { background: #0f7a6d; }
+
+.invite-btn-qr-download {
+  flex: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border-radius: 11px;
+  border: 1px solid #3a2060;
+  background: #1a1030;
+  color: #9c6fff;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 11px 16px;
+  cursor: pointer;
+  font-family: inherit;
+  transition: .15s;
+  text-decoration: none;
+}
+
+.invite-btn-qr-download:hover {
+  background: #241540;
+  border-color: #5a3a90;
+}
+
+/* ── QR Code ── */
+
+.invite-qr-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 4px 0;
+}
+
+.invite-qr-box {
+  background: #080b18;
+  border: 1px solid #1a2040;
+  border-radius: 16px;
+  padding: 18px;
+  display: inline-block;
+  line-height: 0;
+}
+
+.invite-qr-hint {
+  font-size: 12px;
+  color: #4a5880;
+  text-align: center;
+  line-height: 1.6;
+}
+
+/* ── Divider + stats ── */
+
+.invite-divider {
+  height: 1px;
+  background: #111830;
+  margin: 0;
+}
+
+.invite-stats-row { display: flex; }
+
+.invite-stat {
+  flex: 1;
+  padding: 14px 0;
+  text-align: center;
+}
+
+.invite-stat + .invite-stat { border-left: 1px solid #111830; }
+
+.invite-stat-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: #4fc3f7;
+}
+
+.invite-stat-lbl {
+  font-size: 10px;
+  color: #3a4568;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  margin-top: 2px;
+}
+
+/* ── Loading ── */
+
+.invite-loading {
+  padding: 32px 22px;
+  text-align: center;
+  font-size: 13px;
+  color: #4a5880;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   TEMA CLARO — body.light-theme (painel do dono)
+   ───────────────────────────────────────────────────────────── */
+
+body.light-theme .invite-modal-box {
+  background: #fff;
+  border-color: rgba(79, 195, 247, .18);
+}
+
+body.light-theme .invite-modal-icon {
+  background: #e6f1fb;
+  border-color: rgba(2, 132, 199, .2);
+}
+
+body.light-theme .invite-modal-title   { color: #0f1736; }
+body.light-theme .invite-modal-sub     { color: #6b7fa8; }
+
+body.light-theme .invite-modal-close {
+  border-color: rgba(79, 195, 247, .18);
+  color: #6b7fa8;
+}
+
+body.light-theme .invite-modal-close:hover {
+  background: #f0f4ff;
+  color: #0f1736;
+}
+
+body.light-theme .invite-ch            { border-color: rgba(79, 195, 247, .16); }
+body.light-theme .invite-ch:hover      { background: #f0f4ff; }
+
+body.light-theme .invite-ch.active {
+  border-color: #0284c7;
+  background: rgba(2, 132, 199, .06);
+}
+
+body.light-theme .invite-ch.active .invite-ch-label { color: #0284c7; }
+body.light-theme .invite-ch-label                    { color: #4b5a82; }
+
+body.light-theme .invite-link-input,
+body.light-theme .invite-msg-textarea {
+  background: #f5f8ff;
+  border-color: rgba(79, 195, 247, .22);
+  color: #0f1736;
+}
+
+body.light-theme .invite-msg-textarea:focus { border-color: rgba(2, 132, 199, .35); }
+
+body.light-theme .invite-field-label   { color: #8fa3c7; }
+body.light-theme .invite-char-row span { color: #8fa3c7; }
+body.light-theme .invite-feedback      { color: #6b7fa8; }
+
+body.light-theme .invite-copy-link-btn {
+  background: #e6f1fb;
+  border-color: rgba(2, 132, 199, .22);
+  color: #0284c7;
+}
+
+body.light-theme .invite-copy-link-btn:hover { background: #cce3f5; }
+
+body.light-theme .invite-btn-ghost {
+  border-color: rgba(79, 195, 247, .2);
+  color: #6b7fa8;
+}
+
+body.light-theme .invite-btn-ghost:hover {
+  border-color: rgba(2, 132, 199, .3);
+  color: #0f1736;
+}
+
+body.light-theme .invite-btn-secondary {
+  background: #e6f1fb;
+  border-color: rgba(2, 132, 199, .22);
+  color: #0284c7;
+}
+
+body.light-theme .invite-btn-secondary:hover { background: #cce3f5; }
+
+body.light-theme .invite-qr-box {
+  background: #f5f8ff;
+  border-color: rgba(79, 195, 247, .2);
+}
+
+body.light-theme .invite-qr-hint       { color: #6b7fa8; }
+body.light-theme .invite-divider        { background: #e8edf5; }
+body.light-theme .invite-stat + .invite-stat { border-color: #e8edf5; }
+body.light-theme .invite-stat-val       { color: #0284c7; }
+body.light-theme .invite-stat-lbl       { color: #8fa3c7; }
+body.light-theme .invite-loading        { color: #6b7fa8; }
