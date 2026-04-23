@@ -240,6 +240,11 @@
   background: rgba(79,195,247,.06);
 }
 
+.agendar-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1) opacity(0.6);
+  cursor: pointer;
+}
+
 .agendar-slots {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
