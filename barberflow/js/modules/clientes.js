@@ -237,6 +237,7 @@ async function copyTextToClipboard(text) {
 // ─── Convite de cliente ────────────────────────────────────────────────────────
 
 let _inviteShopData = null;
+let _inviteChannel  = 'link'; // 'link' | 'whatsapp' | 'qr'
 
 async function loadInviteShopData() {
   if (_inviteShopData) return _inviteShopData;
@@ -259,110 +260,344 @@ function buildWhatsAppUrl(message) {
   return `https://wa.me/?text=${encodeURIComponent(message)}`;
 }
 
-function openInviteModal() {
-  let modal = document.getElementById('client-invite-modal');
-  if (!modal) {
-    modal = document.createElement('div');
-    modal.id = 'client-invite-modal';
-    modal.className = 'modal-overlay';
-    modal.style.display = 'flex';
-    modal.innerHTML = `
-      <div class="modal">
-        <div id="client-invite-content">
-          <div class="modal-title">📨 Convidar cliente</div>
-          <div class="modal-sub">Carregando link de cadastro...</div>
-        </div>
-      </div>`;
-    modal.addEventListener('click', e => { if (e.target === modal) closeInviteModal(); });
-    document.body.appendChild(modal);
-  } else {
-    modal.style.display = 'flex';
+function buildQrImageUrl(text) {
+  return `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(text)}&color=9c6fff&bgcolor=080b18&format=png&margin=2`;
+}
+
+async function loadInviteStats(barbershopId) {
+  try {
+    const data = await apiFetch(`/api/barbershops/${barbershopId}/invites/stats`);
+    return {
+      sent:      data?.sent      ?? '—',
+      converted: data?.converted ?? '—',
+      rate:      data?.rate != null ? `${Math.round(data.rate)}%` : '—',
+    };
+  } catch {
+    return { sent: '—', converted: '—', rate: '—' };
   }
-  renderInviteContent();
 }
 
-function closeInviteModal() {
-  const modal = document.getElementById('client-invite-modal');
-  if (modal) modal.style.display = 'none';
+function setInviteStats(stats) {
+  const s = document.getElementById('invite-stat-sent');
+  const c = document.getElementById('invite-stat-converted');
+  const r = document.getElementById('invite-stat-rate');
+  if (s) s.textContent = stats.sent;
+  if (c) c.textContent = stats.converted;
+  if (r) r.textContent = stats.rate;
 }
 
-async function renderInviteContent() {
-  const content = document.getElementById('client-invite-content');
-  if (!content) return;
+// SVG icons inline
+const _iCopy = `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><rect x="4" y="4" width="8" height="8" rx="1.5" stroke="currentColor" stroke-width="1.5"/><path d="M9 4V2.5A1.5 1.5 0 007.5 1h-5A1.5 1.5 0 001 2.5v5A1.5 1.5 0 002.5 9H4" stroke="currentColor" stroke-width="1.5"/></svg>`;
+const _iCheck = `<svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M2 7l3 3 6-6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+const _iWa = `<svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1.5A6.5 6.5 0 001.5 8c0 1.15.3 2.24.82 3.18L1.5 14.5l3.42-.8A6.5 6.5 0 108 1.5z" stroke="currentColor" stroke-width="1.5"/><path d="M6 6.5c0-.28.22-.5.5-.5h.5a.5.5 0 01.5.5v.5c0 .83.5 1.5 1 2s1.17 1 2 1h.5a.5.5 0 01.5.5v.5a.5.5 0 01-.5.5h-.5c-1.1 0-2.18-.5-3-1.32A4.6 4.6 0 016 7v-.5z" fill="currentColor"/></svg>`;
+const _iDown = `<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1v8M4 6l3 3 3-3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/><path d="M2 10v1a1 1 0 001 1h8a1 1 0 001-1v-1" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+
+function _renderInviteHtml(link, message) {
+  const ch = _inviteChannel;
+  return `
+    <div class="invite-modal-header">
+      <div class="invite-modal-icon">
+        <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+          <path d="M10 2C5.58 2 2 5.58 2 10s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm1 11H9v-2h2v2zm0-4H9V7h2v2z" fill="#4fc3f7"/>
+        </svg>
+      </div>
+      <div class="invite-modal-title-block">
+        <div class="invite-modal-title">Convidar cliente</div>
+        <div class="invite-modal-sub">Escolha como compartilhar o cadastro</div>
+      </div>
+      <button type="button" class="invite-modal-close" id="invite-modal-x">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+          <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </button>
+    </div>
+
+    <div class="invite-channels">
+      <div class="invite-ch ${ch === 'link'     ? 'active' : ''}" data-channel="link">
+        <div class="invite-ch-icon" style="background:#0e1e38">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M6.5 9.5a3.5 3.5 0 004.95 0l2-2a3.5 3.5 0 00-4.95-4.95l-1 1" stroke="#4fc3f7" stroke-width="1.6" stroke-linecap="round"/>
+            <path d="M9.5 6.5a3.5 3.5 0 00-4.95 0l-2 2a3.5 3.5 0 004.95 4.95l1-1" stroke="#4fc3f7" stroke-width="1.6" stroke-linecap="round"/>
+          </svg>
+        </div>
+        <div class="invite-ch-label">Link</div>
+      </div>
+      <div class="invite-ch ${ch === 'whatsapp' ? 'active' : ''}" data-channel="whatsapp">
+        <div class="invite-ch-icon" style="background:#062018">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <path d="M8 1.5A6.5 6.5 0 001.5 8c0 1.15.3 2.24.82 3.18L1.5 14.5l3.42-.8A6.5 6.5 0 108 1.5z" stroke="#25D366" stroke-width="1.5"/>
+            <path d="M6 6.5c0-.28.22-.5.5-.5h.5a.5.5 0 01.5.5v.5c0 .83.5 1.5 1 2s1.17 1 2 1h.5a.5.5 0 01.5.5v.5a.5.5 0 01-.5.5h-.5c-1.1 0-2.18-.5-3-1.32A4.6 4.6 0 016 7v-.5z" fill="#25D366"/>
+          </svg>
+        </div>
+        <div class="invite-ch-label">WhatsApp</div>
+      </div>
+      <div class="invite-ch ${ch === 'qr'       ? 'active' : ''}" data-channel="qr">
+        <div class="invite-ch-icon" style="background:#1a1030">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+            <rect x="1" y="1" width="5" height="5" rx="1" stroke="#9c6fff" stroke-width="1.5"/>
+            <rect x="10" y="1" width="5" height="5" rx="1" stroke="#9c6fff" stroke-width="1.5"/>
+            <rect x="1" y="10" width="5" height="5" rx="1" stroke="#9c6fff" stroke-width="1.5"/>
+            <rect x="3" y="3" width="1" height="1" fill="#9c6fff"/>
+            <rect x="12" y="3" width="1" height="1" fill="#9c6fff"/>
+            <rect x="3" y="12" width="1" height="1" fill="#9c6fff"/>
+            <rect x="10" y="10" width="1.5" height="1.5" fill="#9c6fff"/>
+            <rect x="12.5" y="10" width="1.5" height="1.5" fill="#9c6fff"/>
+            <rect x="10" y="12.5" width="1.5" height="1.5" fill="#9c6fff"/>
+            <rect x="12.5" y="12.5" width="1.5" height="1.5" fill="#9c6fff"/>
+          </svg>
+        </div>
+        <div class="invite-ch-label">QR Code</div>
+      </div>
+    </div>
+
+    <!-- PAINEL LINK -->
+    <div class="invite-panel" id="invite-panel-link" style="display:${ch === 'link' ? 'flex' : 'none'}">
+      <div>
+        <div class="invite-field-label">Link de cadastro</div>
+        <div class="invite-link-row">
+          <input class="invite-link-input" id="invite-link-value" type="text" readonly value="${escapeHtml(link)}"/>
+          <button type="button" class="invite-copy-link-btn" id="invite-copy-link-btn">
+            ${_iCopy} Copiar
+          </button>
+        </div>
+        <div id="invite-link-feedback" class="invite-feedback"></div>
+      </div>
+      <div>
+        <div class="invite-field-label">Mensagem de convite</div>
+        <textarea class="invite-msg-textarea" id="invite-link-msg" maxlength="1000">${escapeHtml(message)}</textarea>
+        <div class="invite-char-row"><span id="invite-link-char">${message.length} caracteres</span></div>
+      </div>
+      <div class="invite-actions">
+        <button type="button" class="invite-btn-ghost invite-close-trigger">Fechar</button>
+        <button type="button" class="invite-btn-secondary" id="invite-copy-msg-btn">
+          ${_iCopy} Copiar mensagem
+        </button>
+      </div>
+      <div id="invite-msg-feedback" class="invite-feedback"></div>
+    </div>
+
+    <!-- PAINEL WHATSAPP -->
+    <div class="invite-panel" id="invite-panel-whatsapp" style="display:${ch === 'whatsapp' ? 'flex' : 'none'}">
+      <div>
+        <div class="invite-field-label">Mensagem de convite</div>
+        <textarea class="invite-msg-textarea" id="invite-wa-msg" maxlength="1000">${escapeHtml(message)}</textarea>
+        <div class="invite-char-row"><span id="invite-wa-char">${message.length} caracteres</span></div>
+      </div>
+      <div class="invite-actions">
+        <button type="button" class="invite-btn-ghost invite-close-trigger">Fechar</button>
+        <a class="invite-btn-whatsapp" id="invite-wa-link"
+           href="${escapeHtml(buildWhatsAppUrl(message))}" target="_blank" rel="noopener">
+          ${_iWa} Abrir WhatsApp
+        </a>
+      </div>
+    </div>
+
+    <!-- PAINEL QR -->
+    <div class="invite-panel" id="invite-panel-qr" style="display:${ch === 'qr' ? 'flex' : 'none'}">
+      <div class="invite-qr-wrap">
+        <div class="invite-qr-box">
+          <img src="${escapeHtml(buildQrImageUrl(link))}"
+               width="180" height="180" alt="QR Code de cadastro"
+               style="display:block;border-radius:8px;"/>
+        </div>
+        <div class="invite-qr-hint">
+          Aponte a câmera do celular para o código<br>
+          O cliente será direcionado ao cadastro
+        </div>
+      </div>
+      <div class="invite-actions">
+        <button type="button" class="invite-btn-ghost invite-close-trigger">Fechar</button>
+        <a class="invite-btn-qr-download"
+           href="${escapeHtml(buildQrImageUrl(link))}" download="convite-qrcode.png" target="_blank">
+          ${_iDown} Baixar QR Code
+        </a>
+      </div>
+    </div>
+
+    <div class="invite-divider"></div>
+    <div class="invite-stats-row">
+      <div class="invite-stat">
+        <div class="invite-stat-val" id="invite-stat-sent">—</div>
+        <div class="invite-stat-lbl">Convites enviados</div>
+      </div>
+      <div class="invite-stat">
+        <div class="invite-stat-val" id="invite-stat-converted">—</div>
+        <div class="invite-stat-lbl">Cadastros realizados</div>
+      </div>
+      <div class="invite-stat">
+        <div class="invite-stat-val" id="invite-stat-rate">—</div>
+        <div class="invite-stat-lbl">Taxa de conversão</div>
+      </div>
+    </div>
+  `;
+}
+
+function openInviteModal() {
+  _inviteChannel = 'link';
+
+  let overlay = document.getElementById('client-invite-modal');
+  if (!overlay) {
+    overlay = document.createElement('div');
+    overlay.id = 'client-invite-modal';
+    overlay.className = 'modal-overlay invite-modal-overlay';
+    overlay.innerHTML = `<div class="modal invite-modal-box" id="client-invite-inner"></div>`;
+    overlay.addEventListener('click', e => { if (e.target === overlay) closeInviteModal(); });
+    document.body.appendChild(overlay);
+  }
+
+  document.getElementById('client-invite-inner').innerHTML =
+    `<div class="invite-loading">Carregando dados da barbearia...</div>`;
+  overlay.style.display = 'flex';
+
+  _loadAndRenderInvite();
+}
+
+async function _loadAndRenderInvite() {
+  const inner = document.getElementById('client-invite-inner');
+  if (!inner) return;
 
   const shop = await loadInviteShopData();
+
   if (!shop?.slug) {
-    content.innerHTML = `
-      <div class="modal-title">📨 Convidar cliente</div>
-      <div class="modal-sub" style="color:#ff8a8a;">Não foi possível carregar os dados da barbearia.</div>
-      <div class="modal-buttons">
-        <div class="btn-cancel" id="invite-close-btn">Fechar</div>
+    inner.innerHTML = `
+      <div class="invite-modal-header">
+        <div class="invite-modal-title-block">
+          <div class="invite-modal-title">Convidar cliente</div>
+          <div class="invite-modal-sub" style="color:#ff8a8a">
+            Não foi possível carregar os dados da barbearia.
+          </div>
+        </div>
+        <button type="button" class="invite-modal-close" id="invite-modal-x">
+          <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+            <path d="M1 1l12 12M13 1L1 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="invite-panel" style="display:flex">
+        <div class="invite-actions">
+          <button type="button" class="invite-btn-ghost invite-close-trigger">Fechar</button>
+        </div>
       </div>`;
-    document.getElementById('invite-close-btn')?.addEventListener('click', closeInviteModal);
+    _bindInviteEvents(null, null, null);
     return;
   }
 
   const link    = buildInviteLink(shop.slug);
   const message = shop.invite_message || getDefaultInviteMessage(shop.name || 'nossa barbearia', link);
 
-  content.innerHTML = `
-    <div class="modal-title" style="margin:0;">📨 Convidar cliente</div>
-    <div class="modal-sub">Compartilhe o link de cadastro da sua barbearia</div>
+  inner.innerHTML = _renderInviteHtml(link, message);
+  _bindInviteEvents(link, message, shop.id);
 
-    <div style="margin-top:16px;">
-      <div class="color-section-label">Link de cadastro</div>
-      <div class="invite-link-row">
-        <input id="invite-link-input" class="modal-input invite-link-input" type="text" readonly
-          value="${escapeHtml(link)}"/>
-        <button type="button" id="invite-copy-link-btn" class="btn-save invite-copy-link-btn">
-          Copiar link
-        </button>
-      </div>
-      <div id="invite-link-feedback" class="invite-feedback"></div>
-    </div>
+  loadInviteStats(shop.id).then(setInviteStats);
+}
 
-    <div>
-      <div class="color-section-label">Mensagem de convite</div>
-      <div class="modal-sub">Edite a mensagem antes de enviar. O link já está incluído.</div>
-      <textarea id="invite-message-textarea" class="invite-message-textarea" maxlength="1000">${escapeHtml(message)}</textarea>
-    </div>
+function closeInviteModal() {
+  const overlay = document.getElementById('client-invite-modal');
+  if (overlay) overlay.style.display = 'none';
+}
 
-    <div id="invite-msg-feedback" class="invite-feedback"></div>
+function _switchInviteChannel(channel) {
+  _inviteChannel = channel;
+  ['link', 'whatsapp', 'qr'].forEach(ch => {
+    const panel = document.getElementById(`invite-panel-${ch}`);
+    const btn   = document.querySelector(`.invite-ch[data-channel="${ch}"]`);
+    if (panel) panel.style.display = ch === channel ? 'flex' : 'none';
+    if (btn)   btn.classList.toggle('active', ch === channel);
+  });
+}
 
-    <div class="modal-buttons invite-actions">
-      <div class="btn-cancel" id="invite-close-btn">Fechar</div>
-      <button type="button" id="invite-copy-msg-btn" class="btn-save invite-btn-copy-msg">
-        📋 Copiar mensagem
-      </button>
-      <a id="invite-whatsapp-btn" href="${escapeHtml(buildWhatsAppUrl(message))}"
-        target="_blank" rel="noopener" class="btn-save invite-btn-whatsapp">
-        📲 Abrir WhatsApp
-      </a>
-    </div>
-  `;
+async function _inviteCopy(text, btnEl, feedbackEl, okMsg) {
+  try {
+    await copyTextToClipboard(text);
+    if (feedbackEl) { feedbackEl.textContent = okMsg; feedbackEl.style.color = '#00e676'; }
+    if (btnEl) {
+      const orig = btnEl.innerHTML;
+      const origBg  = btnEl.style.background;
+      const origBdr = btnEl.style.borderColor;
+      const origClr = btnEl.style.color;
+      btnEl.innerHTML       = `${_iCheck} Copiado!`;
+      btnEl.style.background  = '#063020';
+      btnEl.style.borderColor = '#0f6e56';
+      btnEl.style.color       = '#5DCAA5';
+      setTimeout(() => {
+        btnEl.innerHTML         = orig;
+        btnEl.style.background  = origBg;
+        btnEl.style.borderColor = origBdr;
+        btnEl.style.color       = origClr;
+      }, 2000);
+    }
+  } catch {
+    if (feedbackEl) { feedbackEl.textContent = 'Não foi possível copiar.'; feedbackEl.style.color = '#ff8a8a'; }
+  }
+}
 
-  document.getElementById('invite-close-btn')?.addEventListener('click', closeInviteModal);
+// registra o envio no backend (fire-and-forget)
+async function _trackInviteSent(barbershopId, channel) {
+  try {
+    await apiFetch(`/api/barbershops/${barbershopId}/invites`, {
+      method: 'POST',
+      body: JSON.stringify({ channel }),
+    });
+  } catch { /* silencioso */ }
+}
 
+function _bindInviteEvents(link, message, shopId) {
+  document.getElementById('invite-modal-x')?.addEventListener('click', closeInviteModal);
+  document.querySelectorAll('.invite-close-trigger').forEach(el =>
+    el.addEventListener('click', closeInviteModal)
+  );
+
+  document.querySelectorAll('.invite-ch[data-channel]').forEach(el =>
+    el.addEventListener('click', () => _switchInviteChannel(el.dataset.channel))
+  );
+
+  if (!link) return;
+
+  // copiar link
   document.getElementById('invite-copy-link-btn')?.addEventListener('click', async () => {
-    try {
-      await copyTextToClipboard(link);
-      const fb = document.getElementById('invite-link-feedback');
-      if (fb) { fb.textContent = '✓ Link copiado!'; fb.style.color = '#00e676'; }
-    } catch {}
+    await _inviteCopy(
+      link,
+      document.getElementById('invite-copy-link-btn'),
+      document.getElementById('invite-link-feedback'),
+      '✓ Link copiado!'
+    );
+    if (shopId) _trackInviteSent(shopId, 'link');
   });
 
+  // copiar mensagem
   document.getElementById('invite-copy-msg-btn')?.addEventListener('click', async () => {
-    const msg = document.getElementById('invite-message-textarea')?.value || message;
-    try {
-      await copyTextToClipboard(msg);
-      const fb = document.getElementById('invite-msg-feedback');
-      if (fb) { fb.textContent = '✓ Mensagem copiada!'; fb.style.color = '#00e676'; }
-    } catch {}
+    const msg = document.getElementById('invite-link-msg')?.value || message;
+    await _inviteCopy(
+      msg,
+      document.getElementById('invite-copy-msg-btn'),
+      document.getElementById('invite-msg-feedback'),
+      '✓ Mensagem copiada!'
+    );
+    if (shopId) _trackInviteSent(shopId, 'link');
   });
 
-  document.getElementById('invite-message-textarea')?.addEventListener('input', e => {
-    const waBtn = document.getElementById('invite-whatsapp-btn');
-    if (waBtn) waBtn.href = buildWhatsAppUrl(e.target.value || message);
+  // contador painel link
+  document.getElementById('invite-link-msg')?.addEventListener('input', e => {
+    const el = document.getElementById('invite-link-char');
+    if (el) el.textContent = `${e.target.value.length} caracteres`;
+  });
+
+  // painel whatsapp — atualiza href e contador ao editar
+  document.getElementById('invite-wa-msg')?.addEventListener('input', e => {
+    const waLink  = document.getElementById('invite-wa-link');
+    const counter = document.getElementById('invite-wa-char');
+    if (waLink)  waLink.href       = buildWhatsAppUrl(e.target.value);
+    if (counter) counter.textContent = `${e.target.value.length} caracteres`;
+  });
+
+  // tracking ao clicar em Abrir WhatsApp
+  document.getElementById('invite-wa-link')?.addEventListener('click', () => {
+    if (shopId) _trackInviteSent(shopId, 'whatsapp');
+  });
+
+  // tracking ao baixar QR
+  document.querySelector('.invite-btn-qr-download')?.addEventListener('click', () => {
+    if (shopId) _trackInviteSent(shopId, 'qr');
   });
 }
 
