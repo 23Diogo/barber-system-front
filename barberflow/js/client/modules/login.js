@@ -1,5 +1,21 @@
 import { loginClient } from '../../services/client-auth.js';
 
+const SLUG_KEY = 'barberflow.inviteSlug';
+
+function getInviteSlug() {
+  try {
+    return (sessionStorage.getItem(SLUG_KEY) || '').trim().toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
+function clearInviteSlug() {
+  try {
+    sessionStorage.removeItem(SLUG_KEY);
+  } catch {}
+}
+
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-feedback');
   if (!el) return;
@@ -74,6 +90,15 @@ export function renderClientLogin() {
 }
 
 export function initClientLoginPage({ navigate }) {
+  const inviteSlug = getInviteSlug();
+
+  if (inviteSlug) {
+    setFeedback(
+      'Convite identificado. Faça login para vincular esta barbearia à sua conta.',
+      'neutral'
+    );
+  }
+
   document.getElementById('go-client-register')?.addEventListener('click', () => {
     navigate('cadastro');
   });
@@ -89,6 +114,8 @@ export function initClientLoginPage({ navigate }) {
       document.getElementById('client-login-identifier')?.value?.trim() || '';
     const password =
       document.getElementById('client-login-password')?.value || '';
+
+    const pendingSlug = getInviteSlug();
 
     if (!identifier) {
       setFeedback('Informe seu WhatsApp ou e-mail.', 'error');
@@ -106,7 +133,10 @@ export function initClientLoginPage({ navigate }) {
       const data = await loginClient({
         identifier,
         password,
+        barbershopSlug: pendingSlug || undefined,
       });
+
+      clearInviteSlug();
 
       setFeedback(`Bem-vindo, ${data?.client?.name || 'cliente'}.`, 'success');
 
