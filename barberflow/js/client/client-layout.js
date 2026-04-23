@@ -56,6 +56,44 @@ function renderCloseIcon() {
   `;
 }
 
+// ─── Theme toggle ──────────────────────────────────────────────────────────────
+// Mesma lógica do painel do dono — lê/salva em localStorage 'theme'
+
+const CLIENT_THEME_KEY = 'barberflow.client.theme';
+
+function getClientTheme() {
+  try { return localStorage.getItem(CLIENT_THEME_KEY) || 'dark'; } catch { return 'dark'; }
+}
+
+function applyClientTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.body.classList.toggle('theme-light', theme === 'light');
+
+  const label = document.getElementById('client-theme-label');
+  const dot   = document.getElementById('client-theme-dot');
+  const pill  = document.getElementById('client-theme-pill');
+  const input = document.getElementById('client-theme-input');
+
+  if (label) label.textContent = theme === 'light' ? '☀️ Tema claro' : '🌙 Tema escuro';
+  if (input) input.checked = theme === 'light';
+
+  // Anima o dot do toggle igual ao painel do dono
+  if (dot)  dot.style.transform  = theme === 'light' ? 'translateX(16px)' : 'translateX(0)';
+  if (pill) pill.style.background = theme === 'light'
+    ? 'linear-gradient(90deg,#f59e0b,#f97316)'
+    : 'linear-gradient(90deg,#00b4ff,#6c3fff)';
+}
+
+export function initClientThemeToggle() {
+  applyClientTheme(getClientTheme());
+
+  document.getElementById('client-theme-toggle')?.addEventListener('click', () => {
+    const next = getClientTheme() === 'dark' ? 'light' : 'dark';
+    try { localStorage.setItem(CLIENT_THEME_KEY, next); } catch {}
+    applyClientTheme(next);
+  });
+}
+
 export function renderClientLayout(content, options = {}) {
   const {
     variant = 'auth',
@@ -72,6 +110,10 @@ export function renderClientLayout(content, options = {}) {
   const initials = getInitials(customerName);
 
   if (variant === 'dashboard') {
+    // Lê o tema atual para renderizar o estado inicial correto
+    const theme = getClientTheme();
+    const isLight = theme === 'light';
+
     return `
       <div class="app client-dashboard-app">
         <button
@@ -238,6 +280,17 @@ export function renderClientLayout(content, options = {}) {
                 <div style="font-size:11px;font-weight:600">${safeCustomerName || 'Cliente'}</div>
                 <div style="font-size:9px;color:#3a4568">Portal do cliente</div>
               </div>
+            </div>
+
+            <!-- Toggle de tema — mesmo padrão do painel do dono -->
+            <div class="theme-btn" id="client-theme-toggle" role="button" tabindex="0" aria-label="Alternar tema">
+              <span id="client-theme-label">${isLight ? '☀️ Tema claro' : '🌙 Tema escuro'}</span>
+              <div class="theme-pill" id="client-theme-pill"
+                style="background:${isLight ? 'linear-gradient(90deg,#f59e0b,#f97316)' : 'linear-gradient(90deg,#00b4ff,#6c3fff)'}">
+                <div class="theme-pill-dot" id="client-theme-dot"
+                  style="transform:${isLight ? 'translateX(16px)' : 'translateX(0)'}"></div>
+              </div>
+              <input type="checkbox" id="client-theme-input" style="display:none" ${isLight ? 'checked' : ''}/>
             </div>
 
             <div
