@@ -2,7 +2,6 @@ import { renderClientLogin, initClientLoginPage } from './modules/login.js';
 import { renderClientRegister, initClientRegisterPage } from './modules/cadastro.js';
 import { renderClientHome, initClientHomePage } from './modules/home.js';
 import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
-import { renderClientLayout } from './client-layout.js';
 import { getClientProfile, logoutClient } from '../services/client-auth.js';
 import { renderClientAgendar, initClientAgendarPage } from './modules/agendar.js';
 import { renderClientAgendamentos, initClientAgendamentosPage } from './modules/agendamentos.js';
