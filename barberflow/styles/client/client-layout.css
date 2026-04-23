@@ -641,3 +641,59 @@ body.client-area::before {
     width: 100%;
   }
 }
+
+@media (max-width: 980px) {
+  body.client-area {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .client-dashboard-app {
+    min-height: 100dvh;
+  }
+
+  .client-dashboard-main,
+  .main {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .client-dashboard-topbar,
+  .topbar {
+    position: relative;
+    z-index: 25;
+    margin-top: calc(env(safe-area-inset-top, 0px) + 10px);
+    padding-left: 12px;
+    padding-right: 12px;
+    box-sizing: border-box;
+  }
+
+  .client-topbar-leading {
+    align-items: center;
+  }
+
+  .client-mobile-menu-btn {
+    position: relative;
+    z-index: 30;
+    margin: 0;
+    flex: 0 0 42px;
+  }
+
+  .client-dashboard-search-box,
+  .search-box {
+    min-width: 0;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    box-sizing: border-box;
+  }
+
+  .client-dashboard-content,
+  .content {
+    min-width: 0;
+    width: 100%;
+    padding-left: 12px;
+    padding-right: 12px;
+    box-sizing: border-box;
+  }
+}
