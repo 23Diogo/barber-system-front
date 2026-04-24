@@ -530,7 +530,7 @@ function collectReactivationSettings() {
 async function loadShopData() {
   try {
     const data = await apiFetch('/api/auth/me');
-    configState.shop         = data?.barbershop || null;
+    configState.shop = data?.barbershop || data?.barbershops || null;
     configState.settings     = data?.barbershop?.notification_settings || null;
     configState.workingHours = data?.barbershop?.working_hours || null;
   } catch (error) {
