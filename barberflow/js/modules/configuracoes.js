@@ -8,6 +8,7 @@ const configState = {
   workingHours: null,
   isSaving: false,
   isSavingHours: false,
+  isSavingReactivation: false,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -25,6 +26,14 @@ function setFeedback(id, message, variant = 'neutral') {
 
 // ─── Notificações ─────────────────────────────────────────────────────────────
 
+const REACTIVATION_DEFAULT_MSG =
+  `👋 Olá, {nome}! Sentimos muito a sua falta 😊\n\n` +
+  `Faz *{dias} dias* que você não passa aqui, e a gente ficou preocupado! 💈\n\n` +
+  `Que tal dar uma renovada no visual essa semana?\n\n` +
+  `🎁 Como presente de retorno, você ganha um *desconto especial* na próxima visita!\n\n` +
+  `👉 Agende agora: {link}\n\n` +
+  `_Te esperamos! Qualquer dúvida é só chamar._ 😄`;
+
 const notifDefaults = {
   appointment_confirmed:      true,
   appointment_cancelled:      true,
@@ -33,7 +42,9 @@ const notifDefaults = {
   subscription_reminder_days: [5, 3, 1, 0],
   stock_alert:                true,
   daily_jobs_hour:            18,
-  new_client_alert:           true,  // ← alerta de novo cliente cadastrado
+  new_client_alert:           true,
+  reactivation_enabled:       true,
+  reactivation_message:       '',
 };
 
 function getSettings() {
@@ -83,6 +94,112 @@ function renderHourInput() {
         min="0" max="23" class="modal-input" style="width:80px;margin:0;text-align:center;"/>
     </div>
   `;
+}
+
+// ─── Mensagem de reativação ───────────────────────────────────────────────────
+
+function renderReactivationMessage() {
+  const s = getSettings();
+  const enabled = s.reactivation_enabled !== false;
+  const msg     = s.reactivation_message || REACTIVATION_DEFAULT_MSG;
+
+  return `
+    <div class="card" id="cfg-reactivation-card">
+      <div class="card-header">
+        <div class="card-title">💬 Mensagem de Reativação</div>
+        <label class="cfg-toggle" title="${enabled ? 'Desativar' : 'Ativar'} envio automático">
+          <input type="checkbox" id="cfg-reactivation-enabled" ${enabled ? 'checked' : ''} />
+          <span class="cfg-toggle-track"></span>
+        </label>
+      </div>
+
+      <div class="cfg-sub" style="margin-bottom:12px;">
+        Enviada automaticamente para clientes que não visitam há 30–60 dias.
+        Personalize o texto usando as variáveis abaixo.
+      </div>
+
+      <!-- Variáveis disponíveis -->
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
+        <span class="cfg-var-chip" data-var="{nome}"  title="Nome do cliente">{nome}</span>
+        <span class="cfg-var-chip" data-var="{dias}"  title="Dias sem visitar">{dias}</span>
+        <span class="cfg-var-chip" data-var="{link}"  title="Link de agendamento">{link}</span>
+      </div>
+
+      <!-- Textarea da mensagem -->
+      <textarea
+        id="cfg-reactivation-msg"
+        class="modal-input"
+        rows="10"
+        maxlength="1000"
+        placeholder="Digite a mensagem de reativação..."
+        style="resize:vertical;min-height:180px;line-height:1.6;font-size:12px;"
+      >${escapeHtml(msg)}</textarea>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+        <span id="cfg-reactivation-char" style="font-size:10px;color:#3a4568;">${msg.length} / 1000 caracteres</span>
+        <button type="button" class="cfg-reactivation-reset"
+          style="font-size:10px;color:#4a5880;background:none;border:none;cursor:pointer;padding:0;">
+          ↺ Restaurar padrão
+        </button>
+      </div>
+
+      <!-- Preview -->
+      <div style="margin-top:14px;">
+        <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;margin-bottom:8px;">
+          Preview (com dados de exemplo)
+        </div>
+        <div id="cfg-reactivation-preview"
+          style="background:#080b18;border:1px solid #1a2040;border-radius:10px;padding:12px 14px;font-size:12px;color:#c0cce8;line-height:1.7;white-space:pre-wrap;word-break:break-word;">
+        </div>
+      </div>
+
+      <div id="cfg-reactivation-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+        <button type="button" class="btn-primary-gradient" id="cfg-reactivation-save-btn" style="min-height:38px;">
+          Salvar mensagem
+        </button>
+      </div>
+    </div>
+
+    <style>
+      .cfg-var-chip {
+        display: inline-flex;
+        align-items: center;
+        padding: 3px 10px;
+        border-radius: 8px;
+        background: rgba(79,195,247,.08);
+        border: 1px solid rgba(79,195,247,.2);
+        color: #4fc3f7;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: monospace;
+        cursor: pointer;
+        transition: background .15s;
+        user-select: none;
+      }
+      .cfg-var-chip:hover {
+        background: rgba(79,195,247,.16);
+      }
+      .cfg-reactivation-reset:hover { color: #c0cce8; }
+    </style>
+  `;
+}
+
+function updateReactivationPreview() {
+  const preview = document.getElementById('cfg-reactivation-preview');
+  const textarea = document.getElementById('cfg-reactivation-msg');
+  if (!preview || !textarea) return;
+
+  const shop = configState.shop;
+  const slug = shop?.slug || 'minha-barbearia';
+  const link = `https://bbarberflow.com.br/client/cadastro/${slug}`;
+
+  const text = (textarea.value || REACTIVATION_DEFAULT_MSG)
+    .replace(/\{nome\}/g, 'Carlos')
+    .replace(/\{dias\}/g, '35')
+    .replace(/\{link\}/g, link);
+
+  preview.textContent = text;
 }
 
 // ─── Horário de funcionamento ─────────────────────────────────────────────────
@@ -287,6 +404,7 @@ function renderNotificationSettings() {
 
       <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;padding:12px 0 8px;">Clientes</div>
       ${renderToggle('new_client_alert', '🎉 Novo cliente cadastrado', 'Receba uma msg no WhatsApp quando um cliente se cadastrar pelo link de convite')}
+      ${renderToggle('reactivation_enabled', '🔄 Reativação de clientes inativos', 'Envia mensagem automática para clientes sem visita há 30–60 dias')}
 
       <div id="cfg-notif-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
       <div style="display:flex;justify-content:flex-end;margin-top:4px;">
@@ -311,6 +429,8 @@ function collectSettings() {
     } else if (key === 'daily_jobs_hour') {
       const h = parseInt(el.value, 10);
       result[key] = isNaN(h) ? 18 : Math.min(23, Math.max(0, h));
+    } else {
+      result[key] = String(el.value || '');
     }
   });
   return result;
@@ -329,6 +449,16 @@ function collectWorkingHours() {
     }
   });
   return result;
+}
+
+function collectReactivationSettings() {
+  const enabled = document.getElementById('cfg-reactivation-enabled')?.checked ?? true;
+  const message = document.getElementById('cfg-reactivation-msg')?.value || '';
+  return {
+    ...getSettings(),
+    reactivation_enabled: enabled,
+    reactivation_message: message,
+  };
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
@@ -362,6 +492,29 @@ async function saveSettings() {
     setFeedback('cfg-notif-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
   } finally {
     configState.isSaving = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function saveReactivationSettings() {
+  if (configState.isSavingReactivation) return;
+  configState.isSavingReactivation = true;
+  const btn = document.getElementById('cfg-reactivation-save-btn');
+  if (btn) btn.disabled = true;
+  setFeedback('cfg-reactivation-feedback', 'Salvando...', 'neutral');
+
+  try {
+    const settings = collectReactivationSettings();
+    await apiFetch('/api/barbershops/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ notification_settings: settings }),
+    });
+    configState.settings = settings;
+    setFeedback('cfg-reactivation-feedback', '✓ Mensagem salva com sucesso!', 'success');
+  } catch (error) {
+    setFeedback('cfg-reactivation-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+  } finally {
+    configState.isSavingReactivation = false;
     if (btn) btn.disabled = false;
   }
 }
@@ -417,6 +570,8 @@ async function saveWorkingHours() {
   }
 }
 
+// ─── Event binding ────────────────────────────────────────────────────────────
+
 function bindInviteLinkCopy() {
   document.getElementById('cfg-invite-copy-btn')?.addEventListener('click', async () => {
     const slug = configState.shop?.slug;
@@ -442,8 +597,6 @@ function bindInviteLinkCopy() {
   });
 }
 
-// ─── Bind events ──────────────────────────────────────────────────────────────
-
 function bindWorkingHoursEvents() {
   document.querySelectorAll('[data-wh-field="active"]').forEach(checkbox => {
     checkbox.addEventListener('change', () => {
@@ -454,6 +607,52 @@ function bindWorkingHoursEvents() {
     });
   });
   document.getElementById('cfg-hours-save-btn')?.addEventListener('click', saveWorkingHours);
+}
+
+function bindReactivationEvents() {
+  const textarea  = document.getElementById('cfg-reactivation-msg');
+  const charCount = document.getElementById('cfg-reactivation-char');
+  const resetBtn  = document.querySelector('.cfg-reactivation-reset');
+  const saveBtn   = document.getElementById('cfg-reactivation-save-btn');
+
+  // Atualiza contador e preview ao digitar
+  textarea?.addEventListener('input', () => {
+    if (charCount) charCount.textContent = `${textarea.value.length} / 1000 caracteres`;
+    updateReactivationPreview();
+  });
+
+  // Clique nas variáveis — insere no cursor
+  document.querySelectorAll('.cfg-var-chip').forEach(chip => {
+    chip.addEventListener('click', () => {
+      if (!textarea) return;
+      const variable = chip.dataset.var;
+      const start = textarea.selectionStart;
+      const end   = textarea.selectionEnd;
+      textarea.value =
+        textarea.value.substring(0, start) +
+        variable +
+        textarea.value.substring(end);
+      textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+      textarea.focus();
+      if (charCount) charCount.textContent = `${textarea.value.length} / 1000 caracteres`;
+      updateReactivationPreview();
+    });
+  });
+
+  // Restaurar mensagem padrão
+  resetBtn?.addEventListener('click', () => {
+    if (!textarea) return;
+    if (!confirm('Restaurar a mensagem padrão? Sua mensagem atual será perdida.')) return;
+    textarea.value = REACTIVATION_DEFAULT_MSG;
+    if (charCount) charCount.textContent = `${textarea.value.length} / 1000 caracteres`;
+    updateReactivationPreview();
+  });
+
+  // Salvar
+  saveBtn?.addEventListener('click', saveReactivationSettings);
+
+  // Preview inicial
+  updateReactivationPreview();
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -469,6 +668,11 @@ export function renderConfiguracoes() {
         </div>
       </div>
       <div id="cfg-working-hours">
+        <div class="card">
+          <div class="card-header"><div class="card-title">Carregando...</div></div>
+        </div>
+      </div>
+      <div id="cfg-reactivation-section">
         <div class="card">
           <div class="card-header"><div class="card-title">Carregando...</div></div>
         </div>
@@ -507,8 +711,12 @@ export async function initConfiguracoesPage() {
   const workingHoursEl = document.getElementById('cfg-working-hours');
   if (workingHoursEl) workingHoursEl.innerHTML = renderWorkingHoursForm();
 
+  const reactivationEl = document.getElementById('cfg-reactivation-section');
+  if (reactivationEl) reactivationEl.innerHTML = renderReactivationMessage();
+
   document.getElementById('cfg-save-btn')?.addEventListener('click', saveSettings);
   document.getElementById('cfg-whatsapp-save-btn')?.addEventListener('click', saveWhatsApp);
   bindWorkingHoursEvents();
   bindInviteLinkCopy();
+  bindReactivationEvents();
 }
