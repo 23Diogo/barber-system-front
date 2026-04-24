@@ -107,6 +107,27 @@
     border-radius: 4px;
   }
 
+  /* ── Ícone do input time visível ── */
+  input[type="time"] {
+    color-scheme: dark;
+    position: relative;
+  }
+
+  input[type="time"]::-webkit-calendar-picker-indicator {
+    filter: invert(0.65) sepia(1) saturate(3) hue-rotate(175deg) brightness(1.2);
+    opacity: 1;
+    cursor: pointer;
+    border-radius: 4px;
+    padding: 3px;
+    transition: filter 0.15s, opacity 0.15s, background 0.15s;
+  }
+
+  input[type="time"]::-webkit-calendar-picker-indicator:hover {
+    filter: invert(0.85) sepia(1) saturate(4) hue-rotate(175deg) brightness(1.4);
+    background: rgba(79, 195, 247, 0.12);
+    opacity: 1;
+  }
+
   .barber-modal-body {
     display: grid;
     gap: 12px;
