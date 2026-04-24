@@ -9,6 +9,7 @@ const configState = {
   isSaving: false,
   isSavingHours: false,
   isSavingReactivation: false,
+  isSavingBot: false,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -227,6 +228,8 @@ function renderShopInfo() {
 
   const inviteLink = shop.slug ? buildInviteLink(shop.slug) : null;
 
+  const botConnected = !!(shop.meta_phone_id && shop.meta_access_token);
+
   return `
     <div class="card">
       <div class="card-header"><div class="card-title">Configurações da Barbearia</div></div>
@@ -269,16 +272,6 @@ function renderShopInfo() {
         <div class="cfg-action-muted">${escapeHtml(subEnd)}</div>
       </div>
 
-      <div class="cfg-row" style="cursor:default;">
-        <div>
-          <div class="cfg-label">🤖 WhatsApp Bot</div>
-          <div class="cfg-sub">Meta Phone ID configurado</div>
-        </div>
-        <div style="font-size:11px;font-weight:700;color:${shop.meta_phone_id ? '#00e676' : '#5a6888'};">
-          ${shop.meta_phone_id ? '● Conectado' : '○ Não configurado'}
-        </div>
-      </div>
-
       <div class="cfg-row" style="cursor:default;flex-direction:column;align-items:flex-start;gap:8px;">
         <div>
           <div class="cfg-label">📨 Link de convite de clientes</div>
@@ -291,6 +284,49 @@ function renderShopInfo() {
           </div>
           <div id="cfg-invite-feedback" style="min-height:14px;font-size:10px;color:#5a6888;"></div>
         ` : `<div class="cfg-action-muted">Slug da barbearia não configurado.</div>`}
+      </div>
+    </div>
+
+    <!-- ── WhatsApp Bot ── -->
+    <div class="card" style="border-color:${botConnected ? 'rgba(0,230,118,.2)' : 'rgba(79,195,247,.12)'};">
+      <div class="card-header">
+        <div class="card-title">🤖 WhatsApp Bot</div>
+        <span style="font-size:11px;font-weight:700;color:${botConnected ? '#00e676' : '#5a6888'};">
+          ${botConnected ? '● Conectado' : '○ Não configurado'}
+        </span>
+      </div>
+
+      <div class="cfg-sub" style="margin-bottom:14px;">
+        Configure aqui o número e o token da API do WhatsApp Business para enviar notificações automáticas.
+        Obtenha esses dados em
+        <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener"
+          style="color:#4fc3f7;">developers.facebook.com/apps</a>
+        → seu app → Configuração da API.
+      </div>
+
+      <div style="display:grid;gap:10px;">
+        <div>
+          <div class="color-section-label">Phone Number ID</div>
+          <input type="text" id="cfg-meta-phone-id" class="modal-input"
+            placeholder="Ex: 1118500758022349"
+            value="${escapeHtml(shop.meta_phone_id || '')}"/>
+        </div>
+        <div>
+          <div class="color-section-label">Access Token</div>
+          <input type="password" id="cfg-meta-token" class="modal-input"
+            placeholder="EAAxxxxxx..."
+            value="${escapeHtml(shop.meta_access_token || '')}"/>
+          <div style="font-size:10px;color:#3a4568;margin-top:4px;">
+            ⚠️ O token temporário expira em 24h. Para produção use um token permanente via System User.
+          </div>
+        </div>
+      </div>
+
+      <div id="cfg-bot-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
+      <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+        <button type="button" class="btn-primary-gradient" id="cfg-bot-save-btn" style="min-height:38px;">
+          Salvar configuração do Bot
+        </button>
       </div>
     </div>`;
 }
@@ -390,13 +426,13 @@ function renderReactivationMessage() {
 
 function renderTestCard() {
   const tests = [
-    { id: 'test-bills',                 icon: '💳', label: 'Conta a pagar',           endpoint: '/api/test-notifications/bills' },
-    { id: 'test-stock',                 icon: '📦', label: 'Estoque baixo',            endpoint: '/api/test-notifications/stock' },
-    { id: 'test-subscription',          icon: '🔔', label: 'Mensalidade do sistema',   endpoint: '/api/test-notifications/subscription' },
-    { id: 'test-appointment-confirmed', icon: '✅', label: 'Confirmação agendamento',  endpoint: '/api/test-notifications/appointment-confirmed' },
-    { id: 'test-appointment-reminder',  icon: '⏰', label: 'Lembrete 1h antes',        endpoint: '/api/test-notifications/appointment-reminder' },
-    { id: 'test-new-client',            icon: '🎉', label: 'Novo cliente cadastrado',  endpoint: '/api/test-notifications/new-client' },
-    { id: 'test-reactivation',          icon: '🔄', label: 'Reativação de clientes',   endpoint: '/api/test-notifications/reactivation' },
+    { id: 'test-bills',                 icon: '💳', label: 'Conta a pagar',          endpoint: '/api/test-notifications/bills' },
+    { id: 'test-stock',                 icon: '📦', label: 'Estoque baixo',           endpoint: '/api/test-notifications/stock' },
+    { id: 'test-subscription',          icon: '🔔', label: 'Mensalidade do sistema',  endpoint: '/api/test-notifications/subscription' },
+    { id: 'test-appointment-confirmed', icon: '✅', label: 'Confirmação agendamento', endpoint: '/api/test-notifications/appointment-confirmed' },
+    { id: 'test-appointment-reminder',  icon: '⏰', label: 'Lembrete 1h antes',       endpoint: '/api/test-notifications/appointment-reminder' },
+    { id: 'test-new-client',            icon: '🎉', label: 'Novo cliente cadastrado', endpoint: '/api/test-notifications/new-client' },
+    { id: 'test-reactivation',          icon: '🔄', label: 'Reativação de clientes',  endpoint: '/api/test-notifications/reactivation' },
   ];
 
   const buttons = tests.map(t => `
@@ -570,6 +606,38 @@ async function saveWhatsApp() {
   }
 }
 
+async function saveWhatsAppBot() {
+  if (configState.isSavingBot) return;
+  configState.isSavingBot = true;
+  const btn     = document.getElementById('cfg-bot-save-btn');
+  const phoneId = String(document.getElementById('cfg-meta-phone-id')?.value || '').trim();
+  const token   = String(document.getElementById('cfg-meta-token')?.value || '').trim();
+  if (btn) btn.disabled = true;
+  setFeedback('cfg-bot-feedback', 'Salvando...', 'neutral');
+  try {
+    if (!phoneId) throw new Error('Informe o Phone Number ID.');
+    if (!token)   throw new Error('Informe o Access Token.');
+    await apiFetch('/api/barbershops/settings', {
+      method: 'PATCH',
+      body: JSON.stringify({ meta_phone_id: phoneId, meta_access_token: token }),
+    });
+    if (configState.shop) {
+      configState.shop.meta_phone_id    = phoneId;
+      configState.shop.meta_access_token = token;
+    }
+    setFeedback('cfg-bot-feedback', '✓ WhatsApp Bot configurado com sucesso!', 'success');
+    // Atualiza o indicador de status sem recarregar a página toda
+    const shopInfo = document.getElementById('cfg-shop-info');
+    if (shopInfo) shopInfo.innerHTML = renderShopInfo();
+    bindShopInfoEvents();
+  } catch (error) {
+    setFeedback('cfg-bot-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+  } finally {
+    configState.isSavingBot = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function saveWorkingHours() {
   if (configState.isSavingHours) return;
   configState.isSavingHours = true;
@@ -593,6 +661,12 @@ async function saveWorkingHours() {
 }
 
 // ─── Event binding ────────────────────────────────────────────────────────────
+
+function bindShopInfoEvents() {
+  document.getElementById('cfg-whatsapp-save-btn')?.addEventListener('click', saveWhatsApp);
+  document.getElementById('cfg-bot-save-btn')?.addEventListener('click', saveWhatsAppBot);
+  bindInviteLinkCopy();
+}
 
 function bindInviteLinkCopy() {
   document.getElementById('cfg-invite-copy-btn')?.addEventListener('click', async () => {
@@ -662,32 +736,24 @@ function bindReactivationEvents() {
 function bindTestEvents() {
   document.querySelectorAll('.cfg-test-btn[data-endpoint]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const endpoint = btn.dataset.endpoint;
-      const statusEl = btn.querySelector('.cfg-test-status');
+      const endpoint  = btn.dataset.endpoint;
+      const statusEl  = btn.querySelector('.cfg-test-status');
       const feedbackEl = document.getElementById('cfg-test-feedback');
 
       btn.disabled = true;
-      if (statusEl) { statusEl.textContent = '⏳'; statusEl.style.color = '#5a6888'; }
+      if (statusEl)   { statusEl.textContent = '⏳'; statusEl.style.color = '#5a6888'; }
       if (feedbackEl) { feedbackEl.textContent = ''; }
 
       try {
         const result = await apiFetch(endpoint, { method: 'POST' });
-        if (statusEl) { statusEl.textContent = '✓ Enviado'; statusEl.style.color = '#00e676'; }
-        if (feedbackEl) {
-          feedbackEl.textContent = result?.message || 'Enviado com sucesso!';
-          feedbackEl.style.color = '#00e676';
-        }
+        if (statusEl)   { statusEl.textContent = '✓ Enviado'; statusEl.style.color = '#00e676'; }
+        if (feedbackEl) { feedbackEl.textContent = result?.message || 'Enviado!'; feedbackEl.style.color = '#00e676'; }
       } catch (err) {
-        if (statusEl) { statusEl.textContent = '✗ Erro'; statusEl.style.color = '#ff8a8a'; }
-        if (feedbackEl) {
-          feedbackEl.textContent = err instanceof Error ? err.message : 'Erro ao enviar.';
-          feedbackEl.style.color = '#ff8a8a';
-        }
+        if (statusEl)   { statusEl.textContent = '✗ Erro'; statusEl.style.color = '#ff8a8a'; }
+        if (feedbackEl) { feedbackEl.textContent = err instanceof Error ? err.message : 'Erro ao enviar.'; feedbackEl.style.color = '#ff8a8a'; }
       } finally {
         btn.disabled = false;
-        setTimeout(() => {
-          if (statusEl) statusEl.textContent = '';
-        }, 5000);
+        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 5000);
       }
     });
   });
@@ -746,9 +812,8 @@ export async function initConfiguracoesPage() {
   if (testEl) testEl.innerHTML = renderTestCard();
 
   document.getElementById('cfg-save-btn')?.addEventListener('click', saveSettings);
-  document.getElementById('cfg-whatsapp-save-btn')?.addEventListener('click', saveWhatsApp);
+  bindShopInfoEvents();
   bindWorkingHoursEvents();
-  bindInviteLinkCopy();
   bindReactivationEvents();
   bindTestEvents();
 }
