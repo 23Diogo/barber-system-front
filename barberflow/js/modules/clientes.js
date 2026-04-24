@@ -266,7 +266,8 @@ function buildQrImageUrl(text) {
 
 async function loadInviteStats(barbershopId) {
   try {
-    const data = await apiFetch(`/api/barbershops/${barbershopId}/invites/stats`);
+    //const data = await apiFetch(`/api/barbershops/${barbershopId}/invites/stats`);
+    const data = await apiFetch(`/api/barbershops/invites/stats`);
     return {
       sent:      data?.sent      ?? '—',
       converted: data?.converted ?? '—',
@@ -534,7 +535,8 @@ async function _inviteCopy(text, btnEl, feedbackEl, okMsg) {
 // registra o envio no backend (fire-and-forget)
 async function _trackInviteSent(barbershopId, channel) {
   try {
-    await apiFetch(`/api/barbershops/${barbershopId}/invites`, {
+    //await apiFetch(`/api/barbershops/${barbershopId}/invites`, {
+      await apiFetch(`/api/barbershops/invites`, {
       method: 'POST',
       body: JSON.stringify({ channel }),
     });
