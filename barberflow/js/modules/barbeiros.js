@@ -49,6 +49,12 @@ function getBarberName(barber) {
   return users?.name || 'Barbeiro';
 }
 
+function getBarberEmail(barber) {
+  const users = barber.users;
+  if (Array.isArray(users)) return users[0]?.email || '';
+  return users?.email || '';
+}
+
 function getBarberAvatarUrl(barber) {
   const users = barber.users;
   if (Array.isArray(users)) return users[0]?.avatar_url || null;
@@ -187,6 +193,7 @@ function renderBarberCard(barber, index) {
 function renderBarberDetails(barber, index) {
   const avatarUrl = getBarberAvatarUrl(barber);
   const status    = getStatusMeta(barber.is_accepting !== false);
+  const email     = getBarberEmail(barber);
 
   return `
     <div class="barber-modal-body">
@@ -255,6 +262,36 @@ function renderBarberDetails(barber, index) {
             ● Não aceitando
           </button>
         </div>
+      </div>
+
+      <!-- Acesso ao App Mobile -->
+      <div style="padding:14px;border-radius:12px;background:rgba(156,111,255,.05);border:1px solid rgba(156,111,255,.18);">
+        <div class="color-section-label" style="margin-bottom:6px;">📱 Acesso ao App BarberFlow</div>
+        <div style="font-size:11px;color:#5a6888;margin-bottom:12px;">
+          O barbeiro usa estas credenciais para entrar no app mobile e ver a agenda dele.
+          A senha padrão é <strong style="color:#9c6fff;">barberflow123</strong> — recomende que ele troque.
+        </div>
+        <div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:end;">
+          <div>
+            <div class="color-section-label">E-mail de acesso</div>
+            <div style="padding:8px 12px;border-radius:8px;background:#0e1022;border:1px solid #232845;font-size:13px;color:#c0cce8;font-family:monospace;">
+              ${escapeHtml(email || '—')}
+            </div>
+          </div>
+        </div>
+        <div style="margin-top:12px;display:flex;align-items:end;gap:8px;flex-wrap:wrap;">
+          <div style="flex:1;">
+            <div class="color-section-label">Nova senha</div>
+            <input type="password" id="barber-new-password" class="modal-input"
+              placeholder="Mínimo 6 caracteres" style="margin:0;"/>
+          </div>
+          <button type="button" id="barber-reset-password-btn"
+            data-barber-id="${escapeHtml(barber.id)}"
+            class="btn-save" style="min-height:40px;padding:0 16px;white-space:nowrap;">
+            Atualizar senha
+          </button>
+        </div>
+        <div id="barber-password-feedback" style="min-height:16px;font-size:10px;margin-top:6px;color:#5a6888;"></div>
       </div>
 
       <div id="barber-modal-feedback" class="barber-form-feedback"></div>
@@ -359,6 +396,24 @@ function renderBarberForm(mode, barber = null) {
             </div>
           </div>
         </div>
+
+        ${!isEdit ? `
+          <!-- Senha de acesso ao app — apenas no cadastro -->
+          <div style="padding:12px 14px;border-radius:12px;background:rgba(156,111,255,.05);border:1px solid rgba(156,111,255,.18);display:grid;gap:10px;">
+            <div>
+              <div class="color-section-label" style="margin-bottom:2px;">📱 Senha de acesso ao App</div>
+              <div style="font-size:10px;color:#5a6888;">
+                O barbeiro usará o e-mail acima + esta senha para entrar no app mobile.
+                Se deixar em branco, a senha padrão será <strong style="color:#9c6fff;">barberflow123</strong>.
+              </div>
+            </div>
+            <div>
+              <div class="color-section-label">Senha inicial (opcional)</div>
+              <input class="modal-input" name="password" type="password"
+                placeholder="Deixe em branco para usar barberflow123" style="margin:0;" />
+            </div>
+          </div>
+        ` : ''}
 
         <div id="barber-form-feedback" class="barber-form-feedback"></div>
 
@@ -481,6 +536,33 @@ async function handleAvatarUpload(file, barberId) {
   }
 }
 
+async function handleResetPassword(barberId) {
+  const input = document.getElementById('barber-new-password');
+  const password = String(input?.value || '').trim();
+
+  if (!password || password.length < 6) {
+    setFeedback('barber-password-feedback', 'A senha deve ter pelo menos 6 caracteres.', 'error');
+    return;
+  }
+
+  const btn = document.getElementById('barber-reset-password-btn');
+  if (btn) btn.disabled = true;
+  setFeedback('barber-password-feedback', 'Atualizando senha...', 'neutral');
+
+  try {
+    await apiFetch(`/api/barbers/${barberId}/password`, {
+      method: 'PATCH',
+      body: JSON.stringify({ password }),
+    });
+    setFeedback('barber-password-feedback', '✓ Senha atualizada com sucesso!', 'success');
+    if (input) input.value = '';
+  } catch (error) {
+    setFeedback('barber-password-feedback', error instanceof Error ? error.message : 'Erro ao atualizar senha.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
 async function handleCreateBarber(event) {
   event.preventDefault();
   const form     = document.getElementById('barber-form');
@@ -504,11 +586,13 @@ async function handleCreateBarber(event) {
     slot_interval: 30,
   };
 
+  const password = String(formData.get('password') || '').trim() || undefined;
+
   try {
     if (btn) btn.disabled = true;
     setFeedback('barber-form-feedback', 'Salvando...', 'neutral');
 
-    await apiFetch('/api/barbers', {
+    const result = await apiFetch('/api/barbers', {
       method: 'POST',
       body: JSON.stringify({
         name, email,
@@ -519,11 +603,19 @@ async function handleCreateBarber(event) {
         bio:          String(formData.get('bio') || '').trim() || null,
         is_accepting: String(formData.get('is_accepting')) === 'true',
         working_hours,
+        password,
       }),
     });
 
-    closeBarberModal();
-    await loadBarbeirosData();
+    // Mostra a senha padrão se não foi definida uma senha personalizada
+    if (result?.temp_password) {
+      setFeedback('barber-form-feedback',
+        `✓ Barbeiro cadastrado! Senha de acesso ao app: ${result.temp_password}`, 'success');
+      setTimeout(() => { closeBarberModal(); loadBarbeirosData(); }, 3000);
+    } else {
+      closeBarberModal();
+      await loadBarbeirosData();
+    }
   } catch (error) {
     setFeedback('barber-form-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
     if (btn) btn.disabled = false;
@@ -613,6 +705,12 @@ function bindBarberModalEvents() {
     const file     = e.target.files?.[0];
     const barberId = e.target.dataset.barberId;
     if (file && barberId) handleAvatarUpload(file, barberId);
+  });
+
+  // Reset de senha na tela de detalhes
+  document.getElementById('barber-reset-password-btn')?.addEventListener('click', (e) => {
+    const barberId = e.currentTarget.dataset.barberId;
+    if (barberId) handleResetPassword(barberId);
   });
 
   const form = document.getElementById('barber-form');
