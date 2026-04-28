@@ -2,6 +2,7 @@ import { renderClientLogin, initClientLoginPage } from './modules/login.js';
 import { renderClientRegister, initClientRegisterPage } from './modules/cadastro.js';
 import { renderClientHome, initClientHomePage } from './modules/home.js';
 import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
+import { renderClientNovaSenha, initClientNovaSenhaPage } from './modules/nova-senha.js';
 import { getClientProfile, logoutClient } from '../services/client-auth.js';
 import { renderClientAgendar, initClientAgendarPage } from './modules/agendar.js';
 import { renderClientAgendamentos, initClientAgendamentosPage } from './modules/agendamentos.js';
@@ -42,6 +43,13 @@ const routes = {
     init: (navigate) => initClientForgotPasswordPage({ navigate }),
     protected: false,
     layoutOptions: { variant: 'auth', title: 'Recuperar senha', subtitle: 'Enviaremos as instruções para você', showBack: true },
+  },
+  'nova-senha': {
+    path: '/client/nova-senha',
+    render: renderClientNovaSenha,
+    init: (navigate) => initClientNovaSenhaPage({ navigate }),
+    protected: false,
+    layoutOptions: { variant: 'auth', title: 'Nova senha', subtitle: 'Crie sua nova senha de acesso', showBack: true },
   },
   home: {
     path: '/client/home',
@@ -121,6 +129,9 @@ function getClientRouteFromPath(pathname = window.location.pathname) {
   if (normalized === CLIENT_BASE || normalized === `${CLIENT_BASE}/login`) return 'login';
 
   if (normalized.startsWith(`${CLIENT_BASE}/cadastro`)) return 'cadastro';
+
+  // Captura /client/:slug/nova-senha?token=... (link do e-mail de recuperação)
+  if (normalized.match(/^\/client\/[^/]+\/nova-senha$/)) return 'nova-senha';
 
   const entry = Object.entries(routes).find(([, config]) => normalizePath(config.path) === normalized);
   return entry?.[0] || 'login';
