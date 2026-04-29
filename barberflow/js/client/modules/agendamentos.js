@@ -1,16 +1,40 @@
-import {
+\import {
   getClientPortalAppointments,
   cancelClientPortalAppointment,
   getClientPortalContext,
 } from '../../services/client-auth.js';
 
-const API_BASE = () => String(window.__API_BASE__ || '').replace(/\/$/, '');
+import { getApiBaseUrl } from '../../services/api.js';
 
 const state = {
   upcoming: [],
   history: [],
   context: null,
 };
+
+function sanitizeBaseUrl(url) {
+  return String(url || '').trim().replace(/\/$/, '');
+}
+
+async function clientPortalFetch(path, options = {}) {
+  const baseUrl = sanitizeBaseUrl(getApiBaseUrl());
+  const token = String(localStorage.getItem('barberflow.clientToken') || '').trim();
+
+  const headers = new Headers(options.headers || {});
+  headers.set('Accept', 'application/json');
+  headers.set('Content-Type', 'application/json');
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+
+  const response = await fetch(`${baseUrl}${path}`, { ...options, headers });
+  const text = await response.text();
+  let payload = null;
+  try { payload = text ? JSON.parse(text) : null; } catch { payload = text; }
+
+  if (!response.ok) {
+    throw new Error(payload?.error || payload?.message || `Erro HTTP ${response.status}`);
+  }
+  return payload;
+}
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -53,8 +77,6 @@ function setFeedback(message, variant = 'neutral') {
   el.style.color = variant === 'error' ? '#ff7b91' : variant === 'success' ? '#00e676' : '#8fa3c7';
 }
 
-// ─── Info row — label + valor em branco e maior ───────────────────────────────
-
 function infoRow(label, value, pill) {
   return `
     <div class="cfg-row">
@@ -67,14 +89,12 @@ function infoRow(label, value, pill) {
   `;
 }
 
-// ─── Rating inline ────────────────────────────────────────────────────────────
-
 function renderRatingSection(item) {
   const isCompleted = String(item?.status || '').toLowerCase() === 'completed';
   if (!isCompleted) return '';
 
   const alreadyRated = item?.rating != null;
-  const appointmentId = escapeHtml(item.id);
+  const id = escapeHtml(item.id);
 
   if (alreadyRated) {
     const stars = '★'.repeat(item.rating) + '☆'.repeat(5 - item.rating);
@@ -88,39 +108,34 @@ function renderRatingSection(item) {
 
   return `
     <div style="border-top:1px solid rgba(79,195,247,.10);padding-top:12px;">
-      <div id="rating-section-${appointmentId}" style="display:none;gap:10px;flex-direction:column;">
-        <div style="display:flex;gap:6px;align-items:center;" id="stars-${appointmentId}">
+      <div id="rating-section-${id}" style="display:none;flex-direction:column;gap:10px;">
+        <div style="display:flex;gap:6px;align-items:center;">
           ${[1,2,3,4,5].map(n => `
-            <button type="button" data-star="${n}" data-appt="${appointmentId}"
-              style="font-size:24px;background:none;border:none;cursor:pointer;color:#555;padding:0;line-height:1;transition:color .15s"
-              onmouseover="document.querySelectorAll('[data-appt=\\'${appointmentId}\\'][data-star]').forEach(s=>s.style.color=Number(s.dataset.star)<=${n}?'#ffd166':'#555')"
-              onmouseleave="this.closest('[id]') && document.querySelectorAll('[data-appt=\\'${appointmentId}\\'][data-star]').forEach(s=>s.style.color=Number(s.dataset.star)<=(Number(document.getElementById('rating-val-${appointmentId}')?.value||0))?'#ffd166':'#555')"
-            >★</button>
+            <button type="button" class="rating-star" data-star="${n}" data-appt="${id}"
+              style="font-size:24px;background:none;border:none;cursor:pointer;color:#555;padding:0;line-height:1;transition:color .15s">★</button>
           `).join('')}
-          <input type="hidden" id="rating-val-${appointmentId}" value="0" />
+          <input type="hidden" id="rating-val-${id}" value="0" />
         </div>
-        <textarea id="rating-comment-${appointmentId}" placeholder="Comentário opcional..." rows="2"
+        <textarea id="rating-comment-${id}" placeholder="Comentário opcional..." rows="2"
           style="width:100%;background:rgba(255,255,255,.05);border:1px solid rgba(79,195,247,.18);border-radius:10px;color:#fff;font:inherit;font-size:13px;padding:8px 10px;resize:vertical;box-sizing:border-box;"></textarea>
         <div style="display:flex;gap:8px;justify-content:flex-end;">
-          <button type="button" data-rating-cancel="${appointmentId}"
+          <button type="button" data-rating-cancel="${id}"
             style="padding:6px 14px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:transparent;color:#8fa3c7;font:inherit;font-size:13px;cursor:pointer;">
             Cancelar
           </button>
-          <button type="button" data-rating-submit="${appointmentId}"
+          <button type="button" data-rating-submit="${id}"
             style="padding:6px 14px;border-radius:10px;border:0;background:rgba(79,195,247,.18);color:#7dd3fc;font:inherit;font-size:13px;font-weight:700;cursor:pointer;">
             Enviar avaliação
           </button>
         </div>
       </div>
-      <button type="button" data-rating-open="${appointmentId}"
+      <button type="button" data-rating-open="${id}"
         style="font-size:13px;padding:6px 14px;border-radius:10px;border:1px solid rgba(255,193,7,.25);background:rgba(255,193,7,.08);color:#ffd166;font:inherit;cursor:pointer;">
         ★ Avaliar atendimento
       </button>
     </div>
   `;
 }
-
-// ─── Card de agendamento ──────────────────────────────────────────────────────
 
 function renderAppointmentCard(item, { allowCancel = false } = {}) {
   const barberUser = Array.isArray(item?.barber_profiles?.users)
@@ -148,7 +163,6 @@ function renderAppointmentCard(item, { allowCancel = false } = {}) {
       ${infoRow('Profissional', escapeHtml(barberUser?.name || 'Profissional'), 'Agenda')}
       ${infoRow('Cobrança', escapeHtml(billingLabel), item?.billing_mode || 'avulso')}
       ${infoRow('Observação', notesLabel, 'Notas')}
-
       ${item?.cancelled_reason ? infoRow('Motivo do cancelamento', escapeHtml(item.cancelled_reason), 'Cancelado') : ''}
 
       ${renderRatingSection(item)}
@@ -185,8 +199,6 @@ function renderList(targetId, items, emptyTitle, emptyText, allowCancel = false)
   container.innerHTML = `<div style="display:grid;gap:14px;">${items.map(item => renderAppointmentCard(item, { allowCancel })).join('')}</div>`;
 }
 
-// ─── Rating: bind events ──────────────────────────────────────────────────────
-
 function bindRatingActions() {
   // Abrir formulário
   document.querySelectorAll('[data-rating-open]').forEach(btn => {
@@ -209,23 +221,41 @@ function bindRatingActions() {
   });
 
   // Selecionar estrela
-  document.querySelectorAll('[data-star]').forEach(star => {
+  document.querySelectorAll('.rating-star').forEach(star => {
     star.addEventListener('click', () => {
-      const id = star.getAttribute('data-appt');
+      const id  = star.getAttribute('data-appt');
       const val = Number(star.getAttribute('data-star'));
       const input = document.getElementById(`rating-val-${id}`);
       if (input) input.value = String(val);
-      document.querySelectorAll(`[data-appt="${id}"][data-star]`).forEach(s => {
+      document.querySelectorAll(`.rating-star[data-appt="${id}"]`).forEach(s => {
         s.style.color = Number(s.getAttribute('data-star')) <= val ? '#ffd166' : '#555';
+      });
+    });
+
+    // Hover
+    star.addEventListener('mouseenter', () => {
+      const id  = star.getAttribute('data-appt');
+      const val = Number(star.getAttribute('data-star'));
+      document.querySelectorAll(`.rating-star[data-appt="${id}"]`).forEach(s => {
+        s.style.color = Number(s.getAttribute('data-star')) <= val ? '#ffd166' : '#555';
+      });
+    });
+
+    star.addEventListener('mouseleave', () => {
+      const id    = star.getAttribute('data-appt');
+      const input = document.getElementById(`rating-val-${id}`);
+      const current = Number(input?.value || 0);
+      document.querySelectorAll(`.rating-star[data-appt="${id}"]`).forEach(s => {
+        s.style.color = Number(s.getAttribute('data-star')) <= current ? '#ffd166' : '#555';
       });
     });
   });
 
-  // Enviar avaliação
+  // Enviar avaliação — usa clientPortalFetch igual ao resto do projeto
   document.querySelectorAll('[data-rating-submit]').forEach(btn => {
     btn.addEventListener('click', async () => {
-      const id = btn.getAttribute('data-rating-submit');
-      const rating = Number(document.getElementById(`rating-val-${id}`)?.value || 0);
+      const id      = btn.getAttribute('data-rating-submit');
+      const rating  = Number(document.getElementById(`rating-val-${id}`)?.value || 0);
       const comment = document.getElementById(`rating-comment-${id}`)?.value?.trim() || '';
 
       if (!rating || rating < 1 || rating > 5) {
@@ -237,17 +267,10 @@ function bindRatingActions() {
         btn.disabled = true;
         setFeedback('Enviando avaliação...', 'neutral');
 
-        const token = localStorage.getItem('barberflow.clientToken') || '';
-        const res = await fetch(`${API_BASE()}/api/client-portal/appointments/${id}/rate`, {
+        await clientPortalFetch(`/api/client-portal/appointments/${id}/rate`, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
           body: JSON.stringify({ rating, comment }),
         });
-
-        if (!res.ok) {
-          const err = await res.json().catch(() => ({}));
-          throw new Error(err?.error || `Erro ${res.status}`);
-        }
 
         setFeedback('Avaliação enviada com sucesso!', 'success');
         await loadAppointments();
@@ -292,14 +315,13 @@ async function loadAppointments() {
     getClientPortalAppointments(),
   ]);
 
-  state.context = context || null;
-  state.upcoming = Array.isArray(appointments?.upcoming) ? appointments.upcoming : [];
-  state.history = Array.isArray(appointments?.history) ? appointments.history : [];
+  state.context   = context || null;
+  state.upcoming  = Array.isArray(appointments?.upcoming) ? appointments.upcoming : [];
+  state.history   = Array.isArray(appointments?.history)  ? appointments.history  : [];
 
   renderHeaderMeta();
   renderList('client-upcoming-list', state.upcoming, 'Nenhum próximo agendamento', 'Seus próximos horários aparecerão aqui.', true);
-  renderList('client-history-list', state.history, 'Nenhum histórico ainda', 'Quando houver atendimentos concluídos ou cancelados, eles aparecerão aqui.', false);
-
+  renderList('client-history-list',  state.history,  'Nenhum histórico ainda', 'Quando houver atendimentos concluídos ou cancelados, eles aparecerão aqui.', false);
   bindCancelActions();
   bindRatingActions();
 }
