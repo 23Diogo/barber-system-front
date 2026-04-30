@@ -136,3 +136,61 @@
     justify-content: flex-start;
   }
 }
+
+/* ─── Tooltip button ── */
+.cres-tip-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1px solid #1e2345;
+  background: #0d0f1e;
+  color: #3a4568;
+  font-size: 9px;
+  font-weight: 700;
+  cursor: pointer;
+  margin-left: 5px;
+  flex-shrink: 0;
+  vertical-align: middle;
+  transition: all .15s;
+  line-height: 1;
+}
+
+.cres-tip-btn:hover {
+  border-color: rgba(79,195,247,.5);
+  color: #4fc3f7;
+  background: rgba(79,195,247,.08);
+}
+
+/* ─── Tooltip box ── */
+.cres-tooltip {
+  position: fixed;
+  z-index: 9999;
+  background: #0c1020;
+  border: 1px solid rgba(79,195,247,.25);
+  border-radius: 10px;
+  padding: 12px 14px;
+  box-shadow: 0 8px 32px rgba(0,0,0,.6);
+  pointer-events: none;
+  animation: cresToolFade .15s ease;
+}
+
+@keyframes cresToolFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.cres-tooltip-title {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4fc3f7;
+  margin-bottom: 5px;
+}
+
+.cres-tooltip-text {
+  font-size: 11px;
+  color: #8fa3c7;
+  line-height: 1.6;
+}
