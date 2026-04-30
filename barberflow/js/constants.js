@@ -12,4 +12,5 @@ export const pageTitles = {
   fidel: 'FIDELIDADE',
   aval: 'AVALIAÇÕES',
   config: 'CONFIGURAÇÕES',
+  cres: 'PAINEL DE CRESCIMENTO',
 };
