@@ -277,3 +277,10 @@ export const clientRegister = registerClient;
 export const clientLogin = loginClient;
 export const getClientMe = meClient;
 export const requestClientPasswordReset = forgotPasswordClient;
+
+export async function rateClientPortalAppointment(appointmentId, payload) {
+  return clientFetch(`/api/client-portal/appointments/${appointmentId}/rate`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, true);
+}
