@@ -4,6 +4,17 @@
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
 <title>BarberFlow — Dashboard</title>
+
+<!-- PWA -->
+<link rel="manifest" href="/manifest-app.json" />
+<meta name="theme-color" content="#050816" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="BarberFlow" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+<link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32x32.png" />
+
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
 <link href="/styles/base.css" rel="stylesheet"/>
 <link href="/styles/layout.css" rel="stylesheet"/>
@@ -23,9 +34,10 @@
 <link href="/styles/modules/configuracoes.css" rel="stylesheet"/>
 <link href="/styles/modules/planos.css" rel="stylesheet"/>
 <link href="/styles/modules/client-auth.css" rel="stylesheet"/>
-<link href="/styles/modules/crescimento.css" rel="stylesheet" />  
+<link href="/styles/modules/crescimento.css" rel="stylesheet"/>
 <link href="/styles/responsive.css" rel="stylesheet"/>
-<link href="/styles/modules/invite-modal.css" rel="stylesheet" />
+<link href="/styles/modules/invite-modal.css" rel="stylesheet"/>
+<link href="/styles/pwa-install.css" rel="stylesheet"/>
 <style>
 body.auth-locked { overflow: hidden; }
 body.auth-locked .app { filter: blur(2px) brightness(.42); pointer-events: none; user-select: none; }
@@ -56,7 +68,7 @@ body.auth-locked #modal { display: none !important; }
     </div>
     <div class="customize-hint" data-open-modal="true">✏️ Personalizar logo →</div>
 
-<nav class="nav">
+    <nav class="nav">
       <div class="nav-group-label nav-group-label--section">Principal</div>
       <div class="nav-item active" data-nav-target="dash">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><rect height="7" rx="1" width="7" x="3" y="3"></rect><rect height="7" rx="1" width="7" x="14" y="3"></rect><rect height="7" rx="1" width="7" x="3" y="14"></rect><rect height="7" rx="1" width="7" x="14" y="14"></rect></svg>
@@ -121,6 +133,7 @@ body.auth-locked #modal { display: none !important; }
         Configurações
       </div>
     </nav>
+
     <div class="sidebar-footer">
       <div class="auth-status-chip" id="authStatusChip">Sem login dev</div>
       <div class="user-card">
@@ -202,19 +215,16 @@ body.auth-locked #modal { display: none !important; }
           <div id="dashboardFinContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando financeiro...</div></div>
           <div class="widget-module">Módulo: Financeiro</div>
         </div>
-
         <div class="analytics-card pos-tr dashboard-widget" data-target="aval" data-widget-id="widget-aval" title="Abrir Avaliações">
           <div class="widget-topbar"><div class="ac-title">Avaliações</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
           <div id="dashboardAvalContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando avaliações...</div></div>
           <div class="widget-module" style="color:#d8b4fe;border-color:rgba(156,111,255,.24);background:rgba(156,111,255,.08)">Módulo: Avaliações</div>
         </div>
-
         <div class="analytics-card pos-bl dashboard-widget" data-target="agenda" data-widget-id="widget-agenda" title="Abrir Agenda">
           <div class="widget-topbar"><div class="ac-title">Agenda de hoje</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
           <div id="dashboardAgendaContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando agenda...</div></div>
           <div class="widget-module">Módulo: Agenda</div>
         </div>
-
         <div class="analytics-card pos-br dashboard-widget" data-target="servicos" data-widget-id="widget-servicos" title="Abrir Serviços">
           <div class="widget-topbar"><div class="ac-title">Serviços mais vendidos</div><div class="widget-actions"><span class="widget-open">abrir ↗</span><button aria-label="Fechar widget" class="widget-close" data-widget-close="" type="button">×</button></div></div>
           <div id="dashboardServicosContent"><div class="ac-value" style="color:#5a6888">...</div><div class="ac-sub">Carregando serviços...</div></div>
