@@ -1,0 +1,115 @@
+/* ─── PWA Install Banner ───────────────────────────────────────────────────── */
+
+#pwa-install-banner {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  z-index: 99999;
+  padding: 12px 16px 20px;
+  background: #0c1020;
+  border-top: 1px solid rgba(79, 195, 247, 0.2);
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.5);
+  transform: translateY(100%);
+  transition: transform 0.35s ease;
+}
+
+#pwa-install-banner.pwa-banner-visible {
+  transform: translateY(0);
+}
+
+.pwa-banner-inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+
+.pwa-banner-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 12px;
+  flex-shrink: 0;
+}
+
+.pwa-banner-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.pwa-banner-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #e8f0fe;
+  margin-bottom: 3px;
+}
+
+.pwa-banner-sub {
+  font-size: 12px;
+  color: #8fa3c7;
+  line-height: 1.5;
+}
+
+.pwa-banner-sub strong {
+  color: #4fc3f7;
+  font-weight: 600;
+}
+
+.pwa-banner-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.pwa-btn-install {
+  padding: 8px 16px;
+  border-radius: 8px;
+  border: 0;
+  background: linear-gradient(90deg, #00b4ff, #6c3fff);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pwa-btn-dismiss {
+  padding: 6px 16px;
+  border-radius: 8px;
+  border: 1px solid rgba(79, 195, 247, 0.15);
+  background: transparent;
+  color: #5a6888;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.pwa-btn-dismiss:hover {
+  color: #8fa3c7;
+}
+
+/* Seta iOS apontando para baixo (share button) */
+.pwa-ios-arrow {
+  text-align: center;
+  font-size: 16px;
+  color: #4fc3f7;
+  margin-top: 8px;
+  animation: pwaArrowBounce 1.2s ease-in-out infinite;
+}
+
+@keyframes pwaArrowBounce {
+  0%, 100% { transform: translateY(0); }
+  50%       { transform: translateY(4px); }
+}
+
+/* Tema claro */
+body.theme-light #pwa-install-banner {
+  background: #fff;
+  border-top-color: rgba(2, 132, 199, 0.2);
+}
+
+body.theme-light .pwa-banner-title { color: #0f1736; }
+body.theme-light .pwa-banner-sub   { color: #6b7fa8; }
+body.theme-light .pwa-btn-dismiss  { border-color: rgba(2,132,199,.2); color: #8fa3c7; }
