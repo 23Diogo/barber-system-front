@@ -13,38 +13,41 @@ import { renderFidelidade, initFidelidadePage } from './modules/fidelidade.js';
 import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
 import { renderConfiguracoes, initConfiguracoesPage } from './modules/configuracoes.js';
 import { renderPlanos, initPlanosPage } from './modules/planos.js';
+import { renderCrescimento, initCrescimentoPage } from './modules/crescimento.js';
 import { hasAuthToken } from './services/api.js';
 
 const ADMIN_BASE_PATH = '/app';
 const LOGIN_PATH = '/app/login';
 
 const renderers = {
-  agenda: renderAgenda,
-  clientes: renderClientes,
-  fin: renderFinanceiro,
-  estoque: renderEstoque,
-  servicos: renderServicos,
-  barbeiros: renderBarbeiros,
-  whats: renderWhatsApp,
-  mkt: renderMarketing,
-  fidel: renderFidelidade,
-  aval: renderAvaliacoes,
-  config: renderConfiguracoes,
-  planos: renderPlanos,
+  agenda:     renderAgenda,
+  clientes:   renderClientes,
+  fin:        renderFinanceiro,
+  estoque:    renderEstoque,
+  servicos:   renderServicos,
+  barbeiros:  renderBarbeiros,
+  whats:      renderWhatsApp,
+  mkt:        renderMarketing,
+  fidel:      renderFidelidade,
+  aval:       renderAvaliacoes,
+  config:     renderConfiguracoes,
+  planos:     renderPlanos,
+  cres:       renderCrescimento,
 };
 
 const initializers = {
-  agenda: initAgendaPage,
-  clientes: initClientesPage,
-  fin: initFinanceiroPage,
-  estoque: initEstoquePage,
-  servicos: initServicosPage,
-  barbeiros: initBarbeirosPage,
-  mkt: initMarketingPage,
-  fidel: initFidelidadePage,
-  aval: initAvaliacoesPage,
-  config: initConfiguracoesPage,
-  planos: initPlanosPage,
+  agenda:     initAgendaPage,
+  clientes:   initClientesPage,
+  fin:        initFinanceiroPage,
+  estoque:    initEstoquePage,
+  servicos:   initServicosPage,
+  barbeiros:  initBarbeirosPage,
+  mkt:        initMarketingPage,
+  fidel:      initFidelidadePage,
+  aval:       initAvaliacoesPage,
+  config:     initConfiguracoesPage,
+  planos:     initPlanosPage,
+  cres:       initCrescimentoPage,
 };
 
 const validPages = new Set(['dash', ...Object.keys(renderers)]);
@@ -61,10 +64,8 @@ function getPathForPage(pageId) {
 
 function getPageFromPath(pathname = window.location.pathname) {
   const normalized = normalizePath(pathname);
-
   if (normalized === '/' || normalized === ADMIN_BASE_PATH) return 'dash';
   if (!normalized.startsWith(`${ADMIN_BASE_PATH}/`)) return 'dash';
-
   const pageId = normalized.slice(`${ADMIN_BASE_PATH}/`.length);
   return validPages.has(pageId) ? pageId : 'dash';
 }
@@ -81,12 +82,10 @@ function redirectToLogin() {
 function renderPage(pageId) {
   const container = document.getElementById('pages');
   if (!container) return;
-
   const renderer = renderers[pageId];
   container.innerHTML = renderer
     ? `<div class="page active" id="page-${pageId}">${renderer()}</div>`
     : '';
-
   const initializer = initializers[pageId];
   if (initializer) queueMicrotask(() => initializer());
 }
@@ -110,7 +109,7 @@ export function navigate(pageId, options = {}) {
     window.history[method]({ pageId: safePageId }, '', nextPath);
   }
 
-  const hero = document.getElementById('hero');
+  const hero  = document.getElementById('hero');
   const pages = document.getElementById('pages');
 
   if (safePageId === 'dash') {
@@ -134,15 +133,12 @@ export function logout() {
 }
 
 export function initRouter() {
-  // Protege todas as rotas /app — redireciona para login se não tiver token
   if (!hasAuthToken()) {
     redirectToLogin();
     return;
   }
-
   const initialPage = getPageFromPath(window.location.pathname);
   const replace = shouldRedirectToAdmin(window.location.pathname);
-
   navigate(initialPage, { replace });
 
   window.addEventListener('popstate', () => {
