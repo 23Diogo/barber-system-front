@@ -20,7 +20,25 @@
 
   .nav{flex:1;padding:8px 7px;overflow-y:auto;display:flex;flex-direction:column}
   .nav::-webkit-scrollbar{display:none}
+
+  /* ─── Nav group labels ─── */
   .nav-group-label{font-size:9px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:#252840;padding:9px 8px 3px}
+
+  /* Label de seção com linha divisória e destaque azul */
+  .nav-group-label--section{
+    margin-top:4px;
+    padding-top:10px;
+    border-top:1px solid rgba(79,195,247,.12);
+    color:#4fc3f7;
+    font-size:9px;
+    font-weight:700;
+    letter-spacing:.14em;
+    text-transform:uppercase;
+    padding-left:8px;
+    padding-bottom:3px;
+    text-shadow:0 0 8px rgba(79,195,247,.4);
+  }
+
   .nav-item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;cursor:pointer;color:#505878;font-size:12px;font-weight:500;transition:all .12s;position:relative;user-select:none;margin-bottom:1px}
   .nav-item:hover{background:rgba(79,195,247,.06);color:#c0cce8}
   .nav-item.active{background:rgba(79,195,247,.1);color:#4fc3f7;font-weight:600}
