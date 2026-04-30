@@ -1,4 +1,5 @@
 import { getApiBaseUrl } from './api.js';
+import { initPWABanner } from '../pwa-install.js';
 
 const CLIENT_TOKEN_STORAGE_KEY = 'barberflow.clientToken';
 const CLIENT_PROFILE_STORAGE_KEY = 'barberflow.clientProfile';
@@ -159,6 +160,9 @@ export async function loginClient(payload) {
     setClientProfile(data.client);
   }
 
+  // Banner PWA aparece 3s após login bem-sucedido
+  initPWABanner();
+
   return data;
 }
 
@@ -168,6 +172,9 @@ export async function meClient() {
   if (data?.client) {
     setClientProfile(data.client);
   }
+
+  // Banner PWA para quem já estava logado (retorna ao sistema)
+  initPWABanner();
 
   return data;
 }
