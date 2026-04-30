@@ -109,7 +109,13 @@ body.auth-locked #modal { display: none !important; }
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         Avaliações <span id="badge-aval" class="nav-badge badge-green" style="display:none">0</span>
       </div>
-
+      <!-- Adicionar dentro do nav, após o item de Avaliações e antes de "Sistema" -->
+      <div class="nav-item" data-nav-target="cres">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+        </svg>
+        Crescimento
+      </div>
       <div class="nav-group-label">Sistema</div>
       <div class="nav-item" data-nav-target="config">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M1 12h2M21 12h2M12 1v2M12 21v2"></path></svg>
