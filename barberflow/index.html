@@ -56,7 +56,7 @@ body.auth-locked #modal { display: none !important; }
     </div>
     <div class="customize-hint" data-open-modal="true">✏️ Personalizar logo →</div>
 
-    <nav class="nav">
+<nav class="nav">
       <div class="nav-group-label">Principal</div>
       <div class="nav-item active" data-nav-target="dash">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><rect height="7" rx="1" width="7" x="3" y="3"></rect><rect height="7" rx="1" width="7" x="14" y="3"></rect><rect height="7" rx="1" width="7" x="3" y="14"></rect><rect height="7" rx="1" width="7" x="14" y="14"></rect></svg>
@@ -67,11 +67,11 @@ body.auth-locked #modal { display: none !important; }
         Agenda <span id="badge-agenda" class="nav-badge badge-green" style="display:none">0</span>
       </div>
       <div class="nav-item" data-nav-target="clientes">
-  <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
-  Clientes <span id="badge-clientes" class="nav-badge badge-red" style="display:none">0</span>
-</div>
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle></svg>
+        Clientes <span id="badge-clientes" class="nav-badge badge-red" style="display:none">0</span>
+      </div>
 
-      <div class="nav-group-label">Gestão</div>
+      <div class="nav-group-label nav-group-label--section">Gestão</div>
       <div class="nav-item" data-nav-target="fin">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><line x1="12" x2="12" y1="1" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
         Financeiro
@@ -92,8 +92,12 @@ body.auth-locked #modal { display: none !important; }
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
         Barbeiros
       </div>
+      <div class="nav-item" data-nav-target="cres">
+        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>
+        Crescimento
+      </div>
 
-      <div class="nav-group-label">Relacionamento</div>
+      <div class="nav-group-label nav-group-label--section">Relacionamento</div>
       <div class="nav-item" data-nav-target="whats">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 13.5 19.79 19.79 0 01.4 4.84 2 2 0 012 2.84h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.09 10.91a16 16 0 006 6l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 17.92z"></path></svg>
         WhatsApp Bot
@@ -110,20 +114,13 @@ body.auth-locked #modal { display: none !important; }
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
         Avaliações <span id="badge-aval" class="nav-badge badge-green" style="display:none">0</span>
       </div>
-      <!-- Adicionar dentro do nav, após o item de Avaliações e antes de "Sistema" -->
-      <div class="nav-item" data-nav-target="cres">
-        <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
-        </svg>
-        Crescimento
-      </div>
-      <div class="nav-group-label">Sistema</div>
+
+      <div class="nav-group-label nav-group-label--section">Sistema</div>
       <div class="nav-item" data-nav-target="config">
         <svg class="nav-icon" fill="none" stroke="currentColor" stroke-width="2" viewbox="0 0 24 24"><circle cx="12" cy="12" r="3"></circle><path d="M19.07 4.93l-1.41 1.41M4.93 4.93l1.41 1.41M4.93 19.07l1.41-1.41M19.07 19.07l-1.41-1.41M1 12h2M21 12h2M12 1v2M12 21v2"></path></svg>
         Configurações
       </div>
     </nav>
-
     <div class="sidebar-footer">
       <div class="auth-status-chip" id="authStatusChip">Sem login dev</div>
       <div class="user-card">
