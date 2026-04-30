@@ -7,6 +7,7 @@ import { initDashboard }     from './modules/dashboard.js';
 import { navigate, initRouter } from './router.js';
 import { initMobileSidebar } from './components/mobile-sidebar.js';
 import { initNavBadges }     from './components/nav-badges.js';
+import { initPWABanner }     from './pwa-install.js';
 
 function initAdminApp() {
   bindSidebar(navigate);
@@ -15,9 +16,10 @@ function initAdminApp() {
   initModal();
   initDashboard();
   initWidgets();
-  initRouter();
+  initRouter();       // só prossegue se hasAuthToken() for true
   initDevAuth();
   initNavBadges();
+  initPWABanner();    // só exibe se mobile + não instalado + não dispensado recentemente
 }
 
 window.addEventListener('DOMContentLoaded', initAdminApp);
