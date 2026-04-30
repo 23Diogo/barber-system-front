@@ -171,7 +171,7 @@ function renderProjecaoCards(o, proj) {
     projRow('Ocupação atual', ocupAtual.toFixed(1) + '%', ocupacaoBadge(ocupAtual)) +
     projRow('Receita com 50% de ocupação', fmt(rev50) + '/mês', '<span style="color:#185FA5">Meta</span>') +
     projRow('Receita com 80% de ocupação', fmt(rev80) + '/mês', '<span style="color:#3B6D11">Potencial</span>') +
-    projRow('MRR de assinaturas', fmt(o.mrr), o.activeSubscriptions + ' ativa(s)') +
+    projRow('Receita Recorrente Mensal', fmt(o.mrr), o.activeSubscriptions + ' ativa(s)') +
     projRow('Próx. mês conservador', fmt(proj[0] && proj[0].conservador || 0), '+15% ao mês') +
     projRow('Próx. mês otimista', fmt(proj[0] && proj[0].otimista || 0), '+30% ao mês');
 }
