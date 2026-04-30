@@ -70,12 +70,12 @@ function showTooltip(key, triggerEl) {
 
   var rect = triggerEl.getBoundingClientRect();
   var boxW = 240;
-  var left = rect.left + rect.width / 2 - boxW / 2;
-  var top  = rect.bottom + 8;
-
-  if (left + boxW > window.innerWidth - 12) left = window.innerWidth - boxW - 12;
-  if (left < 8) left = 8;
-
+  var left = rect.right + 10;
+  var top  = rect.top + rect.height / 2 - 30;
+  
+  if (left + boxW > window.innerWidth - 12) left = rect.left - boxW - 10;
+  if (top < 8) top = 8;
+  
   box.style.left  = left + 'px';
   box.style.top   = top + 'px';
   box.style.width = boxW + 'px';
