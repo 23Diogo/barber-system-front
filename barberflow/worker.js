@@ -36,6 +36,12 @@ export default {
       const privUrl = new URL('/privacidade/index.html', url.origin);
       return env.ASSETS.fetch(new Request(privUrl.toString(), request));
     }
+    // ── /app/assinatura → Assinaturas do sistema
+    if (url.pathname === '/app/assinatura' || url.pathname === '/app/assinatura/') {
+      const url2 = new URL('/app/assinatura/index.html', url.origin);
+      return env.ASSETS.fetch(new Request(url2.toString(), request));
+    }
+    
     // ── /app/login → login do dono
     if (url.pathname === '/app/login' || url.pathname === '/app/login/') {
       const loginUrl = new URL('/app/login/index.html', url.origin);
