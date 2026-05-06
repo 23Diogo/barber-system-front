@@ -1,195 +1,417 @@
-/* ─── Assinatura Suspensa ─────────────────────────────────── */
+/* ─── BarberFlow Design System — Assinatura ─────────────────────── */
 
-.assinatura-container {
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bf-bg:         #0b0d1a;
+  --bf-surface:    #111425;
+  --bf-surface2:   #161929;
+  --bf-border:     rgba(255,255,255,0.07);
+  --bf-orange:     #ff6b35;
+  --bf-cyan:       #00e5ff;
+  --bf-white:      #e8eaf6;
+  --bf-muted:      #5a6080;
+  --bf-danger:     #ff4444;
+  --bf-font-head:  'Orbitron', monospace;
+  --bf-font-body:  'Rajdhani', sans-serif;
+}
+
+html, body {
+  min-height: 100vh;
+  background: var(--bf-bg);
+  color: var(--bf-white);
+  font-family: var(--bf-font-body);
+  font-size: 16px;
+  line-height: 1.5;
+  overflow-x: hidden;
+}
+
+/* ─── Background animado ──────────────────────────────────────────── */
+
+.bf-bg {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.bf-bg__glow {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.12;
+  animation: glow-drift 8s ease-in-out infinite alternate;
+}
+
+.bf-bg__glow--orange {
+  width: 600px; height: 600px;
+  background: var(--bf-orange);
+  top: -200px; left: -200px;
+}
+
+.bf-bg__glow--cyan {
+  width: 500px; height: 500px;
+  background: var(--bf-cyan);
+  bottom: -150px; right: -150px;
+  animation-delay: -4s;
+}
+
+@keyframes glow-drift {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(40px, 30px) scale(1.1); }
+}
+
+.bf-bg__grid {
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
+  background-size: 40px 40px;
+}
+
+/* ─── Layout ──────────────────────────────────────────────────────── */
+
+.bf-wrap {
+  position: relative;
+  z-index: 1;
   min-height: 100vh;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 24px;
-  background: #0a0a0a;
-  color: #f5f5f0;
-  font-family: 'Inter', sans-serif;
+  padding: 32px 20px;
+  gap: 24px;
 }
 
-.assinatura-logo {
+/* ─── Logo ────────────────────────────────────────────────────────── */
+
+.bf-logo {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 32px;
+  gap: 14px;
+  animation: fade-down 0.6s ease both;
 }
 
-.assinatura-logo img {
-  height: 36px;
-  width: auto;
-}
-
-.assinatura-logo-text {
-  font-family: 'Syne', sans-serif;
-  font-size: 22px;
-  color: #f5f5f0;
-  letter-spacing: -0.5px;
-}
-
-.assinatura-logo-text strong {
-  color: #1a6bff;
-}
-
-.assinatura-card {
-  width: 100%;
-  max-width: 460px;
-  background: #111;
-  border: 1px solid #222;
-  border-radius: 16px;
-  padding: 40px 36px;
-  text-align: center;
-}
-
-.assinatura-icon {
-  font-size: 44px;
-  margin-bottom: 20px;
-}
-
-.assinatura-title {
-  font-family: 'Syne', sans-serif;
-  font-size: 26px;
-  font-weight: 700;
-  margin-bottom: 10px;
-  color: #f5f5f0;
-}
-
-.assinatura-subtitle {
-  font-size: 14px;
-  color: #888;
-  line-height: 1.65;
-  margin-bottom: 28px;
-}
-
-/* ─── Price box ──────────────────────────────────────────── */
-
-.assinatura-price-box {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-  background: #0f0f0f;
-  border: 1px solid #222;
+.bf-logo__icon {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, #ff6b35, #e53935);
   border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 24px rgba(255,107,53,0.4), 0 0 60px rgba(255,107,53,0.15);
 }
 
-.assinatura-price-label {
-  font-size: 12px;
-  color: #666;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.assinatura-price-value {
-  font-family: 'Syne', sans-serif;
-  font-size: 38px;
-  font-weight: 700;
-  color: #f5f5f0;
+.bf-logo__icon span {
+  font-family: var(--bf-font-head);
+  font-size: 28px;
+  font-weight: 900;
+  color: #fff;
   line-height: 1;
 }
 
-.assinatura-price-cents {
-  font-size: 20px;
+.bf-logo__text {
+  font-family: var(--bf-font-head);
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: 1px;
 }
 
-.assinatura-price-period {
-  font-size: 12px;
-  color: #666;
+.bf-logo__barber { color: var(--bf-white); }
+.bf-logo__flow   {
+  color: var(--bf-cyan);
+  text-shadow: 0 0 20px rgba(0,229,255,0.5);
 }
 
-/* ─── Features ───────────────────────────────────────────── */
+/* ─── Card ────────────────────────────────────────────────────────── */
 
-.assinatura-features {
-  list-style: none;
-  padding: 0;
-  margin: 0 0 28px;
-  text-align: left;
+.bf-card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--bf-surface);
+  border: 1px solid var(--bf-border);
+  border-radius: 20px;
+  padding: 36px 32px;
+  backdrop-filter: blur(20px);
+  box-shadow:
+    0 0 0 1px rgba(0,229,255,0.05),
+    0 24px 64px rgba(0,0,0,0.5),
+    inset 0 1px 0 rgba(255,255,255,0.05);
+  animation: fade-up 0.6s ease 0.1s both;
 }
 
-.assinatura-features li {
+/* ─── Card Header ─────────────────────────────────────────────────── */
+
+.bf-card__header {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.bf-status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--bf-font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--bf-orange);
+  background: rgba(255,107,53,0.1);
+  border: 1px solid rgba(255,107,53,0.25);
+  padding: 4px 12px;
+  border-radius: 99px;
+  margin-bottom: 16px;
+}
+
+.bf-status-badge__dot {
+  width: 6px;
+  height: 6px;
+  background: var(--bf-orange);
+  border-radius: 50%;
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.8); }
+}
+
+.bf-card__title {
+  font-family: var(--bf-font-head);
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--bf-white);
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+
+.bf-card__subtitle {
   font-size: 14px;
-  color: #bbb;
-  padding: 6px 0;
+  color: var(--bf-muted);
+  line-height: 1.65;
+}
+
+/* ─── Price Widget — estilo igual aos widgets do dashboard ─────────── */
+
+.bf-price-widget {
+  background: var(--bf-surface2);
+  border: 1px solid var(--bf-border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+
+.bf-price-widget__label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.12em;
+  color: var(--bf-muted);
+  margin-bottom: 8px;
+}
+
+.bf-price-widget__value {
+  display: flex;
+  align-items: baseline;
+  gap: 2px;
+  margin-bottom: 12px;
+}
+
+.bf-price-widget__currency {
+  font-family: var(--bf-font-head);
+  font-size: 16px;
+  color: var(--bf-muted);
+}
+
+.bf-price-widget__amount {
+  font-family: var(--bf-font-head);
+  font-size: 42px;
+  font-weight: 900;
+  color: var(--bf-white);
+  line-height: 1;
+}
+
+.bf-price-widget__cents {
+  font-family: var(--bf-font-head);
+  font-size: 20px;
+  color: var(--bf-white);
+}
+
+.bf-price-widget__bar {
   display: flex;
   align-items: center;
   gap: 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--bf-muted);
 }
 
-.assinatura-features li::before {
-  content: '✓';
-  color: #1a6bff;
-  font-weight: 700;
+.bf-price-widget__progress {
+  flex: 1;
+  height: 4px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.bf-price-widget__fill {
+  height: 100%;
+  width: 60%;
+  background: linear-gradient(90deg, var(--bf-cyan), #7c4dff);
+  border-radius: 2px;
+  animation: fill-pulse 2s ease-in-out infinite alternate;
+}
+
+@keyframes fill-pulse {
+  from { opacity: 0.7; }
+  to   { opacity: 1; }
+}
+
+/* ─── Modules — estilo igual aos módulos do painel ─────────────────── */
+
+.bf-modules {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.bf-module {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--bf-surface2);
+  border: 1px solid var(--bf-border);
+  border-radius: 8px;
+  padding: 10px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #9ba3c0;
+  transition: border-color 0.2s, color 0.2s;
+}
+
+.bf-module:hover {
+  border-color: rgba(0,229,255,0.2);
+  color: var(--bf-white);
+}
+
+.bf-module__icon {
+  font-size: 15px;
   flex-shrink: 0;
 }
 
-/* ─── Buttons ────────────────────────────────────────────── */
+/* ─── Buttons ─────────────────────────────────────────────────────── */
 
-.assinatura-btn-primary,
-.assinatura-btn-secondary {
+.bf-btn {
   display: block;
   width: 100%;
   border: none;
   border-radius: 10px;
   cursor: pointer;
-  font-family: 'Syne', sans-serif;
-  font-weight: 600;
-  transition: opacity 0.2s;
+  font-family: var(--bf-font-body);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+}
+
+.bf-btn--primary {
+  background: linear-gradient(135deg, #0066ff, #00c8ff);
+  color: #fff;
+  padding: 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 20px rgba(0,102,255,0.35);
+}
+
+.bf-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 28px rgba(0,102,255,0.5);
+}
+
+.bf-btn--primary:active {
+  transform: translateY(0);
+}
+
+.bf-btn--primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.bf-btn__shine {
+  position: absolute;
+  top: 0; left: -100%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
+  transform: skewX(-20deg);
+  transition: left 0.5s;
+}
+
+.bf-btn--primary:hover .bf-btn__shine {
+  left: 150%;
+}
+
+.bf-btn--ghost {
+  background: transparent;
+  color: var(--bf-muted);
+  border: 1px solid var(--bf-border);
+  padding: 12px;
+  font-size: 13px;
+}
+
+.bf-btn--ghost:hover {
+  border-color: rgba(255,255,255,0.15);
+  color: var(--bf-white);
+}
+
+/* ─── Error ───────────────────────────────────────────────────────── */
+
+.bf-error {
+  display: none;
+  margin-top: 12px;
+  font-size: 13px;
+  color: var(--bf-danger);
   text-align: center;
 }
 
-.assinatura-btn-primary:hover,
-.assinatura-btn-secondary:hover {
-  opacity: 0.82;
+/* ─── Footer ──────────────────────────────────────────────────────── */
+
+.bf-footer {
+  font-size: 12px;
+  color: var(--bf-muted);
+  animation: fade-up 0.6s ease 0.3s both;
 }
 
-.assinatura-btn-primary {
-  background: #1a6bff;
-  color: #fff;
-  font-size: 16px;
-  padding: 15px;
-  margin-bottom: 10px;
+.bf-footer a {
+  color: var(--bf-cyan);
+  text-decoration: none;
 }
 
-.assinatura-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
+.bf-footer a:hover { text-decoration: underline; }
+
+/* ─── Animations ──────────────────────────────────────────────────── */
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-.assinatura-btn-secondary {
-  background: transparent;
-  color: #666;
-  border: 1px solid #222;
-  font-size: 13px;
-  padding: 11px;
+@keyframes fade-down {
+  from { opacity: 0; transform: translateY(-16px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
-/* ─── Error ──────────────────────────────────────────────── */
-
-.assinatura-error {
-  display: none;
-  margin-top: 14px;
-  font-size: 13px;
-  color: #ff4444;
-}
-
-/* ─── Responsivo ─────────────────────────────────────────── */
+/* ─── Responsivo ──────────────────────────────────────────────────── */
 
 @media (max-width: 480px) {
-  .assinatura-card {
-    padding: 32px 24px;
-  }
-
-  .assinatura-title {
-    font-size: 22px;
-  }
-
-  .assinatura-price-value {
-    font-size: 32px;
-  }
+  .bf-card { padding: 28px 20px; }
+  .bf-logo__text { font-size: 22px; }
+  .bf-logo__icon { width: 44px; height: 44px; }
+  .bf-logo__icon span { font-size: 22px; }
+  .bf-price-widget__amount { font-size: 34px; }
+  .bf-card__title { font-size: 20px; }
 }
