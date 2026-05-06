@@ -5,6 +5,9 @@ const DEFAULT_LOCAL_API_URL = 'http://localhost:3002';
 const DEFAULT_PRODUCTION_API_URL = 'https://api.bbarberflow.com.br';
 const DEFAULT_REQUEST_TIMEOUT_MS = 15000;
 
+const LICENSE_SUSPENDED_PATH = '/app/assinatura';
+const LICENSE_SUSPENDED_ERRORS = ['license_suspended', 'license_cancelled'];
+
 function sanitizeBaseUrl(url) {
   return String(url || '').trim().replace(/\/+$/, '');
 }
@@ -120,6 +123,20 @@ function buildQueryString(params = {}) {
 
   const query = searchParams.toString();
   return query ? `?${query}` : '';
+}
+
+// ─── Interceptor de licença suspensa ─────────────────────────────────────────
+// Evita redirecionamentos em loop caso já esteja na tela de assinatura
+function isLicenseSuspendedError(error) {
+  return LICENSE_SUSPENDED_ERRORS.some(code =>
+    String(error?.message || '').toLowerCase().includes(code)
+  );
+}
+
+function redirectToLicensePage() {
+  const currentPath = window.location.pathname;
+  if (currentPath.startsWith(LICENSE_SUSPENDED_PATH)) return;
+  window.location.replace(LICENSE_SUSPENDED_PATH);
 }
 
 export function getApiBaseUrl() {
@@ -241,10 +258,14 @@ export async function apiFetch(path, options = {}) {
     }
 
     if (!response.ok) {
-      const message =
-        payload?.error ||
-        payload?.message ||
-        `Erro HTTP ${response.status}`;
+      const errorCode = payload?.error || '';
+      const message = payload?.message || payload?.error || `Erro HTTP ${response.status}`;
+
+      // ─── Interceptor de licença suspensa ─────────────────────────────────
+      if (response.status === 403 && LICENSE_SUSPENDED_ERRORS.includes(errorCode)) {
+        redirectToLicensePage();
+        throw new Error(message);
+      }
 
       throw new Error(message);
     }
@@ -253,6 +274,11 @@ export async function apiFetch(path, options = {}) {
   } catch (error) {
     if (error?.name === 'AbortError') {
       throw new Error('A API demorou para responder. Tente novamente.');
+    }
+
+    // Captura erros de licença que possam ter passado pelo catch acima
+    if (isLicenseSuspendedError(error)) {
+      redirectToLicensePage();
     }
 
     throw error;
@@ -345,6 +371,16 @@ export async function updateAppointmentStatus(appointmentId, status) {
       throw firstError;
     }
   }
+}
+
+/* =========================
+   LICENÇA DA PLATAFORMA
+========================= */
+
+export async function getPaymentLink() {
+  return apiFetch('/api/auth/payment-link', {
+    method: 'POST',
+  });
 }
 
 /* =========================
@@ -504,17 +540,15 @@ window.BarberFlowApi = {
   getClientById,
   createClient,
   updateClient,
-
   getBarbers,
   getServices,
   createAppointment,
   updateAppointmentStatus,
-
+  getPaymentLink,
   getPlans,
   getPlanById,
   createPlan,
   updatePlan,
-
   getSubscriptions,
   getSubscriptionById,
   getActiveSubscriptionByClient,
@@ -526,12 +560,10 @@ window.BarberFlowApi = {
   cancelSubscription,
   generateNextSubscriptionCycle,
   consumeSubscriptionBenefit,
-
   getSubscriptionInvoices,
   createManualInvoice,
   markInvoicePaid,
   markInvoiceFailed,
   cancelInvoice,
-
   createMercadoPagoPreference,
 };
