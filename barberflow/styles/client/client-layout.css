@@ -970,3 +970,22 @@ body.client-area.theme-light .agendar-summary-row { background: #f5f8ff; border-
 body.client-area.theme-light .agendar-summary-label { color: #6b7fa8; }
 body.client-area.theme-light .agendar-summary-value { color: #1a2040; }
 body.client-area.theme-light .agendar-empty { border-color: rgba(79, 195, 247, 0.20); color: #6b7fa8; }
+
+/* ─── SCROLL HIDE TOPBAR (mobile) ────────────────────────────────── */
+/* Adicionado via transition ao topbar fixed — JS controla a classe   */
+
+@media (max-width: 980px) {
+  .topbar,
+  .client-dashboard-topbar {
+    transition:
+      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 0.3s ease !important;
+  }
+
+  .topbar.topbar--hidden,
+  .client-dashboard-topbar.topbar--hidden {
+    transform: translateY(calc(-100% - env(safe-area-inset-top, 0px) - 20px)) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
