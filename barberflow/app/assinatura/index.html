@@ -4,48 +4,104 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Assinatura — BarberFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/styles/app/assinatura.css"/>
 </head>
 <body>
-  <div class="assinatura-container">
 
-    <div class="assinatura-logo">
-      <img src="/icons/logo.png" alt="BarberFlow" onerror="this.style.display='none'"/>
-      <span class="assinatura-logo-text">Barber<strong>Flow</strong></span>
+  <!-- Fundo animado igual ao sistema -->
+  <div class="bf-bg">
+    <div class="bf-bg__glow bf-bg__glow--orange"></div>
+    <div class="bf-bg__glow bf-bg__glow--cyan"></div>
+    <div class="bf-bg__grid"></div>
+  </div>
+
+  <div class="bf-wrap">
+
+    <!-- Logo idêntico ao sistema -->
+    <div class="bf-logo">
+      <div class="bf-logo__icon">
+        <span>B</span>
+      </div>
+      <div class="bf-logo__text">
+        <span class="bf-logo__barber">Barber</span><span class="bf-logo__flow">Flow</span>
+      </div>
     </div>
 
-    <div class="assinatura-card">
-      <div class="assinatura-icon">💈</div>
-      <h1 class="assinatura-title">Assinatura Suspensa</h1>
-      <p class="assinatura-subtitle">
-        O acesso ao BarberFlow está bloqueado.<br/>
-        Regularize sua assinatura para continuar atendendo.
-      </p>
+    <!-- Card principal -->
+    <div class="bf-card">
 
-      <div class="assinatura-price-box">
-        <span class="assinatura-price-label">Assinatura mensal</span>
-        <span class="assinatura-price-value">R$ 89<span class="assinatura-price-cents">,90</span></span>
-        <span class="assinatura-price-period">pagamento via PIX · renovação mensal</span>
+      <div class="bf-card__header">
+        <div class="bf-status-badge">
+          <span class="bf-status-badge__dot"></span>
+          ASSINATURA SUSPENSA
+        </div>
+        <h1 class="bf-card__title">Acesso Bloqueado</h1>
+        <p class="bf-card__subtitle">
+          Sua barbearia está temporariamente bloqueada.<br/>
+          Regularize o pagamento para voltar a atender.
+        </p>
       </div>
 
-      <ul class="assinatura-features">
-        <li>Agenda online ilimitada</li>
-        <li>Bot de WhatsApp automático</li>
-        <li>Gestão de clientes e fidelidade</li>
-        <li>Controle financeiro completo</li>
-        <li>App para barbeiros</li>
-      </ul>
+      <!-- Price box estilo widget do sistema -->
+      <div class="bf-price-widget">
+        <div class="bf-price-widget__label">PLANO MENSAL</div>
+        <div class="bf-price-widget__value">
+          <span class="bf-price-widget__currency">R$</span>
+          <span class="bf-price-widget__amount">89</span>
+          <span class="bf-price-widget__cents">,90</span>
+        </div>
+        <div class="bf-price-widget__bar">
+          <span>PIX</span>
+          <div class="bf-price-widget__progress">
+            <div class="bf-price-widget__fill"></div>
+          </div>
+          <span>Mensal</span>
+        </div>
+      </div>
 
-      <button class="assinatura-btn-primary" id="btnPagar">
-        Pagar agora via PIX
+      <!-- Features estilo módulos do sistema -->
+      <div class="bf-modules">
+        <div class="bf-module">
+          <span class="bf-module__icon">📅</span>
+          <span class="bf-module__name">Agenda online ilimitada</span>
+        </div>
+        <div class="bf-module">
+          <span class="bf-module__icon">💬</span>
+          <span class="bf-module__name">Bot WhatsApp automático</span>
+        </div>
+        <div class="bf-module">
+          <span class="bf-module__icon">👥</span>
+          <span class="bf-module__name">Gestão de clientes e fidelidade</span>
+        </div>
+        <div class="bf-module">
+          <span class="bf-module__icon">💰</span>
+          <span class="bf-module__name">Controle financeiro completo</span>
+        </div>
+        <div class="bf-module">
+          <span class="bf-module__icon">✂️</span>
+          <span class="bf-module__name">App para barbeiros</span>
+        </div>
+      </div>
+
+      <!-- Botões -->
+      <button class="bf-btn bf-btn--primary" id="btnPagar">
+        <span class="bf-btn__text">Pagar agora via PIX</span>
+        <span class="bf-btn__shine"></span>
       </button>
 
-      <button class="assinatura-btn-secondary" id="btnLogout">
+      <button class="bf-btn bf-btn--ghost" id="btnLogout">
         Sair da conta
       </button>
 
-      <p class="assinatura-error" id="assinaturaError"></p>
+      <p class="bf-error" id="assinaturaError"></p>
+
     </div>
+
+    <p class="bf-footer">
+      Dúvidas? <a href="mailto:suporte@bbarberflow.com.br">suporte@bbarberflow.com.br</a>
+    </p>
 
   </div>
 
