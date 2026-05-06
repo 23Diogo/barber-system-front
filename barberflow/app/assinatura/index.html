@@ -4,102 +4,85 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Assinatura — BarberFlow</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com"/>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=Rajdhani:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/styles/app/assinatura.css"/>
 </head>
 <body>
 
-  <!-- Fundo animado igual ao sistema -->
-  <div class="bf-bg">
-    <div class="bf-bg__glow bf-bg__glow--orange"></div>
-    <div class="bf-bg__glow bf-bg__glow--cyan"></div>
-    <div class="bf-bg__grid"></div>
-  </div>
+  <div id="assinatura-hero">
 
-  <div class="bf-wrap">
-
-    <!-- Logo idêntico ao sistema -->
-    <div class="bf-logo">
-      <div class="bf-logo__icon">
-        <span>B</span>
-      </div>
-      <div class="bf-logo__text">
-        <span class="bf-logo__barber">Barber</span><span class="bf-logo__flow">Flow</span>
-      </div>
+    <!-- Logo idêntico ao hero do dashboard -->
+    <div class="hero-logo">
+      <div class="hero-B">B</div>
+      <div class="hero-name">Barber<span>Flow</span></div>
     </div>
 
-    <!-- Card principal -->
-    <div class="bf-card">
+    <!-- Card central -->
+    <div class="ass-card">
 
-      <div class="bf-card__header">
-        <div class="bf-status-badge">
-          <span class="bf-status-badge__dot"></span>
-          ASSINATURA SUSPENSA
-        </div>
-        <h1 class="bf-card__title">Acesso Bloqueado</h1>
-        <p class="bf-card__subtitle">
-          Sua barbearia está temporariamente bloqueada.<br/>
-          Regularize o pagamento para voltar a atender.
-        </p>
+      <!-- Status badge -->
+      <div class="ass-badge">
+        <span class="ass-badge__dot"></span>
+        ASSINATURA SUSPENSA
       </div>
 
-      <!-- Price box estilo widget do sistema -->
-      <div class="bf-price-widget">
-        <div class="bf-price-widget__label">PLANO MENSAL</div>
-        <div class="bf-price-widget__value">
-          <span class="bf-price-widget__currency">R$</span>
-          <span class="bf-price-widget__amount">89</span>
-          <span class="bf-price-widget__cents">,90</span>
+      <h1 class="ass-title">Acesso Bloqueado</h1>
+      <p class="ass-subtitle">
+        Sua barbearia está temporariamente bloqueada.<br/>
+        Regularize o pagamento para voltar a atender.
+      </p>
+
+      <!-- Price widget — estilo analytics-card do sistema -->
+      <div class="ass-price">
+        <div class="ac-title">PLANO MENSAL</div>
+        <div class="ass-price__value">
+          <span class="ass-price__currency">R$</span>
+          <span class="ass-price__amount">89</span>
+          <span class="ass-price__cents">,90</span>
         </div>
-        <div class="bf-price-widget__bar">
-          <span>PIX</span>
-          <div class="bf-price-widget__progress">
-            <div class="bf-price-widget__fill"></div>
+        <div class="data-row" style="margin-top:8px">
+          <div class="data-name">PIX</div>
+          <div class="data-bar">
+            <div class="data-fill" style="width:100%;background:linear-gradient(90deg,#4fc3f7,#9c6fff)"></div>
           </div>
-          <span>Mensal</span>
+          <div class="data-val">Mensal</div>
         </div>
       </div>
 
-      <!-- Features estilo módulos do sistema -->
-      <div class="bf-modules">
-        <div class="bf-module">
-          <span class="bf-module__icon">📅</span>
-          <span class="bf-module__name">Agenda online ilimitada</span>
+      <!-- Features — estilo widget-module do sistema -->
+      <div class="ass-features">
+        <div class="ass-feature">
+          <span class="widget-module" style="margin:0">📅 Agenda online ilimitada</span>
         </div>
-        <div class="bf-module">
-          <span class="bf-module__icon">💬</span>
-          <span class="bf-module__name">Bot WhatsApp automático</span>
+        <div class="ass-feature">
+          <span class="widget-module" style="margin:0;color:#d8b4fe;border-color:rgba(156,111,255,.24);background:rgba(156,111,255,.08)">💬 Bot WhatsApp automático</span>
         </div>
-        <div class="bf-module">
-          <span class="bf-module__icon">👥</span>
-          <span class="bf-module__name">Gestão de clientes e fidelidade</span>
+        <div class="ass-feature">
+          <span class="widget-module" style="margin:0;color:#00e676;border-color:rgba(0,230,118,.24);background:rgba(0,230,118,.08)">👥 Clientes e fidelidade</span>
         </div>
-        <div class="bf-module">
-          <span class="bf-module__icon">💰</span>
-          <span class="bf-module__name">Controle financeiro completo</span>
+        <div class="ass-feature">
+          <span class="widget-module" style="margin:0;color:#f59e0b;border-color:rgba(245,158,11,.24);background:rgba(245,158,11,.08)">💰 Financeiro completo</span>
         </div>
-        <div class="bf-module">
-          <span class="bf-module__icon">✂️</span>
-          <span class="bf-module__name">App para barbeiros</span>
+        <div class="ass-feature">
+          <span class="widget-module" style="margin:0">✂️ App para barbeiros</span>
         </div>
       </div>
 
       <!-- Botões -->
-      <button class="bf-btn bf-btn--primary" id="btnPagar">
-        <span class="bf-btn__text">Pagar agora via PIX</span>
-        <span class="bf-btn__shine"></span>
+      <button class="ass-btn ass-btn--primary" id="btnPagar">
+        Pagar agora via PIX
       </button>
 
-      <button class="bf-btn bf-btn--ghost" id="btnLogout">
+      <button class="ass-btn ass-btn--ghost" id="btnLogout">
         Sair da conta
       </button>
 
-      <p class="bf-error" id="assinaturaError"></p>
+      <p class="ass-error" id="assinaturaError"></p>
 
     </div>
 
-    <p class="bf-footer">
+    <!-- Rodapé -->
+    <p class="ass-footer">
       Dúvidas? <a href="mailto:suporte@bbarberflow.com.br">suporte@bbarberflow.com.br</a>
     </p>
 
