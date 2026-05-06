@@ -1,417 +1,295 @@
-/* ─── BarberFlow Design System — Assinatura ─────────────────────── */
+/* ─── Assinatura — mesmo design system do dashboard ─────────────── */
 
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
-:root {
-  --bf-bg:         #0b0d1a;
-  --bf-surface:    #111425;
-  --bf-surface2:   #161929;
-  --bf-border:     rgba(255,255,255,0.07);
-  --bf-orange:     #ff6b35;
-  --bf-cyan:       #00e5ff;
-  --bf-white:      #e8eaf6;
-  --bf-muted:      #5a6080;
-  --bf-danger:     #ff4444;
-  --bf-font-head:  'Orbitron', monospace;
-  --bf-font-body:  'Rajdhani', sans-serif;
-}
-
 html, body {
   min-height: 100vh;
-  background: var(--bf-bg);
-  color: var(--bf-white);
-  font-family: var(--bf-font-body);
-  font-size: 16px;
-  line-height: 1.5;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 13px;
+  color: #c8d4f0;
+  background: #07080f;
   overflow-x: hidden;
 }
 
-/* ─── Background animado ──────────────────────────────────────────── */
+/* ─── Hero — idêntico ao #hero do dashboard ─────────────────────── */
 
-.bf-bg {
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 0;
-}
-
-.bf-bg__glow {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
-  opacity: 0.12;
-  animation: glow-drift 8s ease-in-out infinite alternate;
-}
-
-.bf-bg__glow--orange {
-  width: 600px; height: 600px;
-  background: var(--bf-orange);
-  top: -200px; left: -200px;
-}
-
-.bf-bg__glow--cyan {
-  width: 500px; height: 500px;
-  background: var(--bf-cyan);
-  bottom: -150px; right: -150px;
-  animation-delay: -4s;
-}
-
-@keyframes glow-drift {
-  from { transform: translate(0, 0) scale(1); }
-  to   { transform: translate(40px, 30px) scale(1.1); }
-}
-
-.bf-bg__grid {
-  position: absolute;
-  inset: 0;
-  background-image:
-    linear-gradient(rgba(0,229,255,0.03) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(0,229,255,0.03) 1px, transparent 1px);
-  background-size: 40px 40px;
-}
-
-/* ─── Layout ──────────────────────────────────────────────────────── */
-
-.bf-wrap {
+#assinatura-hero {
   position: relative;
-  z-index: 1;
   min-height: 100vh;
+  overflow: hidden;
+  background: #07080f;
+  background-image:
+    linear-gradient(rgba(79,195,247,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,195,247,.04) 1px, transparent 1px);
+  background-size: 30px 30px;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 32px 20px;
-  gap: 24px;
+  padding: 100px 20px 40px;
+  gap: 28px;
 }
 
-/* ─── Logo ────────────────────────────────────────────────────────── */
+/* ─── Logo — copiado 1:1 do .hero-logo do dashboard ─────────────── */
 
-.bf-logo {
+.hero-logo {
   display: flex;
   align-items: center;
   gap: 14px;
-  animation: fade-down 0.6s ease both;
+  white-space: nowrap;
 }
 
-.bf-logo__icon {
-  width: 52px;
-  height: 52px;
-  background: linear-gradient(135deg, #ff6b35, #e53935);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 24px rgba(255,107,53,0.4), 0 0 60px rgba(255,107,53,0.15);
-}
-
-.bf-logo__icon span {
-  font-family: var(--bf-font-head);
-  font-size: 28px;
+.hero-B {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 72px;
   font-weight: 900;
-  color: #fff;
+  line-height: 1;
+  background: linear-gradient(180deg, #ff9500 0%, #ff4500 40%, #cc0000 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  filter: drop-shadow(0 0 20px rgba(255,80,0,.95)) drop-shadow(0 0 40px rgba(255,50,0,.6));
+  animation: flamePulse 2s ease-in-out infinite;
+}
+
+@keyframes flamePulse {
+  0%,100% { filter: drop-shadow(0 0 20px rgba(255,80,0,.95)) drop-shadow(0 0 40px rgba(255,50,0,.6)); }
+  50%      { filter: drop-shadow(0 0 32px rgba(255,120,0,1))  drop-shadow(0 0 60px rgba(255,80,0,.9)); }
+}
+
+.hero-name {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 46px;
+  font-weight: 900;
+  color: #f0f4ff;
+  letter-spacing: .02em;
+  text-shadow: 0 0 20px rgba(79,195,247,.25);
   line-height: 1;
 }
 
-.bf-logo__text {
-  font-family: var(--bf-font-head);
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 1px;
+.hero-name span {
+  color: #4fc3f7;
+  text-shadow: 0 0 20px rgba(79,195,247,.9);
 }
 
-.bf-logo__barber { color: var(--bf-white); }
-.bf-logo__flow   {
-  color: var(--bf-cyan);
-  text-shadow: 0 0 20px rgba(0,229,255,0.5);
-}
+/* ─── Card — estilo analytics-card do dashboard ──────────────────── */
 
-/* ─── Card ────────────────────────────────────────────────────────── */
-
-.bf-card {
+.ass-card {
   width: 100%;
-  max-width: 480px;
-  background: var(--bf-surface);
-  border: 1px solid var(--bf-border);
-  border-radius: 20px;
-  padding: 36px 32px;
-  backdrop-filter: blur(20px);
-  box-shadow:
-    0 0 0 1px rgba(0,229,255,0.05),
-    0 24px 64px rgba(0,0,0,0.5),
-    inset 0 1px 0 rgba(255,255,255,0.05);
-  animation: fade-up 0.6s ease 0.1s both;
+  max-width: 420px;
+  background: rgba(6,8,20,.88);
+  border: 1px solid rgba(20,25,55,.98);
+  border-radius: 14px;
+  padding: 24px 22px;
+  backdrop-filter: blur(10px);
 }
 
-/* ─── Card Header ─────────────────────────────────────────────────── */
+/* ─── Badge de status ────────────────────────────────────────────── */
 
-.bf-card__header {
-  text-align: center;
-  margin-bottom: 28px;
-}
-
-.bf-status-badge {
+.ass-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-family: var(--bf-font-body);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: #ff6b7a;
+  background: rgba(255,23,68,.08);
+  border: 1px solid rgba(255,23,68,.2);
+  border-radius: 999px;
+  padding: 4px 10px;
+  margin-bottom: 10px;
+}
+
+.ass-badge__dot {
+  width: 5px;
+  height: 5px;
+  background: #ff6b7a;
+  border-radius: 50%;
+  animation: dotPulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dotPulse {
+  0%,100% { opacity: 1; }
+  50%      { opacity: .4; }
+}
+
+/* ─── Título e subtítulo — estilo ac-value / ac-sub ─────────────── */
+
+.ass-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 22px;
+  font-weight: 700;
+  color: #e8f0fe;
+  margin-bottom: 6px;
+  letter-spacing: .01em;
+}
+
+.ass-subtitle {
   font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  color: var(--bf-orange);
-  background: rgba(255,107,53,0.1);
-  border: 1px solid rgba(255,107,53,0.25);
-  padding: 4px 12px;
-  border-radius: 99px;
+  color: #343868;
+  line-height: 1.7;
   margin-bottom: 16px;
 }
 
-.bf-status-badge__dot {
-  width: 6px;
-  height: 6px;
-  background: var(--bf-orange);
-  border-radius: 50%;
-  animation: pulse 1.5s ease-in-out infinite;
+/* ─── Price widget ───────────────────────────────────────────────── */
+
+.ass-price {
+  background: rgba(6,8,20,.6);
+  border: 1px solid rgba(20,25,55,.98);
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
 }
 
-@keyframes pulse {
-  0%, 100% { opacity: 1; transform: scale(1); }
-  50%       { opacity: 0.5; transform: scale(0.8); }
-}
-
-.bf-card__title {
-  font-family: var(--bf-font-head);
-  font-size: 24px;
-  font-weight: 700;
-  color: var(--bf-white);
-  margin-bottom: 8px;
-  letter-spacing: 1px;
-}
-
-.bf-card__subtitle {
-  font-size: 14px;
-  color: var(--bf-muted);
-  line-height: 1.65;
-}
-
-/* ─── Price Widget — estilo igual aos widgets do dashboard ─────────── */
-
-.bf-price-widget {
-  background: var(--bf-surface2);
-  border: 1px solid var(--bf-border);
-  border-radius: 12px;
-  padding: 18px 20px;
-  margin-bottom: 20px;
-}
-
-.bf-price-widget__label {
+/* reutiliza exatamente as classes do dashboard */
+.ac-title {
   font-size: 10px;
   font-weight: 600;
-  letter-spacing: 0.12em;
-  color: var(--bf-muted);
-  margin-bottom: 8px;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: #343868;
+  margin-bottom: 5px;
 }
 
-.bf-price-widget__value {
+.ass-price__value {
   display: flex;
   align-items: baseline;
   gap: 2px;
-  margin-bottom: 12px;
+  margin-bottom: 2px;
 }
 
-.bf-price-widget__currency {
-  font-family: var(--bf-font-head);
-  font-size: 16px;
-  color: var(--bf-muted);
+.ass-price__currency {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 14px;
+  color: #343868;
 }
 
-.bf-price-widget__amount {
-  font-family: var(--bf-font-head);
-  font-size: 42px;
-  font-weight: 900;
-  color: var(--bf-white);
+.ass-price__amount {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 38px;
+  font-weight: 700;
+  color: #e8f0fe;
   line-height: 1;
 }
 
-.bf-price-widget__cents {
-  font-family: var(--bf-font-head);
-  font-size: 20px;
-  color: var(--bf-white);
+.ass-price__cents {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 18px;
+  color: #e8f0fe;
 }
 
-.bf-price-widget__bar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--bf-muted);
-}
+/* reutiliza data-row do dashboard */
+.data-row  { display:flex; align-items:center; gap:8px; padding:4px 0; font-size:10px; }
+.data-bar  { flex:1; height:4px; background:#1a1f38; border-radius:999px; overflow:hidden; }
+.data-fill { height:100%; border-radius:2px; background:linear-gradient(90deg,#4fc3f7,#9c6fff); }
+.data-val  { color:#4fc3f7; font-size:9px; font-weight:700; min-width:38px; text-align:right; }
+.data-name { color:#343868; min-width:72px; flex-shrink:0; font-size:9px; }
 
-.bf-price-widget__progress {
-  flex: 1;
-  height: 4px;
-  background: rgba(255,255,255,0.06);
-  border-radius: 2px;
-  overflow: hidden;
-}
+/* ─── Features — reutiliza widget-module do dashboard ───────────── */
 
-.bf-price-widget__fill {
-  height: 100%;
-  width: 60%;
-  background: linear-gradient(90deg, var(--bf-cyan), #7c4dff);
-  border-radius: 2px;
-  animation: fill-pulse 2s ease-in-out infinite alternate;
-}
-
-@keyframes fill-pulse {
-  from { opacity: 0.7; }
-  to   { opacity: 1; }
-}
-
-/* ─── Modules — estilo igual aos módulos do painel ─────────────────── */
-
-.bf-modules {
+.ass-features {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-bottom: 24px;
+  gap: 6px;
+  margin-bottom: 20px;
 }
 
-.bf-module {
-  display: flex;
+/* widget-module copiado do dashboard */
+.widget-module {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  background: var(--bf-surface2);
-  border: 1px solid var(--bf-border);
-  border-radius: 8px;
-  padding: 10px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: #9ba3c0;
-  transition: border-color 0.2s, color 0.2s;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: #7dd3fc;
+  background: rgba(79,195,247,.08);
+  border: 1px solid rgba(79,195,247,.18);
+  border-radius: 999px;
+  padding: 5px 10px;
+  width: 100%;
 }
 
-.bf-module:hover {
-  border-color: rgba(0,229,255,0.2);
-  color: var(--bf-white);
-}
+/* ─── Botões — estilo restore-widgets-btn do dashboard ──────────── */
 
-.bf-module__icon {
-  font-size: 15px;
-  flex-shrink: 0;
-}
-
-/* ─── Buttons ─────────────────────────────────────────────────────── */
-
-.bf-btn {
+.ass-btn {
   display: block;
   width: 100%;
-  border: none;
-  border-radius: 10px;
-  cursor: pointer;
-  font-family: var(--bf-font-body);
+  border-radius: 999px;
+  font-size: 11px;
   font-weight: 700;
-  font-size: 16px;
-  letter-spacing: 0.05em;
-  transition: all 0.2s;
-  position: relative;
-  overflow: hidden;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all .16s;
+  font-family: 'DM Sans', sans-serif;
+  border: none;
+  padding: 12px;
+  margin-bottom: 8px;
 }
 
-.bf-btn--primary {
-  background: linear-gradient(135deg, #0066ff, #00c8ff);
+.ass-btn--primary {
+  background: linear-gradient(135deg, #0057ff, #4fc3f7);
   color: #fff;
-  padding: 16px;
-  margin-bottom: 10px;
-  box-shadow: 0 4px 20px rgba(0,102,255,0.35);
+  box-shadow: 0 0 18px rgba(79,195,247,.2);
 }
 
-.bf-btn--primary:hover {
+.ass-btn--primary:hover {
   transform: translateY(-1px);
-  box-shadow: 0 8px 28px rgba(0,102,255,0.5);
+  box-shadow: 0 0 28px rgba(79,195,247,.35);
 }
 
-.bf-btn--primary:active {
-  transform: translateY(0);
-}
-
-.bf-btn--primary:disabled {
-  opacity: 0.5;
+.ass-btn--primary:disabled {
+  opacity: .45;
   cursor: not-allowed;
   transform: none;
 }
 
-.bf-btn__shine {
-  position: absolute;
-  top: 0; left: -100%;
-  width: 60%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.15), transparent);
-  transform: skewX(-20deg);
-  transition: left 0.5s;
+.ass-btn--ghost {
+  background: rgba(8,13,28,.76);
+  color: #7dd3fc;
+  border: 1px solid rgba(79,195,247,.24);
+  backdrop-filter: blur(10px);
+  box-shadow: 0 0 16px rgba(79,195,247,.08);
 }
 
-.bf-btn--primary:hover .bf-btn__shine {
-  left: 150%;
+.ass-btn--ghost:hover {
+  border-color: rgba(79,195,247,.46);
+  color: #e8f0fe;
+  transform: translateY(-1px);
 }
 
-.bf-btn--ghost {
-  background: transparent;
-  color: var(--bf-muted);
-  border: 1px solid var(--bf-border);
-  padding: 12px;
-  font-size: 13px;
-}
+/* ─── Error ──────────────────────────────────────────────────────── */
 
-.bf-btn--ghost:hover {
-  border-color: rgba(255,255,255,0.15);
-  color: var(--bf-white);
-}
-
-/* ─── Error ───────────────────────────────────────────────────────── */
-
-.bf-error {
+.ass-error {
   display: none;
-  margin-top: 12px;
-  font-size: 13px;
-  color: var(--bf-danger);
+  margin-top: 10px;
+  font-size: 10px;
+  color: #ff6b7a;
   text-align: center;
 }
 
-/* ─── Footer ──────────────────────────────────────────────────────── */
+/* ─── Footer ─────────────────────────────────────────────────────── */
 
-.bf-footer {
-  font-size: 12px;
-  color: var(--bf-muted);
-  animation: fade-up 0.6s ease 0.3s both;
+.ass-footer {
+  font-size: 10px;
+  color: #343868;
 }
 
-.bf-footer a {
-  color: var(--bf-cyan);
+.ass-footer a {
+  color: #4fc3f7;
   text-decoration: none;
 }
 
-.bf-footer a:hover { text-decoration: underline; }
+.ass-footer a:hover { text-decoration: underline; }
 
-/* ─── Animations ──────────────────────────────────────────────────── */
-
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(20px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-@keyframes fade-down {
-  from { opacity: 0; transform: translateY(-16px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ─── Responsivo ──────────────────────────────────────────────────── */
+/* ─── Responsivo ─────────────────────────────────────────────────── */
 
 @media (max-width: 480px) {
-  .bf-card { padding: 28px 20px; }
-  .bf-logo__text { font-size: 22px; }
-  .bf-logo__icon { width: 44px; height: 44px; }
-  .bf-logo__icon span { font-size: 22px; }
-  .bf-price-widget__amount { font-size: 34px; }
-  .bf-card__title { font-size: 20px; }
+  .hero-B    { font-size: 52px; }
+  .hero-name { font-size: 32px; }
+  .ass-card  { padding: 20px 16px; }
+  .ass-title { font-size: 18px; }
 }
