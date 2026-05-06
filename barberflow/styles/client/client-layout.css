@@ -663,21 +663,21 @@ body.client-area::before {
     overflow: visible !important;
   }
 
-  /* FIX: main sem padding-top — topbar é fixed e se posiciona sozinho */
+  /* FIX: main sem padding-top — topbar é fixed */
   .main,
   .client-dashboard-main {
     height: auto !important;
     padding-top: 0 !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
-    padding-bottom: 24px !important;
+    padding-bottom: 32px !important;
   }
 
-  /* FIX TOPBAR: fixed no topo, respeitando safe-area do iPhone */
+  /* FIX TOPBAR: fixed logo abaixo da barra do browser, valor fixo confiável */
   .topbar,
   .client-dashboard-topbar {
     position: fixed !important;
-    top: env(safe-area-inset-top, 0px) !important;
+    top: 8px !important;
     left: 10px !important;
     right: 10px !important;
     z-index: 50 !important;
@@ -685,8 +685,8 @@ body.client-area::before {
     grid-template-columns: 40px minmax(0, 1fr) !important;
     align-items: center !important;
     gap: 10px !important;
-    min-height: 58px !important;
-    margin: 6px 0 0 !important;
+    min-height: 56px !important;
+    margin: 0 !important;
     padding: 8px 10px !important;
     background: linear-gradient(180deg, rgba(5, 8, 22, 0.98) 0%, rgba(5, 8, 22, 0.92) 100%) !important;
     backdrop-filter: blur(12px) !important;
@@ -696,13 +696,14 @@ body.client-area::before {
     box-sizing: border-box !important;
   }
 
-  /* FIX: empurra o conteúdo para baixo do topbar fixo */
-  /* topbar height(58) + margin-top(6) + margin-bottom(12) + safe-area */
+  /* FIX: padding-top = topbar(56) + top(8) + gap(12) = 76px fixos */
+  /* min-height garante que conteúdos curtos preencham a tela */
   .content,
   .client-dashboard-content {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 80px) !important;
+    padding-top: 76px !important;
     padding-left: 12px !important;
     padding-right: 12px !important;
+    min-height: calc(100dvh - 76px) !important;
   }
 
   .client-topbar-leading {
