@@ -172,6 +172,60 @@ function bindClientDashboardMenu() {
   overlay?.addEventListener('click', closeClientMenu);
 }
 
+// ─── Scroll hide topbar ────────────────────────────────────────────────────────
+// Esconde o topbar ao rolar para baixo, mostra ao rolar para cima.
+// Só ativa em mobile (≤ 980px). Limpa o listener ao trocar de página.
+
+let _scrollCleanup = null;
+
+function bindScrollHideTopbar() {
+  // Remove listener anterior se existir
+  if (_scrollCleanup) {
+    _scrollCleanup();
+    _scrollCleanup = null;
+  }
+
+  if (window.innerWidth > 980) return;
+
+  const topbar = document.querySelector('.client-dashboard-topbar');
+  if (!topbar) return;
+
+  let lastScrollY = window.scrollY;
+  let ticking = false;
+
+  const onScroll = () => {
+    if (ticking) return;
+    ticking = true;
+    requestAnimationFrame(() => {
+      // Não esconde enquanto o menu lateral estiver aberto
+      if (document.body.classList.contains('client-menu-open')) {
+        topbar.classList.remove('topbar--hidden');
+        lastScrollY = window.scrollY;
+        ticking = false;
+        return;
+      }
+
+      const currentScrollY = window.scrollY;
+      const scrollingDown = currentScrollY > lastScrollY;
+      const pastThreshold = currentScrollY > 80;
+
+      if (scrollingDown && pastThreshold) {
+        topbar.classList.add('topbar--hidden');
+      } else {
+        topbar.classList.remove('topbar--hidden');
+      }
+
+      lastScrollY = currentScrollY;
+      ticking = false;
+    });
+  };
+
+  window.addEventListener('scroll', onScroll, { passive: true });
+
+  // Guarda cleanup para remover na próxima navegação
+  _scrollCleanup = () => window.removeEventListener('scroll', onScroll);
+}
+
 function bindClientRouteTriggers(currentRoute) {
   document.querySelectorAll('[data-client-route]').forEach((element) => {
     const targetRoute = element.getAttribute('data-client-route');
@@ -242,6 +296,7 @@ function renderClientPage(route) {
     bindClientRouteTriggers(safeRoute);
     bindClientGlobalActions();
     bindClientDashboardMenu();
+    bindScrollHideTopbar();
     closeClientMenu();
     initClientThemeToggle();
   });
