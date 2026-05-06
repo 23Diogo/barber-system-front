@@ -31,6 +31,14 @@ document.getElementById('app-login-form')?.addEventListener('submit', async (eve
     }
 
     setFeedback('Login realizado com sucesso!', 'success');
+
+    // Se a licença estiver suspensa ou cancelada, redireciona para pagamento
+    const licenseStatus = payload?.license?.status;
+    if (licenseStatus === 'suspended' || licenseStatus === 'cancelled') {
+      window.location.href = '/app/assinatura';
+      return;
+    }
+
     window.location.href = '/app';
   } catch (error) {
     setFeedback(error instanceof Error ? error.message : 'Não foi possível entrar.', 'error');
