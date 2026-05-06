@@ -584,6 +584,13 @@ body.client-area::before {
     overflow: hidden !important;
   }
 
+  /* ── FIX: previne zoom automático do iOS em inputs ── */
+  body.client-area input,
+  body.client-area select,
+  body.client-area textarea {
+    font-size: 16px !important;
+  }
+
   .client-mobile-menu-btn,
   .client-sidebar-close-btn {
     display: inline-flex !important;
@@ -649,9 +656,10 @@ body.client-area::before {
     overflow: visible !important;
   }
 
+  /* ── FIX: topbar colada na borda superior com safe-area ── */
   .main,
   .client-dashboard-main {
-    padding-top: calc(env(safe-area-inset-top, 0px) + 92px) !important;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 12px) !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
     padding-bottom: 24px !important;
