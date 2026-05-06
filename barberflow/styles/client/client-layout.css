@@ -6,15 +6,12 @@
 /* ─── BASE ─── */
 
 body.client-area {
-  /* FIX: sobrescreve height:100vh e overflow:hidden do base.css */
-  height: auto !important;
-  min-height: 100dvh;
-  overflow-x: hidden !important;
-  overflow-y: auto !important;
-
   margin: 0;
+  min-height: 100vh;
   font-family: 'DM Sans', sans-serif;
   color: #e8f0fe;
+  overflow-x: hidden;
+  overflow-y: auto;
   background:
     radial-gradient(circle at 50% 18%, rgba(255, 90, 31, 0.14), transparent 16%),
     radial-gradient(circle at 50% 18%, rgba(79, 195, 247, 0.08), transparent 28%),
@@ -39,7 +36,7 @@ body.client-area::before {
 
 .client-shell {
   position: relative;
-  min-height: 100dvh;
+  min-height: 100vh;
   display: flex;
   flex-direction: column;
   overflow-x: hidden;
@@ -362,7 +359,7 @@ body.client-area::before {
 
 .client-dashboard-app {
   position: relative;
-  min-height: 100dvh;
+  min-height: 100vh;
 }
 
 .client-dashboard-main,
@@ -572,24 +569,24 @@ body.client-area::before {
 /* ─── RESPONSIVE ─── */
 
 @media (max-width: 980px) {
-
-  /* FIX ZOOM iOS: inputs >= 16px previnem zoom automático */
-  body.client-area input,
-  body.client-area select,
-  body.client-area textarea {
-    font-size: 16px !important;
-  }
-
   html,
   body,
   body.client-area {
     overflow-x: hidden !important;
   }
 
+  /* FIX: sobrescreve height:100vh e overflow:hidden do base.css */
   body.client-area {
     height: auto !important;
     min-height: 100dvh !important;
     overflow-y: auto !important;
+  }
+
+  /* FIX ZOOM iOS: font-size >= 16px previne zoom automático em inputs */
+  body.client-area input,
+  body.client-area select,
+  body.client-area textarea {
+    font-size: 16px !important;
   }
 
   body.client-area.client-menu-open {
@@ -661,30 +658,30 @@ body.client-area::before {
     overflow: visible !important;
   }
 
-  /* FIX TOPBAR: só o safe-area, sem pixels extras desnecessários */
+  /* FIX: main sem padding-top — topbar é fixed e se posiciona sozinho */
   .main,
   .client-dashboard-main {
     height: auto !important;
-    padding-top: env(safe-area-inset-top, 0px) !important;
+    padding-top: 0 !important;
     padding-left: 0 !important;
     padding-right: 0 !important;
     padding-bottom: 24px !important;
   }
 
+  /* FIX TOPBAR: fixed no topo, respeitando safe-area do iPhone */
   .topbar,
   .client-dashboard-topbar {
-    position: relative !important;
-    top: auto !important;
-    left: auto !important;
-    right: auto !important;
-    z-index: 20 !important;
+    position: fixed !important;
+    top: env(safe-area-inset-top, 0px) !important;
+    left: 10px !important;
+    right: 10px !important;
+    z-index: 50 !important;
     display: grid !important;
     grid-template-columns: 40px minmax(0, 1fr) !important;
     align-items: center !important;
     gap: 10px !important;
     min-height: 58px !important;
-    /* margem-top pequena para respirar abaixo do safe-area */
-    margin: 6px 10px 12px !important;
+    margin: 6px 0 0 !important;
     padding: 8px 10px !important;
     background: linear-gradient(180deg, rgba(5, 8, 22, 0.98) 0%, rgba(5, 8, 22, 0.92) 100%) !important;
     backdrop-filter: blur(12px) !important;
@@ -692,6 +689,15 @@ body.client-area::before {
     border: 1px solid rgba(79, 195, 247, 0.12) !important;
     border-radius: 16px !important;
     box-sizing: border-box !important;
+  }
+
+  /* FIX: empurra o conteúdo para baixo do topbar fixo */
+  /* topbar height(58) + margin-top(6) + margin-bottom(12) + safe-area */
+  .content,
+  .client-dashboard-content {
+    padding-top: calc(env(safe-area-inset-top, 0px) + 80px) !important;
+    padding-left: 12px !important;
+    padding-right: 12px !important;
   }
 
   .client-topbar-leading {
@@ -725,11 +731,6 @@ body.client-area::before {
   .client-dashboard-search-box,
   .client-topbar-actions {
     display: none !important;
-  }
-
-  .content,
-  .client-dashboard-content {
-    padding: 0 12px !important;
   }
 
   .client-dashboard-content .grid-3 {
@@ -818,8 +819,8 @@ body.client-area::before {
 @media (max-width: 640px) {
   .topbar,
   .client-dashboard-topbar {
-    margin-left: 10px !important;
-    margin-right: 10px !important;
+    left: 10px !important;
+    right: 10px !important;
   }
 
   .topbar-title,
