@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Assinatura — BarberFlow</title>
+  <link rel="stylesheet" href="/styles/app/assinatura.css"/>
+</head>
+<body>
+  <div class="assinatura-container">
+
+    <div class="assinatura-logo">
+      <img src="/icons/logo.png" alt="BarberFlow" onerror="this.style.display='none'"/>
+      <span class="assinatura-logo-text">Barber<strong>Flow</strong></span>
+    </div>
+
+    <div class="assinatura-card">
+      <div class="assinatura-icon">💈</div>
+      <h1 class="assinatura-title">Assinatura Suspensa</h1>
+      <p class="assinatura-subtitle">
+        O acesso ao BarberFlow está bloqueado.<br/>
+        Regularize sua assinatura para continuar atendendo.
+      </p>
+
+      <div class="assinatura-price-box">
+        <span class="assinatura-price-label">Assinatura mensal</span>
+        <span class="assinatura-price-value">R$ 89<span class="assinatura-price-cents">,90</span></span>
+        <span class="assinatura-price-period">pagamento via PIX · renovação mensal</span>
+      </div>
+
+      <ul class="assinatura-features">
+        <li>Agenda online ilimitada</li>
+        <li>Bot de WhatsApp automático</li>
+        <li>Gestão de clientes e fidelidade</li>
+        <li>Controle financeiro completo</li>
+        <li>App para barbeiros</li>
+      </ul>
+
+      <button class="assinatura-btn-primary" id="btnPagar">
+        Pagar agora via PIX
+      </button>
+
+      <button class="assinatura-btn-secondary" id="btnLogout">
+        Sair da conta
+      </button>
+
+      <p class="assinatura-error" id="assinaturaError"></p>
+    </div>
+
+  </div>
+
+  <script type="module" src="/js/app/assinatura.js"></script>
+</body>
+</html>
