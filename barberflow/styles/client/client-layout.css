@@ -569,30 +569,15 @@ body.client-area::before {
 /* ─── RESPONSIVE ─── */
 
 @media (max-width: 980px) {
-  html,
-  body,
-  body.client-area {
-    overflow-x: hidden !important;
-  }
 
-  /* FIX: sobrescreve height:100vh e overflow:hidden do base.css */
-  body.client-area {
-    height: auto !important;
-    min-height: 100dvh !important;
-    overflow-y: auto !important;
-  }
-
-  /* FIX ZOOM iOS: font-size >= 16px previne zoom automático em inputs */
+  /* ── Previne zoom automático do iOS em inputs ── */
   body.client-area input,
   body.client-area select,
   body.client-area textarea {
     font-size: 16px !important;
   }
 
-  body.client-area.client-menu-open {
-    overflow: hidden !important;
-  }
-
+  /* ── Sidebar overlay ── */
   .client-mobile-menu-btn,
   .client-sidebar-close-btn {
     display: inline-flex !important;
@@ -617,15 +602,15 @@ body.client-area::before {
     pointer-events: auto;
   }
 
+  /* ── Sidebar: drawer flutuante com bordas arredondadas ── */
   .client-dashboard-sidebar {
     position: fixed !important;
-    /* abaixo do safe-area + margem do topo */
-    top: calc(env(safe-area-inset-top, 0px) + 10px) !important;
+    top: 10px !important;
     left: 10px !important;
     width: min(82vw, 300px) !important;
     max-width: 300px !important;
-    /* altura descontando safe areas e margens */
-    height: calc(100dvh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px) - 20px) !important;
+    bottom: 10px !important;
+    height: auto !important;
     z-index: 90 !important;
     overflow-y: auto !important;
     border-radius: 20px !important;
@@ -652,60 +637,72 @@ body.client-area::before {
     right: 16px;
   }
 
+  /* ────────────────────────────────────────────────────────────
+     ABORDAGEM SCROLL CONTAINER
+     O .client-dashboard-main vira um flex-column de 100dvh.
+     O topbar fica estático no topo do container (nunca fixed).
+     O conteúdo scrolla dentro do container.
+     Resultado: topbar sempre visível, sem conflito com browser chrome.
+  ─────────────────────────────────────────────────────────────── */
+
+  /* body: ocupa exatamente a viewport — sem scroll no body */
+  body.client-area {
+    height: 100dvh !important;
+    overflow: hidden !important;
+  }
+
+  /* .app e .main: full-height sem scroll */
   .app,
   .main,
-  .content,
-  .client-dashboard-main,
-  .client-dashboard-content {
-    min-width: 0 !important;
-    width: 100% !important;
-    box-sizing: border-box !important;
-    overflow: visible !important;
-  }
-
-  /* FIX: main sem padding-top — topbar é fixed */
-  .main,
   .client-dashboard-main {
-    height: auto !important;
-    padding-top: 0 !important;
-    padding-left: 0 !important;
-    padding-right: 0 !important;
-    padding-bottom: 32px !important;
+    width: 100% !important;
+    height: 100dvh !important;
+    min-height: 0 !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
   }
 
-  /* FIX TOPBAR: fixed logo abaixo da barra do browser, valor fixo confiável */
+  /* Topbar: estático no topo do flex, com margem visível */
   .topbar,
   .client-dashboard-topbar {
-    position: fixed !important;
-    top: 8px !important;
-    left: 10px !important;
-    right: 10px !important;
-    z-index: 50 !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    flex-shrink: 0 !important;
     display: grid !important;
     grid-template-columns: 40px minmax(0, 1fr) !important;
     align-items: center !important;
     gap: 10px !important;
     min-height: 56px !important;
-    margin: 0 !important;
-    padding: 8px 10px !important;
+    margin: 8px 10px 4px !important;
+    padding: 8px 12px !important;
     background: linear-gradient(180deg, rgba(5, 8, 22, 0.98) 0%, rgba(5, 8, 22, 0.92) 100%) !important;
-    backdrop-filter: blur(12px) !important;
-    -webkit-backdrop-filter: blur(12px) !important;
-    border: 1px solid rgba(79, 195, 247, 0.12) !important;
-    border-radius: 16px !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    border: 1px solid rgba(79, 195, 247, 0.14) !important;
+    border-radius: 18px !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3) !important;
+    z-index: 10 !important;
+  }
+
+  /* Conteúdo: ocupa o espaço restante e scrolla */
+  .content,
+  .client-dashboard-content {
+    flex: 1 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    overscroll-behavior: contain !important;
+    padding: 8px 12px 24px !important;
+    min-height: 0 !important;
     box-sizing: border-box !important;
   }
 
-  /* FIX: padding-top = topbar(56) + top(8) + gap(12) = 76px fixos */
-  /* min-height garante que conteúdos curtos preencham a tela */
-  .content,
-  .client-dashboard-content {
-    padding-top: 76px !important;
-    padding-left: 12px !important;
-    padding-right: 12px !important;
-    min-height: calc(100dvh - 76px) !important;
-  }
-
+  /* Elementos internos */
   .client-topbar-leading {
     min-width: 0 !important;
     display: flex !important;
@@ -714,11 +711,10 @@ body.client-area::before {
   }
 
   .client-mobile-menu-btn {
-    position: relative !important;
-    z-index: 30 !important;
     width: 40px !important;
     height: 40px !important;
     flex: 0 0 40px !important;
+    display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
   }
@@ -726,7 +722,7 @@ body.client-area::before {
   .topbar-title,
   .client-topbar-leading .topbar-title {
     min-width: 0 !important;
-    font-size: 16px !important;
+    font-size: 15px !important;
     line-height: 1.1 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
@@ -739,30 +735,13 @@ body.client-area::before {
     display: none !important;
   }
 
-  .client-dashboard-content .grid-3 {
-    grid-template-columns: 1fr;
-  }
-
-  .client-dashboard-content .card-header {
-    display: grid;
-    gap: 10px;
-  }
-
-  .client-dashboard-content .client-action-row {
-    justify-content: stretch;
-  }
-
-  .client-dashboard-content .client-action-row > * {
-    width: 100%;
-  }
-
-  .client-portal-grid {
-    grid-template-columns: 1fr;
-  }
-
-  .grid-3 {
-    grid-template-columns: 1fr;
-  }
+  /* Grids */
+  .client-dashboard-content .grid-3 { grid-template-columns: 1fr; }
+  .client-dashboard-content .card-header { display: grid; gap: 10px; }
+  .client-dashboard-content .client-action-row { justify-content: stretch; }
+  .client-dashboard-content .client-action-row > * { width: 100%; }
+  .client-portal-grid { grid-template-columns: 1fr; }
+  .grid-3 { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 720px) {
@@ -971,22 +950,3 @@ body.client-area.theme-light .agendar-summary-row { background: #f5f8ff; border-
 body.client-area.theme-light .agendar-summary-label { color: #6b7fa8; }
 body.client-area.theme-light .agendar-summary-value { color: #1a2040; }
 body.client-area.theme-light .agendar-empty { border-color: rgba(79, 195, 247, 0.20); color: #6b7fa8; }
-
-/* ─── SCROLL HIDE TOPBAR (mobile) ────────────────────────────────── */
-/* Adicionado via transition ao topbar fixed — JS controla a classe   */
-
-@media (max-width: 980px) {
-  .topbar,
-  .client-dashboard-topbar {
-    transition:
-      transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-      opacity 0.3s ease !important;
-  }
-
-  .topbar.topbar--hidden,
-  .client-dashboard-topbar.topbar--hidden {
-    transform: translateY(calc(-100% - env(safe-area-inset-top, 0px) - 20px)) !important;
-    opacity: 0 !important;
-    pointer-events: none !important;
-  }
-}
