@@ -52,10 +52,13 @@ body.auth-locked #modal { display: none !important; }
 </head>
 <body>
 
+<!-- Backdrop do sidebar mobile -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
 <div class="app">
 
   <!-- ════════ SIDEBAR ════════ -->
-  <div class="sidebar">
+  <div class="sidebar" id="sidebar">
     <div class="logo-area" data-open-modal="true">
       <div class="logo-mark" id="logoMark">
         <span class="logo-mark-text" id="logoChar">B</span>
@@ -153,9 +156,17 @@ body.auth-locked #modal { display: none !important; }
   <!-- ════════ MAIN ════════ -->
   <div class="main">
     <div class="topbar">
+      <!-- Hamburger — visível apenas em mobile via CSS -->
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Abrir menu" type="button">
+        <svg fill="none" height="18" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24" width="18">
+          <line x1="4" y1="6" x2="20" y2="6"></line>
+          <line x1="4" y1="12" x2="20" y2="12"></line>
+          <line x1="4" y1="18" x2="20" y2="18"></line>
+        </svg>
+      </button>
       <div class="topbar-title" id="pageTitle">DASHBOARD</div>
-      <button class="auth-dev-btn" data-open-auth-modal="true" id="openAuthModalBtn" type="button">🔐 Login dev</button>
-      <div class="avatar" id="topAvatar" style="cursor:pointer">DB</div>
+      <button class="auth-dev-btn" data-open-auth-modal="true" id="openAuthModalBtn" type="button">🔐 Sessão ativa</button>
+      <div class="avatar" id="topAvatar" style="cursor:pointer">DC</div>
     </div>
 
     <div class="content">
@@ -165,7 +176,7 @@ body.auth-locked #modal { display: none !important; }
           <div class="hero-name">Barber<span>Flow</span></div>
         </div>
         <div class="hero-actions">
-          <button class="restore-widgets-btn" id="restoreWidgetsBtn" type="button">↺ Restaurar widgets</button>
+          <button class="restore-widgets-btn" id="restoreWidgetsBtn" type="button">↺ Restaurar 4 widgets</button>
         </div>
         <div class="orbit" style="width:340px;height:170px"><div class="orbit-dot" style="background:#4fc3f7;color:#4fc3f7"></div></div>
         <div class="orbit orbit-2" style="width:420px;height:210px"><div class="orbit-dot" style="background:#9c6fff;color:#9c6fff"></div></div>
@@ -257,7 +268,7 @@ body.auth-locked #modal { display: none !important; }
   </div>
 </div>
 
-<!-- ════════ MODAL: Login dev ════════ -->
+<!-- ════════ MODAL: Login / Auth ════════ -->
 <div class="modal-overlay" id="authModal">
   <div class="modal">
     <div class="auth-gate-badge">🔐 Acesso obrigatório</div>
