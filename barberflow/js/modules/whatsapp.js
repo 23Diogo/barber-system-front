@@ -1,14 +1,20 @@
 import { apiFetch } from '../services/api.js';
 
+// ─── Config Meta ──────────────────────────────────────────────────────────────
+const META_APP_ID = '1928408417794214';
+
 // ─── State ────────────────────────────────────────────────────────────────────
 
 const whatsappState = {
-  sessions: [],
-  messages: [],
-  activeSessionId: null,
+  sessions:          [],
+  messages:          [],
+  activeSessionId:   null,
   isLoadingSessions: false,
   isLoadingMessages: false,
-  pollingTimer: null,
+  pollingTimer:      null,
+  connection:        null,   // { connected, phone_number_id, business_phone }
+  metaSdkReady:      false,
+  showManualForm:    false,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -43,7 +49,6 @@ function getGradient(index) {
 }
 
 function getLastMessage(session) {
-  // Último estado do bot como preview
   const stateLabels = {
     idle:              'Aguardando mensagem...',
     menu:              'Visualizou o menu',
@@ -54,7 +59,285 @@ function getLastMessage(session) {
   return stateLabels[session.state] || 'Conversa ativa';
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────────
+// ─── Meta SDK ─────────────────────────────────────────────────────────────────
+
+function loadMetaSdk() {
+  return new Promise((resolve) => {
+    if (whatsappState.metaSdkReady) { resolve(); return; }
+    if (document.getElementById('fb-sdk-script')) {
+      window.fbAsyncInit = () => {
+        FB.init({ appId: META_APP_ID, autoLogAppEvents: true, xfbml: true, version: 'v19.0' });
+        whatsappState.metaSdkReady = true;
+        resolve();
+      };
+      return;
+    }
+    window.fbAsyncInit = () => {
+      FB.init({ appId: META_APP_ID, autoLogAppEvents: true, xfbml: true, version: 'v19.0' });
+      whatsappState.metaSdkReady = true;
+      resolve();
+    };
+    const script = document.createElement('script');
+    script.id  = 'fb-sdk-script';
+    script.src = 'https://connect.facebook.net/pt_BR/sdk.js';
+    script.async = true;
+    script.defer = true;
+    document.head.appendChild(script);
+  });
+}
+
+// ─── Embedded Signup ──────────────────────────────────────────────────────────
+
+async function launchEmbeddedSignup() {
+  const btn = document.getElementById('wa-connect-btn');
+  const feedback = document.getElementById('wa-connect-feedback');
+
+  try {
+    if (btn) { btn.disabled = true; btn.textContent = 'Carregando...'; }
+    if (feedback) feedback.textContent = '';
+
+    await loadMetaSdk();
+
+    FB.login(async (response) => {
+      if (response.authResponse?.code) {
+        await exchangeCodeForToken(response.authResponse.code);
+      } else {
+        setFeedback('Conexão cancelada ou sem permissão.', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '🔗 Conectar WhatsApp'; }
+      }
+    }, {
+      config_id:    '', // Preencher com config_id após criar no Meta Developers
+      response_type: 'code',
+      override_default_response_type: true,
+      extras: {
+        setup: {},
+        featureType: '',
+        sessionInfoVersion: '3',
+      }
+    });
+
+  } catch (err) {
+    console.error('Embedded Signup error:', err);
+    setFeedback('Erro ao iniciar conexão. Tente o método manual abaixo.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🔗 Conectar WhatsApp'; }
+  }
+}
+
+async function exchangeCodeForToken(code) {
+  const btn = document.getElementById('wa-connect-btn');
+  const feedback = document.getElementById('wa-connect-feedback');
+
+  try {
+    setFeedback('Conectando ao WhatsApp...', 'loading');
+
+    const result = await apiFetch('/api/whatsapp/connect', {
+      method: 'POST',
+      body: JSON.stringify({ code }),
+    });
+
+    if (result?.success) {
+      setFeedback('WhatsApp conectado com sucesso! ✅', 'success');
+      await loadConnectionStatus();
+      rerenderConnection();
+    } else {
+      setFeedback(result?.error || 'Erro ao conectar.', 'error');
+    }
+  } catch (err) {
+    setFeedback(err?.message || 'Erro ao conectar.', 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '🔗 Conectar WhatsApp'; }
+  }
+}
+
+// ─── Manual connect ───────────────────────────────────────────────────────────
+
+async function connectManual() {
+  const phoneId    = document.getElementById('wa-manual-phone-id')?.value?.trim();
+  const token      = document.getElementById('wa-manual-token')?.value?.trim();
+  const phone      = document.getElementById('wa-manual-phone')?.value?.trim();
+  const btn        = document.getElementById('wa-manual-save-btn');
+
+  if (!phoneId || !token) {
+    setFeedback('Phone Number ID e Access Token são obrigatórios.', 'error');
+    return;
+  }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('Validando credenciais...', 'loading');
+
+    const result = await apiFetch('/api/whatsapp/connect/manual', {
+      method: 'POST',
+      body: JSON.stringify({
+        phone_number_id: phoneId,
+        access_token:    token,
+        display_phone:   phone || null,
+      }),
+    });
+
+    if (result?.success) {
+      setFeedback('WhatsApp conectado com sucesso! ✅', 'success');
+      whatsappState.showManualForm = false;
+      await loadConnectionStatus();
+      rerenderConnection();
+    } else {
+      setFeedback(result?.error || 'Erro ao conectar.', 'error');
+    }
+  } catch (err) {
+    setFeedback(err?.message || 'Credenciais inválidas.', 'error');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function disconnect() {
+  if (!confirm('Deseja desconectar o WhatsApp? O bot será desativado.')) return;
+
+  try {
+    await apiFetch('/api/whatsapp/disconnect', { method: 'DELETE' });
+    whatsappState.connection = { connected: false };
+    rerenderConnection();
+    setFeedback('WhatsApp desconectado.', 'neutral');
+  } catch (err) {
+    setFeedback('Erro ao desconectar.', 'error');
+  }
+}
+
+// ─── Feedback ─────────────────────────────────────────────────────────────────
+
+function setFeedback(message, type = 'neutral') {
+  const el = document.getElementById('wa-connect-feedback');
+  if (!el) return;
+  el.textContent = message;
+  el.className = `wa-feedback wa-feedback--${type}`;
+}
+
+// ─── Connection status ────────────────────────────────────────────────────────
+
+async function loadConnectionStatus() {
+  try {
+    const data = await apiFetch('/api/whatsapp/status');
+    whatsappState.connection = data;
+  } catch (err) {
+    whatsappState.connection = { connected: false };
+  }
+}
+
+function rerenderConnection() {
+  const el = document.getElementById('wa-connection-section');
+  if (!el) return;
+  el.innerHTML = renderConnectionSection();
+  bindConnectionEvents();
+}
+
+function renderConnectionSection() {
+  const c = whatsappState.connection;
+
+  if (c === null) {
+    return `<div class="wa-status-card"><div class="wa-status-loading">Carregando status...</div></div>`;
+  }
+
+  if (c.connected) {
+    const phone = c.business_phone
+      ? c.business_phone.replace(/\D/g,'').replace(/^55/,'').replace(/(\d{2})(\d{4,5})(\d{4})/, '($1) $2-$3')
+      : c.phone_number_id;
+
+    return `
+      <div class="wa-status-card wa-status-card--connected">
+        <div class="wa-status-header">
+          <div class="wa-status-dot wa-status-dot--on"></div>
+          <span class="wa-status-label">WhatsApp conectado</span>
+        </div>
+        <div class="wa-status-info">
+          <div class="wa-status-row">
+            <span class="wa-status-key">Número</span>
+            <span class="wa-status-val">${escapeHtml(phone || '—')}</span>
+          </div>
+          <div class="wa-status-row">
+            <span class="wa-status-key">Bot</span>
+            <span class="wa-status-val wa-status-val--green">● Ativo</span>
+          </div>
+          <div class="wa-status-row">
+            <span class="wa-status-key">Phone Number ID</span>
+            <span class="wa-status-val wa-status-val--mono">${escapeHtml(c.phone_number_id || '—')}</span>
+          </div>
+        </div>
+        <button type="button" class="wa-btn wa-btn--danger" id="wa-disconnect-btn">
+          Desconectar WhatsApp
+        </button>
+        <p id="wa-connect-feedback" class="wa-feedback"></p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="wa-status-card wa-status-card--disconnected">
+      <div class="wa-status-header">
+        <div class="wa-status-dot wa-status-dot--off"></div>
+        <span class="wa-status-label">WhatsApp não conectado</span>
+      </div>
+      <p class="wa-status-desc">
+        Conecte o WhatsApp da sua barbearia para ativar o bot automático,
+        enviar notificações e gerenciar conversas pelo painel.
+      </p>
+
+      <button type="button" class="wa-btn wa-btn--primary" id="wa-connect-btn">
+        🔗 Conectar WhatsApp
+      </button>
+
+      <button type="button" class="wa-btn wa-btn--ghost" id="wa-manual-toggle-btn">
+        ⚙️ Configurar manualmente
+      </button>
+
+      ${whatsappState.showManualForm ? renderManualForm() : ''}
+
+      <p id="wa-connect-feedback" class="wa-feedback"></p>
+    </div>
+  `;
+}
+
+function renderManualForm() {
+  return `
+    <div class="wa-manual-form">
+      <div class="wa-manual-title">Configuração manual</div>
+      <p class="wa-manual-desc">
+        Use esta opção se você já tem as credenciais do WhatsApp Business API.
+      </p>
+      <div class="wa-manual-field">
+        <label class="wa-manual-label">Phone Number ID</label>
+        <input id="wa-manual-phone-id" type="text" class="modal-input"
+          placeholder="Ex: 1049280788276183" style="margin:0;" />
+      </div>
+      <div class="wa-manual-field">
+        <label class="wa-manual-label">Access Token (60 dias)</label>
+        <input id="wa-manual-token" type="text" class="modal-input"
+          placeholder="EAAr..." style="margin:0;" />
+      </div>
+      <div class="wa-manual-field">
+        <label class="wa-manual-label">Número de exibição (opcional)</label>
+        <input id="wa-manual-phone" type="text" class="modal-input"
+          placeholder="Ex: +55 11 91234-5678" style="margin:0;" />
+      </div>
+      <button type="button" class="wa-btn wa-btn--primary" id="wa-manual-save-btn">
+        Salvar credenciais
+      </button>
+    </div>
+  `;
+}
+
+// ─── Bind connection events ───────────────────────────────────────────────────
+
+function bindConnectionEvents() {
+  document.getElementById('wa-connect-btn')?.addEventListener('click', launchEmbeddedSignup);
+  document.getElementById('wa-disconnect-btn')?.addEventListener('click', disconnect);
+  document.getElementById('wa-manual-save-btn')?.addEventListener('click', connectManual);
+  document.getElementById('wa-manual-toggle-btn')?.addEventListener('click', () => {
+    whatsappState.showManualForm = !whatsappState.showManualForm;
+    rerenderConnection();
+  });
+}
+
+// ─── Chat renders ─────────────────────────────────────────────────────────────
 
 function renderSessionRow(session, index) {
   const name     = getClientName(session);
@@ -118,8 +401,6 @@ function renderEmptyMessages() {
   `;
 }
 
-// ─── Render principal ─────────────────────────────────────────────────────────
-
 function rerenderSessions() {
   const list = document.getElementById('wa-sessions-list');
   if (!list) return;
@@ -153,8 +434,6 @@ function rerenderMessages() {
   }
 
   area.innerHTML = whatsappState.messages.map(renderBubble).join('');
-
-  // Scroll para o final
   area.scrollTop = area.scrollHeight;
 }
 
@@ -192,11 +471,11 @@ async function loadSessions() {
 }
 
 async function loadMessages(sessionId) {
-  whatsappState.activeSessionId = sessionId;
+  whatsappState.activeSessionId   = sessionId;
   whatsappState.isLoadingMessages = true;
 
   updateChatHeader();
-  rerenderSessions(); // atualiza is-active
+  rerenderSessions();
   rerenderMessages();
 
   try {
@@ -231,18 +510,16 @@ async function sendMessage() {
       }),
     });
 
-    // Recarrega mensagens para mostrar a enviada
     await loadMessages(whatsappState.activeSessionId);
   } catch (error) {
     console.error('Erro ao enviar mensagem:', error);
-    if (input) input.value = text; // restaura se falhou
+    if (input) input.value = text;
   } finally {
     if (btn) btn.disabled = false;
     input?.focus();
   }
 }
 
-// Polling para novas mensagens a cada 10s quando há sessão ativa
 function startPolling() {
   stopPolling();
   whatsappState.pollingTimer = setInterval(async () => {
@@ -260,17 +537,24 @@ function stopPolling() {
   }
 }
 
-// ─── Export ───────────────────────────────────────────────────────────────────
+// ─── Render principal ─────────────────────────────────────────────────────────
 
 export function renderWhatsApp() {
   return /* html */ `
 <section class="page-shell page--whatsapp">
-  <div class="grid-2">
+
+  <!-- Seção de conexão -->
+  <div id="wa-connection-section">
+    <div class="wa-status-card"><div class="wa-status-loading">Carregando status...</div></div>
+  </div>
+
+  <!-- Chat -->
+  <div class="grid-2" style="margin-top:16px;">
 
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="card-header" style="padding:12px 14px;">
         <div class="card-title">💬 Conversas</div>
-        <div style="font-size:10px;background:rgba(0,230,118,.1);color:#00e676;padding:3px 10px;border-radius:8px;font-weight:600;">
+        <div id="wa-bot-badge" style="font-size:10px;background:rgba(0,230,118,.1);color:#00e676;padding:3px 10px;border-radius:8px;font-weight:600;">
           ● Bot ativo
         </div>
       </div>
@@ -312,8 +596,8 @@ export function renderWhatsApp() {
 }
 
 export function initWhatsAppPage() {
+  // Chat
   document.getElementById('wa-send-btn')?.addEventListener('click', sendMessage);
-
   document.getElementById('wa-message-input')?.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -321,6 +605,25 @@ export function initWhatsAppPage() {
     }
   });
 
-  loadSessions();
+  // Carrega status de conexão e sessões em paralelo
+  Promise.all([loadConnectionStatus(), loadSessions()]).then(() => {
+    rerenderConnection();
+    bindConnectionEvents();
+
+    // Atualiza badge do bot
+    const badge = document.getElementById('wa-bot-badge');
+    if (badge && whatsappState.connection) {
+      if (whatsappState.connection.connected) {
+        badge.style.background = 'rgba(0,230,118,.1)';
+        badge.style.color = '#00e676';
+        badge.textContent = '● Bot ativo';
+      } else {
+        badge.style.background = 'rgba(255,100,50,.1)';
+        badge.style.color = '#ff6b7a';
+        badge.textContent = '● Bot inativo';
+      }
+    }
+  });
+
   startPolling();
 }
