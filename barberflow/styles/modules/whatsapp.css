@@ -1,2 +1,266 @@
-/* WhatsApp Bot: espaço reservado para estilos específicos do módulo */
-.page--whatsapp{}
+/* ─── WhatsApp Bot Module ─────────────────────────────────────────── */
+
+.page--whatsapp {}
+
+/* ─── Status Card ────────────────────────────────────────────────── */
+
+.wa-status-card {
+  background: rgba(6, 8, 20, 0.88);
+  border: 1px solid rgba(20, 25, 55, 0.98);
+  border-radius: 14px;
+  padding: 20px 22px;
+  margin-bottom: 4px;
+}
+
+.wa-status-card--connected {
+  border-color: rgba(0, 230, 118, 0.2);
+  background: rgba(0, 230, 118, 0.04);
+}
+
+.wa-status-card--disconnected {
+  border-color: rgba(79, 195, 247, 0.12);
+}
+
+.wa-status-loading {
+  font-size: 11px;
+  color: #3a4568;
+  padding: 8px 0;
+}
+
+/* ─── Status Header ──────────────────────────────────────────────── */
+
+.wa-status-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.wa-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.wa-status-dot--on {
+  background: #00e676;
+  box-shadow: 0 0 8px rgba(0, 230, 118, 0.6);
+  animation: waDotPulse 2s ease-in-out infinite;
+}
+
+.wa-status-dot--off {
+  background: #ff6b7a;
+  box-shadow: 0 0 8px rgba(255, 107, 122, 0.4);
+}
+
+@keyframes waDotPulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.5; }
+}
+
+.wa-status-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: #e8f0fe;
+  letter-spacing: 0.02em;
+}
+
+/* ─── Status Info ────────────────────────────────────────────────── */
+
+.wa-status-info {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 16px;
+  padding: 12px 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 10px;
+}
+
+.wa-status-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 11px;
+}
+
+.wa-status-key {
+  color: #3a4568;
+  min-width: 130px;
+  flex-shrink: 0;
+}
+
+.wa-status-val {
+  color: #c0cce8;
+  font-weight: 600;
+}
+
+.wa-status-val--green {
+  color: #00e676;
+}
+
+.wa-status-val--mono {
+  font-family: 'Courier New', monospace;
+  font-size: 10px;
+  color: #7dd3fc;
+  word-break: break-all;
+}
+
+.wa-status-desc {
+  font-size: 12px;
+  color: #5a6888;
+  line-height: 1.6;
+  margin-bottom: 16px;
+}
+
+/* ─── Buttons ────────────────────────────────────────────────────── */
+
+.wa-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 38px;
+  padding: 0 18px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.16s;
+  border: none;
+  font-family: inherit;
+  margin-right: 8px;
+  margin-bottom: 8px;
+}
+
+.wa-btn--primary {
+  background: linear-gradient(135deg, #0057ff, #4fc3f7);
+  color: #fff;
+  box-shadow: 0 0 16px rgba(79, 195, 247, 0.2);
+}
+
+.wa-btn--primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 0 24px rgba(79, 195, 247, 0.35);
+}
+
+.wa-btn--primary:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.wa-btn--danger {
+  background: rgba(255, 23, 68, 0.1);
+  color: #ff6b7a;
+  border: 1px solid rgba(255, 23, 68, 0.2);
+}
+
+.wa-btn--danger:hover {
+  background: rgba(255, 23, 68, 0.16);
+  border-color: rgba(255, 23, 68, 0.35);
+}
+
+.wa-btn--ghost {
+  background: rgba(8, 13, 28, 0.76);
+  color: #7dd3fc;
+  border: 1px solid rgba(79, 195, 247, 0.2);
+}
+
+.wa-btn--ghost:hover {
+  border-color: rgba(79, 195, 247, 0.4);
+  color: #e8f0fe;
+}
+
+/* ─── Feedback ───────────────────────────────────────────────────── */
+
+.wa-feedback {
+  font-size: 11px;
+  margin-top: 8px;
+  min-height: 18px;
+  line-height: 1.5;
+}
+
+.wa-feedback--success { color: #00e676; }
+.wa-feedback--error   { color: #ff6b7a; }
+.wa-feedback--loading { color: #7dd3fc; }
+.wa-feedback--neutral { color: #5a6888; }
+
+/* ─── Manual Form ────────────────────────────────────────────────── */
+
+.wa-manual-form {
+  margin-top: 16px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(79, 195, 247, 0.1);
+  border-radius: 12px;
+  margin-bottom: 8px;
+}
+
+.wa-manual-title {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #4fc3f7;
+  margin-bottom: 6px;
+}
+
+.wa-manual-desc {
+  font-size: 11px;
+  color: #3a4568;
+  line-height: 1.6;
+  margin-bottom: 14px;
+}
+
+.wa-manual-field {
+  display: grid;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.wa-manual-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #5a6888;
+}
+
+/* ─── Light theme ────────────────────────────────────────────────── */
+
+body.light-theme .wa-status-card {
+  background: rgba(255, 255, 255, 0.92);
+  border-color: rgba(79, 195, 247, 0.16);
+}
+
+body.light-theme .wa-status-card--connected {
+  border-color: rgba(5, 150, 105, 0.2);
+  background: rgba(5, 150, 105, 0.04);
+}
+
+body.light-theme .wa-status-label { color: #0f1736; }
+body.light-theme .wa-status-key   { color: #8fa3c7; }
+body.light-theme .wa-status-val   { color: #1a2040; }
+body.light-theme .wa-status-desc  { color: #6b7fa8; }
+
+body.light-theme .wa-status-info {
+  background: rgba(79, 195, 247, 0.04);
+  border-color: rgba(79, 195, 247, 0.14);
+}
+
+body.light-theme .wa-manual-form {
+  background: rgba(79, 195, 247, 0.04);
+  border-color: rgba(79, 195, 247, 0.16);
+}
+
+body.light-theme .wa-manual-desc { color: #8fa3c7; }
+
+body.light-theme .wa-btn--ghost {
+  background: rgba(255, 255, 255, 0.8);
+  color: #0284c7;
+  border-color: rgba(2, 132, 199, 0.2);
+}
