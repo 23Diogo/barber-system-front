@@ -10,6 +10,7 @@ const configState = {
   isSavingHours: false,
   isSavingReactivation: false,
   isSavingBot: false,
+  isConnectingMeta: false,
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -288,7 +289,7 @@ function renderShopInfo() {
     </div>
 
     <!-- ── WhatsApp Bot ── -->
-    <div class="card" style="border-color:${botConnected ? 'rgba(0,230,118,.2)' : 'rgba(79,195,247,.12)'};">
+    <div class="card" id="cfg-whatsapp-bot-card" style="border-color:${botConnected ? 'rgba(0,230,118,.2)' : 'rgba(79,195,247,.12)'};">
       <div class="card-header">
         <div class="card-title">🤖 WhatsApp Bot</div>
         <span style="font-size:11px;font-weight:700;color:${botConnected ? '#00e676' : '#5a6888'};">
@@ -296,39 +297,88 @@ function renderShopInfo() {
         </span>
       </div>
 
-      <div class="cfg-sub" style="margin-bottom:14px;">
-        Configure aqui o número e o token da API do WhatsApp Business para enviar notificações automáticas.
-        Obtenha esses dados em
-        <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener"
-          style="color:#4fc3f7;">developers.facebook.com/apps</a>
-        → seu app → Configuração da API.
-      </div>
-
-      <div style="display:grid;gap:10px;">
-        <div>
-          <div class="color-section-label">Phone Number ID</div>
-          <input type="text" id="cfg-meta-phone-id" class="modal-input"
-            placeholder="Ex: 1118500758022349"
-            value="${escapeHtml(shop.meta_phone_id || '')}"/>
-        </div>
-        <div>
-          <div class="color-section-label">Access Token</div>
-          <input type="password" id="cfg-meta-token" class="modal-input"
-            placeholder="EAAxxxxxx..."
-            value="${escapeHtml(shop.meta_access_token || '')}"/>
-          <div style="font-size:10px;color:#3a4568;margin-top:4px;">
-            ⚠️ O token temporário expira em 24h. Para produção use um token permanente via System User.
+      ${botConnected ? `
+        <!-- ── Já conectado ── -->
+        <div style="display:flex;align-items:center;gap:10px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.15);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
+          <span style="font-size:22px;">✅</span>
+          <div>
+            <div style="font-size:12px;font-weight:700;color:#00e676;">WhatsApp Business conectado!</div>
+            <div style="font-size:10px;color:#5a6888;margin-top:2px;">Phone Number ID: ${escapeHtml(shop.meta_phone_id)}</div>
           </div>
         </div>
-      </div>
-
-      <div id="cfg-bot-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:4px;">
-        <button type="button" class="btn-primary-gradient" id="cfg-bot-save-btn" style="min-height:38px;">
-          Salvar configuração do Bot
+        <div style="display:flex;justify-content:flex-end;">
+          <button type="button" id="cfg-meta-reconnect-btn"
+            style="font-size:11px;color:#4a5880;background:none;border:none;cursor:pointer;padding:4px 0;">
+            ↺ Reconectar com outra conta
+          </button>
+        </div>
+      ` : `
+        <!-- ── Não conectado ── -->
+        <div class="cfg-sub" style="margin-bottom:16px;">
+          Conecte sua conta do WhatsApp Business para enviar notificações automáticas aos clientes.
+        </div>
+        <button type="button" id="cfg-meta-connect-btn" class="btn-meta-connect">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;">
+            <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" fill="#25D366"/>
+            <path d="M8.5 8.5c-.28 0-.5.22-.5.5v1c0 2.485 2.015 4.5 4.5 4.5h1c.28 0 .5-.22.5-.5v-1l-1.5-.5-.5 1c-.5-.25-1.25-1-1.5-1.5l1-.5L11 10l-2.5-1.5z" fill="white"/>
+          </svg>
+          Conectar com WhatsApp Business
         </button>
-      </div>
-    </div>`;
+        <div id="cfg-bot-feedback" style="min-height:18px;font-size:10px;margin:10px 0 0;color:#5a6888;text-align:center;"></div>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #1a2040;">
+          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;margin-bottom:10px;">
+            ou configure manualmente
+          </div>
+          <div style="display:grid;gap:10px;">
+            <div>
+              <div class="color-section-label">Phone Number ID</div>
+              <input type="text" id="cfg-meta-phone-id" class="modal-input"
+                placeholder="Ex: 1118500758022349"
+                value="${escapeHtml(shop.meta_phone_id || '')}"/>
+            </div>
+            <div>
+              <div class="color-section-label">Access Token</div>
+              <input type="password" id="cfg-meta-token" class="modal-input"
+                placeholder="EAAxxxxxx..."
+                value="${escapeHtml(shop.meta_access_token || '')}"/>
+              <div style="font-size:10px;color:#3a4568;margin-top:4px;">
+                ⚠️ O token temporário expira em 24h. Para produção use um token permanente via System User.
+              </div>
+            </div>
+          </div>
+          <div id="cfg-bot-manual-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
+          <div style="display:flex;justify-content:flex-end;margin-top:4px;">
+            <button type="button" class="btn-primary-gradient" id="cfg-bot-save-btn" style="min-height:38px;">
+              Salvar configuração manual
+            </button>
+          </div>
+        </div>
+      `}
+    </div>
+
+    <style>
+      .btn-meta-connect {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        width: 100%;
+        padding: 12px 20px;
+        border-radius: 12px;
+        border: none;
+        background: linear-gradient(135deg, #25D366, #128C7E);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: opacity .15s, transform .1s;
+        font-family: inherit;
+      }
+      .btn-meta-connect:hover { opacity: .9; }
+      .btn-meta-connect:active { transform: scale(.98); }
+      .btn-meta-connect:disabled { opacity: .5; cursor: not-allowed; }
+    </style>`;
 }
 
 // ─── Notificações ─────────────────────────────────────────────────────────────
@@ -613,7 +663,7 @@ async function saveWhatsAppBot() {
   const phoneId = String(document.getElementById('cfg-meta-phone-id')?.value || '').trim();
   const token   = String(document.getElementById('cfg-meta-token')?.value || '').trim();
   if (btn) btn.disabled = true;
-  setFeedback('cfg-bot-feedback', 'Salvando...', 'neutral');
+  setFeedback('cfg-bot-manual-feedback', 'Salvando...', 'neutral');
   try {
     if (!phoneId) throw new Error('Informe o Phone Number ID.');
     if (!token)   throw new Error('Informe o Access Token.');
@@ -625,16 +675,40 @@ async function saveWhatsAppBot() {
       configState.shop.meta_phone_id    = phoneId;
       configState.shop.meta_access_token = token;
     }
-    setFeedback('cfg-bot-feedback', '✓ WhatsApp Bot configurado com sucesso!', 'success');
-    // Atualiza o indicador de status sem recarregar a página toda
+    setFeedback('cfg-bot-manual-feedback', '✓ WhatsApp Bot configurado com sucesso!', 'success');
+    // Atualiza o card sem recarregar a página
     const shopInfo = document.getElementById('cfg-shop-info');
     if (shopInfo) shopInfo.innerHTML = renderShopInfo();
     bindShopInfoEvents();
   } catch (error) {
-    setFeedback('cfg-bot-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    setFeedback('cfg-bot-manual-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
   } finally {
     configState.isSavingBot = false;
     if (btn) btn.disabled = false;
+  }
+}
+
+// ─── Conectar com Meta OAuth ──────────────────────────────────────────────────
+
+async function connectWithMeta() {
+  if (configState.isConnectingMeta) return;
+  configState.isConnectingMeta = true;
+
+  const btn = document.getElementById('cfg-meta-connect-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Redirecionando...'; }
+  setFeedback('cfg-bot-feedback', 'Aguarde, conectando com a Meta...', 'neutral');
+
+  try {
+    const data = await apiFetch('/api/auth/meta/connect', { method: 'POST' });
+    if (data?.url) {
+      window.location.href = data.url;
+    } else {
+      throw new Error('URL de autorização não retornada.');
+    }
+  } catch (err) {
+    setFeedback('cfg-bot-feedback', err instanceof Error ? err.message : 'Erro ao conectar.', 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" fill="#25D366"/><path d="M8.5 8.5c-.28 0-.5.22-.5.5v1c0 2.485 2.015 4.5 4.5 4.5h1c.28 0 .5-.22.5-.5v-1l-1.5-.5-.5 1c-.5-.25-1.25-1-1.5-1.5l1-.5L11 10l-2.5-1.5z" fill="white"/></svg> Conectar com WhatsApp Business`; }
+    configState.isConnectingMeta = false;
   }
 }
 
@@ -660,11 +734,69 @@ async function saveWorkingHours() {
   }
 }
 
+// ─── Checa meta_status na URL após retorno do OAuth ──────────────────────────
+
+function checkMetaStatusFromUrl() {
+  const params = new URLSearchParams(window.location.search);
+  const status = params.get('meta_status');
+  if (!status) return;
+
+  // Remove o param da URL sem recarregar
+  const cleanUrl = window.location.pathname;
+  window.history.replaceState({}, '', cleanUrl);
+
+  // Mostra o feedback após o DOM estar pronto
+  setTimeout(() => {
+    const shopInfo = document.getElementById('cfg-shop-info');
+    if (status === 'success') {
+      if (shopInfo) {
+        // Força recarga dos dados para pegar o novo token
+        loadShopData().then(() => {
+          shopInfo.innerHTML = renderShopInfo();
+          bindShopInfoEvents();
+        });
+      }
+      // Toast de sucesso
+      showToast('✅ WhatsApp Business conectado com sucesso!', 'success');
+    } else {
+      showToast('❌ Erro ao conectar com a Meta. Tente novamente.', 'error');
+    }
+  }, 300);
+}
+
+function showToast(message, variant = 'neutral') {
+  const existing = document.getElementById('cfg-meta-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.id = 'cfg-meta-toast';
+  toast.textContent = message;
+  toast.style.cssText = `
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 12px 24px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    z-index: 9999;
+    animation: fadeInDown .3s ease;
+    background: ${variant === 'success' ? 'rgba(0,230,118,.15)' : 'rgba(255,82,82,.15)'};
+    border: 1px solid ${variant === 'success' ? 'rgba(0,230,118,.4)' : 'rgba(255,82,82,.4)'};
+    color: ${variant === 'success' ? '#00e676' : '#ff8a8a'};
+  `;
+  document.body.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
 // ─── Event binding ────────────────────────────────────────────────────────────
 
 function bindShopInfoEvents() {
   document.getElementById('cfg-whatsapp-save-btn')?.addEventListener('click', saveWhatsApp);
   document.getElementById('cfg-bot-save-btn')?.addEventListener('click', saveWhatsAppBot);
+  document.getElementById('cfg-meta-connect-btn')?.addEventListener('click', connectWithMeta);
+  document.getElementById('cfg-meta-reconnect-btn')?.addEventListener('click', connectWithMeta);
   bindInviteLinkCopy();
 }
 
@@ -792,11 +924,15 @@ export function renderConfiguracoes() {
     .cfg-toggle input:checked + .cfg-toggle-track{background:linear-gradient(90deg,#00b4ff,#6c3fff);}
     .cfg-toggle input:checked + .cfg-toggle-track::after{transform:translateX(16px);}
     input[type="time"]:disabled{opacity:.35;cursor:not-allowed;}
+    @keyframes fadeInDown{from{opacity:0;transform:translateX(-50%) translateY(-10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
   </style>
 </section>`;
 }
 
 export async function initConfiguracoesPage() {
+  // Checa retorno do OAuth antes de carregar dados
+  checkMetaStatusFromUrl();
+
   await loadShopData();
 
   const shopInfo = document.getElementById('cfg-shop-info');
