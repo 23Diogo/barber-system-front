@@ -1,290 +1,706 @@
-import {
-  apiFetch,
-} from '../services/api.js';
+import { apiFetch } from '../services/api.js';
 
-// ─── State ────────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════════════════
 
 const financeiroState = {
-  bills: [],
+  bills:        [],
   transactions: [],
-  commissions: [],
-  isLoading: false,
-  isLoaded: false,
-  modalMode: 'closed',   // closed | viewBill | editBill | createBill | createTransaction
+  commissions:  [],
+  cash:         { register: null, movements: [], summary: null },
+  activeTab:    'caixa',   // caixa | contas | transacoes
+  isLoading:    false,
+  isLoaded:     false,
+  modalMode:    'closed',
   activeEntryId: null,
-  activeSection: null,   // bills | transactions
+  activeSection: null,
+  cashDate:     new Date().toISOString().split('T')[0],
 };
 
-// ─── Helpers ──────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// PALETA & CONSTANTES
+// ══════════════════════════════════════════════════════════════════════════════
 
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
+const PAYMENT_METHODS = {
+  pix:        { label: 'Pix',          color: '#00e676', icon: '⚡' },
+  dinheiro:   { label: 'Dinheiro',     color: '#ffd700', icon: '💵' },
+  debito:     { label: 'Débito',       color: '#4fc3f7', icon: '💳' },
+  credito:    { label: 'Crédito',      color: '#9c6fff', icon: '💎' },
+  pix_cartao: { label: 'Pix+Cartão',  color: '#f97316', icon: '🔀' },
+  cortesia:   { label: 'Cortesia',     color: '#5a6888', icon: '🎁' },
+};
+
+const MOVEMENT_TYPES = {
+  income:        { label: 'Entrada',  color: '#00e676', bg: 'rgba(0,230,118,.1)',  icon: '↑', sign: +1 },
+  service:       { label: 'Serviço',  color: '#00e676', bg: 'rgba(0,230,118,.08)', icon: '✂', sign: +1 },
+  expense:       { label: 'Saída',    color: '#ff1744', bg: 'rgba(255,23,68,.1)',   icon: '↓', sign: -1 },
+  withdrawal:    { label: 'Sangria',  color: '#f97316', bg: 'rgba(249,115,22,.1)', icon: '⬇', sign: -1 },
+  reinforcement: { label: 'Reforço',  color: '#4fc3f7', bg: 'rgba(79,195,247,.1)', icon: '⬆', sign: +1 },
+};
+
+// ══════════════════════════════════════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+
+const esc = (v) =>
+  String(v ?? '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
-}
 
-function formatCurrency(value) {
-  return new Intl.NumberFormat('pt-BR', {
-    style: 'currency',
-    currency: 'BRL',
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-}
+const fmt = (v) =>
+  new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
 
-function formatCompactCurrency(value) {
-  const abs = Math.abs(Number(value || 0));
-  if (abs >= 1000) return `R$${(abs / 1000).toFixed(1)}k`;
-  return formatCurrency(abs);
-}
+const fmtCompact = (v) => {
+  const n = Math.abs(Number(v || 0));
+  return n >= 1_000_000 ? `R$${(n / 1_000_000).toFixed(1)}M`
+       : n >= 1_000     ? `R$${(n / 1_000).toFixed(1)}k`
+       : fmt(n);
+};
 
-function formatDate(value) {
-  if (!value) return '—';
-  const d = new Date(value);
-  if (isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString('pt-BR');
-}
+const fmtDate = (v) => {
+  if (!v) return '—';
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? String(v) : d.toLocaleDateString('pt-BR');
+};
 
-function setFeedback(id, message, variant = 'neutral') {
+const fmtTime = (v) => {
+  if (!v) return '—';
+  const d = new Date(v);
+  return isNaN(d.getTime()) ? String(v)
+    : d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+};
+
+const setFeedback = (id, msg, variant = 'neutral') => {
   const el = document.getElementById(id);
   if (!el) return;
-  el.textContent = message || '';
-  el.style.color =
-    variant === 'error' ? '#ff8a8a' :
-    variant === 'success' ? '#00e676' :
-    '#5a6888';
-}
+  el.textContent = msg || '';
+  el.style.color = variant === 'error' ? '#ff8a8a'
+                 : variant === 'success' ? '#00e676'
+                 : '#5a6888';
+};
 
-// ─── Métricas ─────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// SVG CHARTS
+// ══════════════════════════════════════════════════════════════════════════════
 
-function getMetrics() {
-  const revenue = financeiroState.transactions
-    .filter(t => t.type === 'income')
-    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
+function renderDonutChart(segments, size = 120, strokeWidth = 18) {
+  if (!segments.length) return '';
+  const r = (size / 2) - strokeWidth;
+  const cx = size / 2, cy = size / 2;
+  const circumference = 2 * Math.PI * r;
+  const total = segments.reduce((s, seg) => s + seg.value, 0);
+  if (!total) return '';
 
-  const expenses = financeiroState.transactions
-    .filter(t => t.type === 'expense')
-    .reduce((sum, t) => sum + Number(t.amount || 0), 0);
-
-  const commissions = financeiroState.commissions
-    .reduce((sum, c) => sum + Number(c.commission_amount || 0), 0);
-
-  const profit = revenue - expenses - commissions;
-  const margin = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
-
-  return { revenue, expenses, profit, commissions, margin };
-}
-
-function renderMetrics() {
-  const m = getMetrics();
-
-  return `
-    <div class="grid-4 finance-metrics-grid">
-      <div class="metric-card">
-        <div class="metric-label">Receita do mês</div>
-        <div class="metric-value">${escapeHtml(formatCompactCurrency(m.revenue))}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Despesas</div>
-        <div class="metric-value" style="color:#ff1744">${escapeHtml(formatCompactCurrency(m.expenses))}</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Lucro líquido</div>
-        <div class="metric-value" style="color:#00e676">${escapeHtml(formatCompactCurrency(m.profit))}</div>
-        <div class="metric-sub color-up">Margem ${escapeHtml(m.margin)}%</div>
-      </div>
-      <div class="metric-card">
-        <div class="metric-label">Comissões</div>
-        <div class="metric-value">${escapeHtml(formatCompactCurrency(m.commissions))}</div>
-      </div>
-    </div>
-  `;
-}
-
-// ─── Bills ────────────────────────────────────────────────────────────────────
-
-function getBillHighlight(bill) {
-  if (bill.status === 'paid') return { color: '#00e676', border: '#00e676' };
-  if (bill.status === 'cancelled') return { color: '#5a6888', border: '#5a6888' };
-
-  const due = new Date(bill.due_date);
-  const now = new Date();
-  const diffDays = Math.ceil((due - now) / (1000 * 60 * 60 * 24));
-
-  if (diffDays < 0) return { color: '#ff1744', border: '#ff1744' };
-  if (diffDays <= 3) return { color: '#f97316', border: '#f97316' };
-  return { color: '#4fc3f7', border: '#4fc3f7' };
-}
-
-function renderBillRow(bill) {
-  const meta = getBillHighlight(bill);
-  const duLabel = bill.due_date ? `Vence ${formatDate(bill.due_date)}` : '—';
+  let offset = 0;
+  const paths = segments.map((seg) => {
+    const frac = seg.value / total;
+    const dash = frac * circumference;
+    const gap  = circumference - dash;
+    const el = `
+      <circle
+        cx="${cx}" cy="${cy}" r="${r}"
+        fill="none"
+        stroke="${seg.color}"
+        stroke-width="${strokeWidth}"
+        stroke-dasharray="${dash.toFixed(2)} ${gap.toFixed(2)}"
+        stroke-dashoffset="${(-offset * circumference).toFixed(2)}"
+        transform="rotate(-90 ${cx} ${cy})"
+        stroke-linecap="round"
+        style="transition:stroke-dasharray .6s ease;"
+      />`;
+    offset += frac;
+    return el;
+  });
 
   return `
-    <button type="button" class="finance-row-button"
-      data-entry-id="${escapeHtml(bill.id)}"
-      data-entry-section="bills"
-      title="Ver detalhes de ${escapeHtml(bill.description)}">
-      <div class="fin-row" style="border-color:${meta.border}">
-        <div class="fin-icon">💸</div>
-        <div class="fin-info">
-          <div class="fin-title">${escapeHtml(bill.description)}</div>
-          <div class="fin-date">${escapeHtml(duLabel)}${bill.category ? ` · ${escapeHtml(bill.category)}` : ''}</div>
-        </div>
-        <div class="fin-val" style="color:${meta.color}">${escapeHtml(formatCurrency(bill.amount))}</div>
-      </div>
-    </button>
-  `;
+    <svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" style="flex-shrink:0;">
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="#1e2345" stroke-width="${strokeWidth}"/>
+      ${paths.join('')}
+    </svg>`;
 }
 
-function renderBillsSection() {
-  const pending = financeiroState.bills.filter(b => b.status !== 'cancelled');
+function renderBarChart(bars, maxVal, height = 60) {
+  if (!bars.length || !maxVal) return '';
+  const barW  = 28;
+  const gap   = 8;
+  const width = bars.length * (barW + gap) - gap + 10;
 
-  if (!pending.length) {
-    return `<div class="finance-empty">Nenhuma conta a pagar cadastrada.</div>`;
+  const rects = bars.map((b, i) => {
+    const pct = maxVal > 0 ? b.value / maxVal : 0;
+    const bh  = Math.max(pct * height, 2);
+    const x   = i * (barW + gap);
+    const y   = height - bh;
+    return `
+      <rect x="${x}" y="${y.toFixed(1)}" width="${barW}" height="${bh.toFixed(1)}"
+        rx="5" fill="${b.color}" opacity="0.85"
+        style="transition:height .5s ease,y .5s ease;"/>
+      <text x="${x + barW / 2}" y="${height + 14}" text-anchor="middle"
+        fill="#5a6888" font-size="9" font-family="inherit">${esc(b.label)}</text>`;
+  });
+
+  return `
+    <svg width="${width}" height="${height + 20}" viewBox="0 0 ${width} ${height + 20}" style="overflow:visible;">
+      ${rects.join('')}
+    </svg>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// CAIXA — RENDER
+// ══════════════════════════════════════════════════════════════════════════════
+
+function renderCashHero() {
+  const { register, summary, movements } = financeiroState.cash;
+
+  // ── Status badge ──────────────────────────────────────────────────────────
+  const isOpen   = register?.status === 'open';
+  const isClosed = register?.status === 'closed';
+  const noRegister = !register;
+
+  const statusColor = isOpen ? '#00e676' : isClosed ? '#5a6888' : '#f97316';
+  const statusLabel = isOpen ? '● Aberto' : isClosed ? '■ Fechado' : '○ Não iniciado';
+  const statusBg    = isOpen ? 'rgba(0,230,118,.08)' : isClosed ? 'rgba(90,104,136,.1)' : 'rgba(249,115,22,.08)';
+
+  const balance = summary?.expectedBalance ?? 0;
+  const totalIn = (summary?.totalIncome ?? 0) + (summary?.totalReinforcement ?? 0);
+  const totalOut = (summary?.totalExpense ?? 0) + (summary?.totalWithdrawal ?? 0);
+
+  // ── Donut: breakdown por método de pagamento ───────────────────────────────
+  const byMethod = summary?.byMethod || {};
+  const methodSegments = Object.entries(byMethod)
+    .filter(([, v]) => v > 0)
+    .map(([key, value]) => ({
+      label: PAYMENT_METHODS[key]?.label || key,
+      value,
+      color: PAYMENT_METHODS[key]?.color || '#4fc3f7',
+    }))
+    .sort((a, b) => b.value - a.value);
+
+  const donut = renderDonutChart(methodSegments, 110, 16);
+
+  // ── Bar: movimentações por tipo ───────────────────────────────────────────
+  const typeAgg = { income: 0, expense: 0, withdrawal: 0, reinforcement: 0 };
+  for (const m of movements) {
+    if (m.type in typeAgg) typeAgg[m.type] += Number(m.amount || 0);
   }
-
-  return pending.map(renderBillRow).join('');
-}
-
-// ─── Transactions ─────────────────────────────────────────────────────────────
-
-function renderTransactionRow(t) {
-  const isIncome = t.type === 'income';
-  const color = isIncome ? '#00e676' : '#ff1744';
-  const prefix = isIncome ? '+' : '-';
+  const barMax = Math.max(...Object.values(typeAgg), 1);
+  const bars = [
+    { label: 'Entrada', value: typeAgg.income,        color: '#00e676' },
+    { label: 'Saída',   value: typeAgg.expense,       color: '#ff1744' },
+    { label: 'Sangria', value: typeAgg.withdrawal,    color: '#f97316' },
+    { label: 'Reforço', value: typeAgg.reinforcement, color: '#4fc3f7' },
+  ];
+  const barChart = renderBarChart(bars, barMax, 64);
 
   return `
-    <button type="button" class="finance-row-button"
-      data-entry-id="${escapeHtml(t.id)}"
-      data-entry-section="transactions"
-      title="Ver detalhes">
-      <div class="fin-row" style="border-color:${color}">
-        <div class="fin-icon">${isIncome ? '💇' : '🧴'}</div>
-        <div class="fin-info">
-          <div class="fin-title">${escapeHtml(t.description)}</div>
-          <div class="fin-date">${escapeHtml(formatDate(t.transaction_date))}${t.payment_method ? ` · ${escapeHtml(t.payment_method)}` : ''}</div>
+    <!-- ─── Hero card: status + saldo ──────────────────────────────────────── -->
+    <div class="cash-hero" style="
+      position:relative;overflow:hidden;
+      background:linear-gradient(135deg,#08091a 0%,#0d1030 60%,#0a1528 100%);
+      border:1px solid #1e2345;border-radius:20px;padding:24px;margin-bottom:16px;
+    ">
+      <!-- glow -->
+      <div style="
+        position:absolute;top:-40px;right:-40px;width:200px;height:200px;
+        background:radial-gradient(circle,${statusColor}22 0%,transparent 70%);
+        pointer-events:none;
+      "></div>
+
+      <!-- Header row -->
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+        <div>
+          <div style="font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:#3a4568;margin-bottom:6px;">
+            CAIXA DO DIA
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+            <div style="
+              font-size:11px;font-weight:700;padding:5px 12px;border-radius:999px;
+              background:${statusBg};color:${statusColor};border:1px solid ${statusColor}44;
+            ">${statusLabel}</div>
+            ${register ? `
+              <div style="font-size:10px;color:#5a6888;">
+                ${isOpen ? `Aberto às ${fmtTime(register.opened_at)}` : `Fechado às ${fmtTime(register.closed_at)}`}
+              </div>` : ''}
+          </div>
         </div>
-        <div class="fin-val" style="color:${color}">${prefix}${escapeHtml(formatCurrency(t.amount))}</div>
-      </div>
-    </button>
-  `;
-}
 
-function renderTransactionsSection() {
-  const recent = [...financeiroState.transactions].slice(0, 20);
-
-  if (!recent.length) {
-    return `<div class="finance-empty">Nenhuma transação registrada.</div>`;
-  }
-
-  return recent.map(renderTransactionRow).join('');
-}
-
-// ─── Modal ────────────────────────────────────────────────────────────────────
-
-function renderBillDetails(bill) {
-  const meta = getBillHighlight(bill);
-
-  return `
-    <div class="finance-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">${escapeHtml(bill.description)}</div>
-        <div class="modal-sub" style="margin-top:4px;">Conta a pagar</div>
-      </div>
-
-      <div class="finance-modal-grid">
-        <div class="mini-card">
-          <div class="mini-lbl">Valor</div>
-          <div class="mini-val" style="color:${meta.color}">${escapeHtml(formatCurrency(bill.amount))}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Status</div>
-          <div class="mini-val" style="font-size:15px;color:${meta.color}">${escapeHtml(bill.status || '—')}</div>
+        <!-- Date picker -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <input type="date" id="cash-date-picker" value="${financeiroState.cashDate}"
+            style="background:#0a0c1a;border:1px solid #1e2345;border-radius:10px;
+                   padding:7px 10px;color:#e8f0fe;font:inherit;font-size:11px;"/>
+          <button type="button" id="cash-load-date-btn"
+            style="padding:7px 14px;border-radius:10px;border:1px solid #1e2345;
+                   background:#0f1428;color:#c0cce8;font:inherit;font-size:11px;
+                   font-weight:700;cursor:pointer;">Carregar</button>
         </div>
       </div>
 
-      <div class="finance-modal-info">
-        <div class="finance-modal-info-row"><strong>Vencimento:</strong> ${escapeHtml(formatDate(bill.due_date))}</div>
-        <div class="finance-modal-info-row"><strong>Categoria:</strong> ${escapeHtml(bill.category || '—')}</div>
-        <div class="finance-modal-info-row"><strong>Fornecedor:</strong> ${escapeHtml(bill.supplier || '—')}</div>
-        <div class="finance-modal-info-row"><strong>Observações:</strong> ${escapeHtml(bill.notes || '—')}</div>
+      <!-- Saldo principal -->
+      <div style="margin-bottom:20px;">
+        <div style="font-size:11px;color:#5a6888;margin-bottom:6px;font-weight:600;">
+          ${isClosed ? 'Saldo de fechamento' : 'Saldo atual (projetado)'}
+        </div>
+        <div style="
+          font-size:clamp(28px,5vw,44px);font-weight:900;
+          font-family:'Orbitron',monospace;
+          color:${balance >= 0 ? '#00e676' : '#ff1744'};
+          letter-spacing:-.02em;line-height:1;
+        ">
+          ${fmt(isClosed ? register.closing_balance : balance)}
+        </div>
+        ${isClosed && register.difference !== null ? `
+          <div style="font-size:11px;margin-top:6px;color:${Math.abs(register.difference) < 1 ? '#00e676' : '#f97316'};">
+            Diferença: ${fmt(register.difference)}
+          </div>` : ''}
       </div>
 
-      <div id="finance-modal-feedback" class="finance-form-feedback"></div>
+      <!-- Mini métricas -->
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:20px;">
+        ${[
+          { label: 'Abertura',  value: summary?.openingBalance ?? 0, color: '#c0cce8' },
+          { label: 'Entradas',  value: totalIn,                       color: '#00e676' },
+          { label: 'Saídas',    value: totalOut,                      color: '#ff1744' },
+          { label: 'Movimentos',value: movements.length,              color: '#4fc3f7', isCount: true },
+        ].map(m => `
+          <div style="
+            background:rgba(255,255,255,.03);border:1px solid #1e2345;
+            border-radius:12px;padding:12px;text-align:center;
+          ">
+            <div style="font-size:9px;color:#5a6888;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">
+              ${m.label}
+            </div>
+            <div style="font-size:${m.isCount ? '22px' : '14px'};font-weight:800;color:${m.color};
+                        ${!m.isCount ? 'font-family:\'Orbitron\',monospace;' : ''}">
+              ${m.isCount ? m.value : fmtCompact(m.value)}
+            </div>
+          </div>
+        `).join('')}
+      </div>
 
-      <div class="modal-buttons" style="margin-top:10px;">
-        <button type="button" class="btn-cancel" id="finance-modal-close">Fechar</button>
-        ${bill.status !== 'paid' && bill.status !== 'cancelled' ? `
-          <button type="button" class="btn-save" id="finance-pay-bill-btn" data-bill-id="${escapeHtml(bill.id)}">
-            Marcar como paga
+      <!-- Charts row -->
+      <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;">
+
+        <!-- Donut: por método de pagamento -->
+        ${methodSegments.length ? `
+          <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:200px;">
+            <div style="position:relative;">
+              ${donut}
+              <div style="
+                position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+                text-align:center;pointer-events:none;
+              ">
+                <div style="font-size:9px;color:#5a6888;line-height:1.2;">métodos</div>
+              </div>
+            </div>
+            <div style="display:grid;gap:5px;flex:1;">
+              ${methodSegments.slice(0, 4).map(s => `
+                <div style="display:flex;align-items:center;gap:7px;">
+                  <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
+                  <div style="font-size:10px;color:#c0cce8;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                    ${esc(s.label)}
+                  </div>
+                  <div style="font-size:10px;color:${s.color};font-weight:700;white-space:nowrap;">
+                    ${fmtCompact(s.value)}
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+          </div>
+        ` : `
+          <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:80px;">
+            <span style="font-size:11px;color:#3a4568;">Nenhuma movimentação registrada</span>
+          </div>
+        `}
+
+        <!-- Bar: por tipo -->
+        ${barChart ? `
+          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+            <div style="font-size:9px;color:#5a6888;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">
+              por tipo
+            </div>
+            ${barChart}
+          </div>
+        ` : ''}
+      </div>
+
+      <!-- Ações do caixa -->
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid #1e2345;">
+        ${noRegister ? `
+          <button type="button" id="cash-open-btn"
+            class="cash-action-btn cash-action-btn--primary">
+            🔓 Abrir caixa
+          </button>
+        ` : ''}
+        ${isOpen ? `
+          <button type="button" id="cash-withdrawal-btn"
+            class="cash-action-btn cash-action-btn--warning">
+            ⬇ Sangria
+          </button>
+          <button type="button" id="cash-reinforcement-btn"
+            class="cash-action-btn cash-action-btn--info">
+            ⬆ Reforço
+          </button>
+          <button type="button" id="cash-income-btn"
+            class="cash-action-btn cash-action-btn--success">
+            + Entrada
+          </button>
+          <button type="button" id="cash-expense-btn"
+            class="cash-action-btn cash-action-btn--danger">
+            − Saída
+          </button>
+          <div style="flex:1;"></div>
+          <button type="button" id="cash-close-btn"
+            class="cash-action-btn cash-action-btn--close">
+            🔒 Fechar caixa
           </button>
         ` : ''}
       </div>
     </div>
+
+    <!-- ─── Lista de movimentações ──────────────────────────────────────────── -->
+    ${renderMovementsList()}
   `;
+}
+
+function renderMovementsList() {
+  const { movements } = financeiroState.cash;
+
+  const header = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px;">
+      <div style="font-size:13px;font-weight:700;color:#e8f0fe;">
+        Movimentações
+        <span style="font-size:10px;color:#5a6888;margin-left:6px;">(${movements.length})</span>
+      </div>
+    </div>
+  `;
+
+  if (!movements.length) {
+    return `
+      <div class="card" style="text-align:center;padding:28px 16px;">
+        ${header}
+        <div style="font-size:32px;margin-bottom:8px;">📭</div>
+        <div style="color:#5a6888;font-size:12px;">Nenhuma movimentação registrada.</div>
+      </div>`;
+  }
+
+  const rows = movements.map((m) => {
+    const meta = MOVEMENT_TYPES[m.type] || MOVEMENT_TYPES.income;
+    const pmeta = m.payment_method ? (PAYMENT_METHODS[m.payment_method] || {}) : {};
+    const isPositive = meta.sign > 0;
+
+    return `
+      <div style="
+        display:flex;align-items:center;gap:12px;
+        padding:12px 14px;border-radius:12px;margin-bottom:6px;
+        background:rgba(255,255,255,.02);border:1px solid #1a2040;
+        transition:background .15s;
+      " onmouseover="this.style.background='rgba(79,195,247,.04)'"
+         onmouseout="this.style.background='rgba(255,255,255,.02)'">
+
+        <!-- Ícone do tipo -->
+        <div style="
+          width:36px;height:36px;border-radius:10px;flex-shrink:0;
+          background:${meta.bg};border:1px solid ${meta.color}33;
+          display:flex;align-items:center;justify-content:center;
+          font-size:14px;
+        ">${meta.icon}</div>
+
+        <!-- Info -->
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:12px;font-weight:700;color:#e8f0fe;
+                      white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+            ${esc(m.description)}
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:3px;flex-wrap:wrap;">
+            <span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:999px;
+                         background:${meta.bg};color:${meta.color};">
+              ${meta.label}
+            </span>
+            ${pmeta.label ? `
+              <span style="font-size:9px;color:#5a6888;">
+                ${pmeta.icon || ''} ${esc(pmeta.label)}
+              </span>` : ''}
+            <span style="font-size:9px;color:#3a4568;">${fmtTime(m.created_at)}</span>
+          </div>
+        </div>
+
+        <!-- Valor -->
+        <div style="
+          font-family:'Orbitron',monospace;font-size:14px;font-weight:800;
+          color:${isPositive ? '#00e676' : '#ff5c74'};
+          white-space:nowrap;flex-shrink:0;
+        ">
+          ${isPositive ? '+' : '−'}${fmt(m.amount)}
+        </div>
+      </div>
+    `;
+  });
+
+  return `
+    <div class="card" style="padding:16px;">
+      ${header}
+      ${rows.join('')}
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// FINANCEIRO — MÉTRICAS GERAIS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function getMetrics() {
+  const revenue    = financeiroState.transactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const expenses   = financeiroState.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+  const commissions = financeiroState.commissions.reduce((s, c) => s + Number(c.commission_amount || 0), 0);
+  const profit  = revenue - expenses - commissions;
+  const margin  = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
+  return { revenue, expenses, profit, commissions, margin };
+}
+
+function renderMetricsBar() {
+  const m = getMetrics();
+
+  const cards = [
+    { label: 'Receita do mês',  value: m.revenue,     color: '#4fc3f7', sub: null },
+    { label: 'Despesas',        value: m.expenses,    color: '#ff1744', sub: null },
+    { label: 'Lucro líquido',   value: m.profit,      color: '#00e676', sub: `Margem ${m.margin}%` },
+    { label: 'Comissões',       value: m.commissions, color: '#ffd700', sub: null },
+  ];
+
+  // Mini bar chart de receita vs despesa
+  const maxM = Math.max(m.revenue, m.expenses, 1);
+  const revW  = Math.round((m.revenue  / maxM) * 100);
+  const expW  = Math.round((m.expenses / maxM) * 100);
+
+  return `
+    <div style="
+      background:linear-gradient(135deg,#08091a,#0d1030);
+      border:1px solid #1e2345;border-radius:20px;padding:20px;margin-bottom:16px;
+    ">
+      <div style="font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:#3a4568;margin-bottom:16px;">
+        VISÃO DO MÊS — ${new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
+        ${cards.map(c => `
+          <div style="
+            background:rgba(255,255,255,.03);border:1px solid #1e2345;
+            border-radius:14px;padding:14px;position:relative;overflow:hidden;
+          ">
+            <div style="
+              position:absolute;top:0;left:0;right:0;height:2px;
+              background:${c.color};opacity:.6;border-radius:14px 14px 0 0;
+            "></div>
+            <div style="font-size:9px;color:#5a6888;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">
+              ${c.label}
+            </div>
+            <div style="font-size:20px;font-weight:900;color:${c.color};font-family:'Orbitron',monospace;line-height:1;">
+              ${fmtCompact(c.value)}
+            </div>
+            ${c.sub ? `<div style="font-size:10px;color:${c.color};margin-top:4px;font-weight:600;">${esc(c.sub)}</div>` : ''}
+          </div>
+        `).join('')}
+      </div>
+
+      <!-- Barra comparativa receita vs despesa -->
+      <div style="display:grid;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="font-size:10px;color:#5a6888;width:60px;text-align:right;">Receita</div>
+          <div style="flex:1;height:8px;background:#1e2345;border-radius:999px;overflow:hidden;">
+            <div style="height:100%;width:${revW}%;background:linear-gradient(90deg,#4fc3f7,#00e676);border-radius:999px;transition:width .8s ease;"></div>
+          </div>
+          <div style="font-size:10px;color:#4fc3f7;width:60px;">${fmtCompact(m.revenue)}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="font-size:10px;color:#5a6888;width:60px;text-align:right;">Despesas</div>
+          <div style="flex:1;height:8px;background:#1e2345;border-radius:999px;overflow:hidden;">
+            <div style="height:100%;width:${expW}%;background:linear-gradient(90deg,#ff1744,#f97316);border-radius:999px;transition:width .8s ease;"></div>
+          </div>
+          <div style="font-size:10px;color:#ff1744;width:60px;">${fmtCompact(m.expenses)}</div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// BILLS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function getBillMeta(bill) {
+  if (bill.status === 'paid')      return { color: '#00e676', border: '#00e676', label: 'Pago' };
+  if (bill.status === 'cancelled') return { color: '#5a6888', border: '#5a6888', label: 'Cancelado' };
+  const due  = new Date(bill.due_date);
+  const diff = Math.ceil((due - new Date()) / 86400000);
+  if (diff < 0)  return { color: '#ff1744', border: '#ff1744', label: 'Vencido' };
+  if (diff <= 3) return { color: '#f97316', border: '#f97316', label: `Vence em ${diff}d` };
+  return { color: '#4fc3f7', border: '#4fc3f7', label: fmtDate(bill.due_date) };
+}
+
+function renderBillRow(bill) {
+  const meta = getBillMeta(bill);
+  return `
+    <button type="button" class="finance-row-button"
+      data-entry-id="${esc(bill.id)}" data-entry-section="bills">
+      <div class="fin-row" style="border-left:3px solid ${meta.border};">
+        <div style="
+          width:36px;height:36px;border-radius:10px;flex-shrink:0;
+          background:rgba(255,23,68,.08);border:1px solid rgba(255,23,68,.2);
+          display:flex;align-items:center;justify-content:center;font-size:16px;
+        ">💸</div>
+        <div class="fin-info">
+          <div class="fin-title">${esc(bill.description)}</div>
+          <div class="fin-date">
+            ${esc(meta.label)}
+            ${bill.category ? ` · ${esc(bill.category)}` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-family:'Orbitron',monospace;font-size:15px;font-weight:800;color:${meta.color};">
+            ${fmt(bill.amount)}
+          </div>
+        </div>
+      </div>
+    </button>`;
+}
+
+function renderBillsSection() {
+  const pending = financeiroState.bills.filter(b => b.status !== 'cancelled');
+  if (!pending.length) return `<div class="finance-empty">Nenhuma conta a pagar cadastrada.</div>`;
+  return pending.map(renderBillRow).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// TRANSACTIONS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function renderTransactionRow(t) {
+  const isIncome = t.type === 'income';
+  const color    = isIncome ? '#00e676' : '#ff1744';
+  const pm       = PAYMENT_METHODS[t.payment_method];
+  return `
+    <button type="button" class="finance-row-button"
+      data-entry-id="${esc(t.id)}" data-entry-section="transactions">
+      <div class="fin-row" style="border-left:3px solid ${color};">
+        <div style="
+          width:36px;height:36px;border-radius:10px;flex-shrink:0;
+          background:${isIncome ? 'rgba(0,230,118,.08)' : 'rgba(255,23,68,.08)'};
+          border:1px solid ${color}33;
+          display:flex;align-items:center;justify-content:center;font-size:16px;
+        ">${isIncome ? (pm?.icon || '💇') : '🧴'}</div>
+        <div class="fin-info">
+          <div class="fin-title">${esc(t.description)}</div>
+          <div class="fin-date">
+            ${esc(fmtDate(t.transaction_date))}
+            ${pm ? ` · ${esc(pm.label)}` : ''}
+          </div>
+        </div>
+        <div style="text-align:right;flex-shrink:0;">
+          <div style="font-family:'Orbitron',monospace;font-size:15px;font-weight:800;color:${color};">
+            ${isIncome ? '+' : '−'}${fmt(t.amount)}
+          </div>
+        </div>
+      </div>
+    </button>`;
+}
+
+function renderTransactionsSection() {
+  const recent = [...financeiroState.transactions].slice(0, 25);
+  if (!recent.length) return `<div class="finance-empty">Nenhuma transação registrada.</div>`;
+  return recent.map(renderTransactionRow).join('');
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODALS
+// ══════════════════════════════════════════════════════════════════════════════
+
+function renderBillDetails(bill) {
+  const meta = getBillMeta(bill);
+  return `
+    <div class="finance-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">${esc(bill.description)}</div>
+        <div class="modal-sub" style="margin-top:4px;">Conta a pagar</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="mini-card">
+          <div class="mini-lbl">Valor</div>
+          <div class="mini-val" style="color:${meta.color};font-family:'Orbitron',monospace;">${fmt(bill.amount)}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Status</div>
+          <div class="mini-val" style="font-size:14px;color:${meta.color};">${esc(meta.label)}</div>
+        </div>
+      </div>
+      <div style="display:grid;gap:8px;">
+        ${[
+          ['Vencimento', fmtDate(bill.due_date)],
+          ['Categoria',  bill.category || '—'],
+          ['Fornecedor', bill.supplier  || '—'],
+          ['Observações',bill.notes     || '—'],
+        ].map(([k,v]) => `
+          <div style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;color:#c0cce8;font-size:11px;">
+            <strong>${esc(k)}:</strong> ${esc(v)}
+          </div>`).join('')}
+      </div>
+      <div id="finance-modal-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
+      <div class="modal-buttons" style="margin-top:10px;">
+        <button type="button" class="btn-cancel" id="finance-modal-close">Fechar</button>
+        ${bill.status !== 'paid' && bill.status !== 'cancelled' ? `
+          <button type="button" class="btn-save" id="finance-pay-bill-btn" data-bill-id="${esc(bill.id)}">
+            ✓ Marcar como paga
+          </button>` : ''}
+      </div>
+    </div>`;
 }
 
 function renderBillForm() {
   return `
     <div class="finance-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">Nova conta a pagar</div>
-        <div class="modal-sub" style="margin-top:4px;">Preencha os dados da conta.</div>
-      </div>
-
+      <div class="modal-title" style="margin:0;">Nova conta a pagar</div>
       <form id="finance-bill-form" class="finance-form">
-        <div class="finance-form-grid">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+          <div style="grid-column:1/-1;">
+            <div class="color-section-label">Descrição *</div>
+            <input class="modal-input" name="description" type="text" placeholder="Ex: Aluguel"/>
+          </div>
           <div>
-            <div class="color-section-label">Descrição</div>
-            <input class="modal-input" name="description" type="text" placeholder="Ex: Aluguel" />
+            <div class="color-section-label">Valor (R$) *</div>
+            <input class="modal-input" name="amount" type="number" min="0" step="0.01" placeholder="0,00"/>
+          </div>
+          <div>
+            <div class="color-section-label">Vencimento *</div>
+            <input class="modal-input" name="due_date" type="date"/>
           </div>
           <div>
             <div class="color-section-label">Categoria</div>
-            <input class="modal-input" name="category" type="text" placeholder="Ex: Aluguel, Energia..." />
-          </div>
-          <div>
-            <div class="color-section-label">Valor (R$)</div>
-            <input class="modal-input" name="amount" type="number" min="0" step="0.01" placeholder="0,00" />
-          </div>
-          <div>
-            <div class="color-section-label">Vencimento</div>
-            <input class="modal-input" name="due_date" type="date" />
+            <input class="modal-input" name="category" type="text" placeholder="Ex: Aluguel, Energia"/>
           </div>
           <div>
             <div class="color-section-label">Fornecedor</div>
-            <input class="modal-input" name="supplier" type="text" placeholder="Nome do fornecedor" />
+            <input class="modal-input" name="supplier" type="text" placeholder="Nome do fornecedor"/>
           </div>
         </div>
-
         <div>
           <div class="color-section-label">Observações</div>
-          <textarea class="modal-input finance-textarea" name="notes" placeholder="Observações"></textarea>
+          <textarea class="modal-input" name="notes" rows="3" style="resize:vertical;" placeholder="Observações"></textarea>
         </div>
-
-        <div id="finance-form-feedback" class="finance-form-feedback"></div>
-
+        <div id="finance-form-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
         <div class="modal-buttons" style="margin-top:10px;">
           <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
           <button type="submit" class="btn-save">Salvar conta</button>
         </div>
       </form>
-    </div>
-  `;
+    </div>`;
 }
 
 function renderTransactionForm() {
   return `
     <div class="finance-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">Nova transação</div>
-        <div class="modal-sub" style="margin-top:4px;">Registre uma entrada ou saída financeira.</div>
-      </div>
-
+      <div class="modal-title" style="margin:0;">Nova transação</div>
       <form id="finance-transaction-form" class="finance-form">
-        <div class="finance-form-grid">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div>
             <div class="color-section-label">Tipo</div>
             <select class="modal-input" name="type">
@@ -293,63 +709,177 @@ function renderTransactionForm() {
             </select>
           </div>
           <div>
-            <div class="color-section-label">Descrição</div>
-            <input class="modal-input" name="description" type="text" placeholder="Ex: Corte — Rafael" />
-          </div>
-          <div>
-            <div class="color-section-label">Categoria</div>
-            <input class="modal-input" name="category" type="text" placeholder="Ex: Serviço, Produto..." />
-          </div>
-          <div>
-            <div class="color-section-label">Valor (R$)</div>
-            <input class="modal-input" name="amount" type="number" min="0" step="0.01" placeholder="0,00" />
-          </div>
-          <div>
             <div class="color-section-label">Forma de pagamento</div>
             <select class="modal-input" name="payment_method">
-              <option value="pix">Pix</option>
-              <option value="cash">Dinheiro</option>
-              <option value="credit_card">Cartão de crédito</option>
-              <option value="debit_card">Cartão de débito</option>
+              ${Object.entries(PAYMENT_METHODS).map(([k,v]) =>
+                `<option value="${esc(k)}">${esc(v.icon)} ${esc(v.label)}</option>`).join('')}
             </select>
+          </div>
+          <div style="grid-column:1/-1;">
+            <div class="color-section-label">Descrição *</div>
+            <input class="modal-input" name="description" type="text" placeholder="Ex: Corte — Rafael"/>
+          </div>
+          <div>
+            <div class="color-section-label">Valor (R$) *</div>
+            <input class="modal-input" name="amount" type="number" min="0" step="0.01" placeholder="0,00"/>
           </div>
           <div>
             <div class="color-section-label">Data</div>
-            <input class="modal-input" name="transaction_date" type="date" value="${new Date().toISOString().split('T')[0]}" />
+            <input class="modal-input" name="transaction_date" type="date" value="${new Date().toISOString().split('T')[0]}"/>
+          </div>
+          <div>
+            <div class="color-section-label">Categoria</div>
+            <input class="modal-input" name="category" type="text" placeholder="Ex: Serviço, Produto"/>
           </div>
         </div>
-
-        <div>
-          <div class="color-section-label">Observações</div>
-          <textarea class="modal-input finance-textarea" name="notes" placeholder="Observações"></textarea>
-        </div>
-
-        <div id="finance-form-feedback" class="finance-form-feedback"></div>
-
+        <div id="finance-form-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
         <div class="modal-buttons" style="margin-top:10px;">
           <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
           <button type="submit" class="btn-save">Salvar transação</button>
         </div>
       </form>
-    </div>
-  `;
+    </div>`;
 }
 
-// ─── Modal control ────────────────────────────────────────────────────────────
+// ── Modal: abrir caixa ─────────────────────────────────────────────────────────
+function renderOpenCashForm() {
+  return `
+    <div class="finance-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">🔓 Abrir Caixa</div>
+        <div class="modal-sub" style="margin-top:4px;">Informe o troco / fundo de caixa inicial.</div>
+      </div>
+      <form id="cash-open-form" class="finance-form">
+        <div>
+          <div class="color-section-label">Saldo inicial (R$)</div>
+          <input class="modal-input" name="opening_balance" type="number" min="0" step="0.01"
+            placeholder="0,00" value="0"/>
+        </div>
+        <div>
+          <div class="color-section-label">Observações</div>
+          <textarea class="modal-input" name="notes" rows="2" style="resize:vertical;"
+            placeholder="Ex: Troco do dia anterior"></textarea>
+        </div>
+        <div id="cash-open-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" style="background:linear-gradient(135deg,#00e676,#00b4ff);color:#000;">
+            🔓 Abrir caixa
+          </button>
+        </div>
+      </form>
+    </div>`;
+}
+
+// ── Modal: fechar caixa ────────────────────────────────────────────────────────
+function renderCloseCashForm() {
+  const { summary } = financeiroState.cash;
+  const expected = summary?.expectedBalance ?? 0;
+  return `
+    <div class="finance-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">🔒 Fechar Caixa</div>
+        <div class="modal-sub" style="margin-top:4px;">Confirme o valor físico em caixa.</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:4px;">
+        <div class="mini-card">
+          <div class="mini-lbl">Saldo projetado</div>
+          <div class="mini-val" style="font-family:'Orbitron',monospace;font-size:16px;color:#4fc3f7;">${fmt(expected)}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Diferença</div>
+          <div class="mini-val" style="font-size:16px;color:#5a6888;" id="cash-close-diff">R$ 0,00</div>
+        </div>
+      </div>
+      <form id="cash-close-form" class="finance-form">
+        <div>
+          <div class="color-section-label">Valor físico em caixa (R$)</div>
+          <input class="modal-input" name="closing_balance" type="number" min="0" step="0.01"
+            placeholder="${expected.toFixed(2)}" value="${expected.toFixed(2)}"
+            data-expected="${expected}"/>
+        </div>
+        <div>
+          <div class="color-section-label">Observações</div>
+          <textarea class="modal-input" name="notes" rows="2" style="resize:vertical;"
+            placeholder="Observações do fechamento"></textarea>
+        </div>
+        <div id="cash-close-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" style="background:linear-gradient(135deg,#5a6888,#3a4568);color:#fff;">
+            🔒 Confirmar fechamento
+          </button>
+        </div>
+      </form>
+    </div>`;
+}
+
+// ── Modal: movimentação manual (sangria/reforço/entrada/saída) ─────────────────
+function renderMovementForm(type) {
+  const meta = MOVEMENT_TYPES[type];
+  const labels = {
+    withdrawal:    { title: '⬇ Sangria', desc: 'Retirada de dinheiro do caixa.', pm: false },
+    reinforcement: { title: '⬆ Reforço', desc: 'Depósito de dinheiro no caixa.', pm: false },
+    income:        { title: '+ Entrada manual', desc: 'Entrada avulsa não vinculada a serviço.', pm: true },
+    expense:       { title: '− Saída manual', desc: 'Saída avulsa (compra, despesa rápida etc.).', pm: true },
+  };
+  const lbl = labels[type];
+
+  return `
+    <div class="finance-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;color:${meta.color};">${lbl.title}</div>
+        <div class="modal-sub" style="margin-top:4px;">${lbl.desc}</div>
+      </div>
+      <form id="cash-movement-form" class="finance-form" data-type="${type}">
+        <div>
+          <div class="color-section-label">Descrição *</div>
+          <input class="modal-input" name="description" type="text"
+            placeholder="Ex: ${type === 'withdrawal' ? 'Retirada do responsável' : type === 'reinforcement' ? 'Troco adicional' : 'Venda avulsa'}"/>
+        </div>
+        <div>
+          <div class="color-section-label">Valor (R$) *</div>
+          <input class="modal-input" name="amount" type="number" min="0.01" step="0.01" placeholder="0,00"/>
+        </div>
+        ${lbl.pm ? `
+          <div>
+            <div class="color-section-label">Forma de pagamento</div>
+            <select class="modal-input" name="payment_method">
+              ${Object.entries(PAYMENT_METHODS).map(([k,v]) =>
+                `<option value="${esc(k)}">${esc(v.icon)} ${esc(v.label)}</option>`).join('')}
+            </select>
+          </div>` : ''}
+        <div>
+          <div class="color-section-label">Observações</div>
+          <textarea class="modal-input" name="notes" rows="2" style="resize:vertical;" placeholder="Opcional"></textarea>
+        </div>
+        <div id="cash-movement-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" style="background:${meta.color};color:#000;font-weight:800;">
+            Confirmar
+          </button>
+        </div>
+      </form>
+    </div>`;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// MODAL CONTROL
+// ══════════════════════════════════════════════════════════════════════════════
 
 function openModal(mode, section = null, entryId = null) {
-  financeiroState.modalMode = mode;
+  financeiroState.modalMode    = mode;
   financeiroState.activeSection = section;
   financeiroState.activeEntryId = entryId;
   renderFinanceModal();
 }
 
 function closeFinanceModal() {
-  const modal = document.getElementById('finance-details-modal');
+  const modal   = document.getElementById('finance-details-modal');
   const content = document.getElementById('finance-details-content');
   if (!modal) return;
-
-  financeiroState.modalMode = 'closed';
+  financeiroState.modalMode     = 'closed';
   financeiroState.activeSection = null;
   financeiroState.activeEntryId = null;
   modal.classList.remove('open');
@@ -358,56 +888,56 @@ function closeFinanceModal() {
 }
 
 function renderFinanceModal() {
-  const modal = document.getElementById('finance-details-modal');
+  const modal   = document.getElementById('finance-details-modal');
   const content = document.getElementById('finance-details-content');
   if (!modal || !content) return;
 
-  if (financeiroState.modalMode === 'closed') {
-    modal.style.display = 'none';
-    modal.classList.remove('open');
-    content.innerHTML = '';
-    return;
-  }
+  const mode = financeiroState.modalMode;
+  if (mode === 'closed') { closeFinanceModal(); return; }
 
-  if (financeiroState.modalMode === 'viewBill') {
+  if (mode === 'viewBill') {
     const bill = financeiroState.bills.find(b => b.id === financeiroState.activeEntryId);
     if (!bill) { closeFinanceModal(); return; }
     content.innerHTML = renderBillDetails(bill);
   }
-
-  if (financeiroState.modalMode === 'createBill') {
-    content.innerHTML = renderBillForm();
-  }
-
-  if (financeiroState.modalMode === 'createTransaction') {
-    content.innerHTML = renderTransactionForm();
-  }
+  else if (mode === 'createBill')        content.innerHTML = renderBillForm();
+  else if (mode === 'createTransaction') content.innerHTML = renderTransactionForm();
+  else if (mode === 'openCash')          content.innerHTML = renderOpenCashForm();
+  else if (mode === 'closeCash')         content.innerHTML = renderCloseCashForm();
+  else if (['withdrawal','reinforcement','income','expense'].includes(mode))
+    content.innerHTML = renderMovementForm(mode);
 
   modal.style.display = 'flex';
   modal.classList.add('open');
   bindModalEvents();
 }
 
-// ─── API calls ────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// API CALLS
+// ══════════════════════════════════════════════════════════════════════════════
 
 async function loadFinanceiroData() {
   financeiroState.isLoading = true;
   rerenderFinanceiro();
 
   try {
-    const now = new Date();
+    const now   = new Date();
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+    const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-    const [bills, transactions, commissions] = await Promise.all([
+    const [bills, transactions, commissions, cashData] = await Promise.all([
       apiFetch('/api/financial/bills'),
       apiFetch(`/api/financial/transactions?start=${start}&end=${end}`),
       apiFetch('/api/financial/commissions'),
+      apiFetch(`/api/financial/cash?date=${financeiroState.cashDate}`),
     ]);
 
-    financeiroState.bills = Array.isArray(bills) ? bills : [];
-    financeiroState.transactions = Array.isArray(transactions) ? transactions : [];
-    financeiroState.commissions = Array.isArray(commissions) ? commissions : [];
+    financeiroState.bills         = Array.isArray(bills)        ? bills        : [];
+    financeiroState.transactions  = Array.isArray(transactions) ? transactions : [];
+    financeiroState.commissions   = Array.isArray(commissions)  ? commissions  : [];
+    financeiroState.cash          = cashData && typeof cashData === 'object'
+      ? { register: cashData.register || null, movements: cashData.movements || [], summary: cashData.summary || null }
+      : { register: null, movements: [], summary: null };
     financeiroState.isLoaded = true;
   } catch (error) {
     console.error('Erro ao carregar financeiro:', error);
@@ -417,37 +947,47 @@ async function loadFinanceiroData() {
   }
 }
 
+async function loadCashForDate(date) {
+  financeiroState.cashDate = date;
+  try {
+    const cashData = await apiFetch(`/api/financial/cash?date=${date}`);
+    financeiroState.cash = cashData && typeof cashData === 'object'
+      ? { register: cashData.register || null, movements: cashData.movements || [], summary: cashData.summary || null }
+      : { register: null, movements: [], summary: null };
+  } catch (e) {
+    console.error(e);
+  }
+  const cashContainer = document.getElementById('finance-cash-container');
+  if (cashContainer) cashContainer.innerHTML = renderCashHero();
+  bindCashEvents();
+}
+
 async function handleCreateBill(event) {
   event.preventDefault();
-  const form = document.getElementById('finance-bill-form');
+  const form     = document.getElementById('finance-bill-form');
   const formData = new FormData(form);
-  const btn = form.querySelector('button[type="submit"]');
-
-  const description = String(formData.get('description') || '').trim();
-  const amount = Number(formData.get('amount') || 0);
+  const btn      = form.querySelector('button[type="submit"]');
+  const desc     = String(formData.get('description') || '').trim();
+  const amount   = Number(formData.get('amount') || 0);
   const due_date = String(formData.get('due_date') || '').trim();
 
-  if (!description) { setFeedback('finance-form-feedback', 'Informe a descrição.', 'error'); return; }
+  if (!desc)             { setFeedback('finance-form-feedback', 'Informe a descrição.', 'error');     return; }
   if (!amount || amount <= 0) { setFeedback('finance-form-feedback', 'Informe um valor válido.', 'error'); return; }
-  if (!due_date) { setFeedback('finance-form-feedback', 'Informe o vencimento.', 'error'); return; }
+  if (!due_date)         { setFeedback('finance-form-feedback', 'Informe o vencimento.', 'error');    return; }
 
   try {
     if (btn) btn.disabled = true;
     setFeedback('finance-form-feedback', 'Salvando...', 'neutral');
-
     await apiFetch('/api/financial/bills', {
       method: 'POST',
       body: JSON.stringify({
-        description,
-        amount,
-        due_date,
+        description: desc, amount, due_date,
         category: String(formData.get('category') || '').trim() || null,
-        supplier: String(formData.get('supplier') || '').trim() || null,
-        notes: String(formData.get('notes') || '').trim() || null,
+        supplier:  String(formData.get('supplier') || '').trim() || null,
+        notes:     String(formData.get('notes') || '').trim()    || null,
         status: 'pending',
       }),
     });
-
     closeFinanceModal();
     await loadFinanceiroData();
   } catch (error) {
@@ -458,34 +998,30 @@ async function handleCreateBill(event) {
 
 async function handleCreateTransaction(event) {
   event.preventDefault();
-  const form = document.getElementById('finance-transaction-form');
+  const form     = document.getElementById('finance-transaction-form');
   const formData = new FormData(form);
-  const btn = form.querySelector('button[type="submit"]');
+  const btn      = form.querySelector('button[type="submit"]');
+  const desc     = String(formData.get('description') || '').trim();
+  const amount   = Number(formData.get('amount') || 0);
 
-  const description = String(formData.get('description') || '').trim();
-  const amount = Number(formData.get('amount') || 0);
-  const transaction_date = String(formData.get('transaction_date') || '').trim();
-
-  if (!description) { setFeedback('finance-form-feedback', 'Informe a descrição.', 'error'); return; }
+  if (!desc)             { setFeedback('finance-form-feedback', 'Informe a descrição.', 'error');     return; }
   if (!amount || amount <= 0) { setFeedback('finance-form-feedback', 'Informe um valor válido.', 'error'); return; }
 
   try {
     if (btn) btn.disabled = true;
     setFeedback('finance-form-feedback', 'Salvando...', 'neutral');
-
     await apiFetch('/api/financial/transactions', {
       method: 'POST',
       body: JSON.stringify({
-        type: String(formData.get('type') || 'income'),
-        description,
+        type:             String(formData.get('type') || 'income'),
+        description:      desc,
         amount,
-        transaction_date: transaction_date || new Date().toISOString().split('T')[0],
-        category: String(formData.get('category') || '').trim() || null,
-        payment_method: String(formData.get('payment_method') || 'pix'),
-        notes: String(formData.get('notes') || '').trim() || null,
+        transaction_date: String(formData.get('transaction_date') || new Date().toISOString().split('T')[0]),
+        category:         String(formData.get('category') || '').trim() || null,
+        payment_method:   String(formData.get('payment_method') || 'pix'),
+        notes:            String(formData.get('notes') || '').trim() || null,
       }),
     });
-
     closeFinanceModal();
     await loadFinanceiroData();
   } catch (error) {
@@ -508,96 +1044,353 @@ async function handlePayBill(billId) {
   }
 }
 
-// ─── Events ───────────────────────────────────────────────────────────────────
+async function handleOpenCash(event) {
+  event.preventDefault();
+  const form     = document.getElementById('cash-open-form');
+  const formData = new FormData(form);
+  const btn      = form.querySelector('button[type="submit"]');
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('cash-open-feedback', 'Abrindo caixa...', 'neutral');
+    await apiFetch('/api/financial/cash/open', {
+      method: 'POST',
+      body: JSON.stringify({
+        opening_balance: Number(formData.get('opening_balance') || 0),
+        notes:           String(formData.get('notes') || '').trim() || null,
+      }),
+    });
+    closeFinanceModal();
+    await loadCashForDate(financeiroState.cashDate);
+  } catch (error) {
+    setFeedback('cash-open-feedback', error instanceof Error ? error.message : 'Erro ao abrir caixa.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleCloseCash(event) {
+  event.preventDefault();
+  const form     = document.getElementById('cash-close-form');
+  const formData = new FormData(form);
+  const btn      = form.querySelector('button[type="submit"]');
+  const reg      = financeiroState.cash.register;
+  if (!reg) return;
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('cash-close-feedback', 'Fechando caixa...', 'neutral');
+    await apiFetch(`/api/financial/cash/${reg.id}/close`, {
+      method: 'POST',
+      body: JSON.stringify({
+        closing_balance: Number(formData.get('closing_balance') || 0),
+        notes:           String(formData.get('notes') || '').trim() || null,
+      }),
+    });
+    closeFinanceModal();
+    await loadCashForDate(financeiroState.cashDate);
+  } catch (error) {
+    setFeedback('cash-close-feedback', error instanceof Error ? error.message : 'Erro ao fechar caixa.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleAddMovement(event) {
+  event.preventDefault();
+  const form     = document.getElementById('cash-movement-form');
+  const formData = new FormData(form);
+  const btn      = form.querySelector('button[type="submit"]');
+  const type     = form.dataset.type;
+  const reg      = financeiroState.cash.register;
+  const desc     = String(formData.get('description') || '').trim();
+  const amount   = Number(formData.get('amount') || 0);
+
+  if (!desc)             { setFeedback('cash-movement-feedback', 'Informe a descrição.', 'error');     return; }
+  if (!amount || amount <= 0) { setFeedback('cash-movement-feedback', 'Informe um valor válido.', 'error'); return; }
+  if (!reg)              { setFeedback('cash-movement-feedback', 'Nenhum caixa aberto.', 'error');     return; }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('cash-movement-feedback', 'Registrando...', 'neutral');
+    await apiFetch(`/api/financial/cash/${reg.id}/movement`, {
+      method: 'POST',
+      body: JSON.stringify({
+        type,
+        description:    desc,
+        amount,
+        payment_method: String(formData.get('payment_method') || '').trim() || null,
+        notes:          String(formData.get('notes') || '').trim() || null,
+      }),
+    });
+    closeFinanceModal();
+    await loadCashForDate(financeiroState.cashDate);
+  } catch (error) {
+    setFeedback('cash-movement-feedback', error instanceof Error ? error.message : 'Erro ao registrar.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EVENTS
+// ══════════════════════════════════════════════════════════════════════════════
 
 function bindModalEvents() {
   document.getElementById('finance-modal-close')?.addEventListener('click', closeFinanceModal);
   document.getElementById('finance-form-cancel')?.addEventListener('click', closeFinanceModal);
 
   document.getElementById('finance-pay-bill-btn')?.addEventListener('click', (e) => {
-    const billId = e.currentTarget.dataset.billId;
-    if (billId) handlePayBill(billId);
+    handlePayBill(e.currentTarget.dataset.billId);
   });
 
   document.getElementById('finance-bill-form')?.addEventListener('submit', handleCreateBill);
   document.getElementById('finance-transaction-form')?.addEventListener('submit', handleCreateTransaction);
+  document.getElementById('cash-open-form')?.addEventListener('submit', handleOpenCash);
+  document.getElementById('cash-close-form')?.addEventListener('submit', handleCloseCash);
+  document.getElementById('cash-movement-form')?.addEventListener('submit', handleAddMovement);
+
+  // Calcula diferença em tempo real no modal de fechar caixa
+  const closingInput = document.querySelector('#cash-close-form [name="closing_balance"]');
+  const diffDisplay  = document.getElementById('cash-close-diff');
+  if (closingInput && diffDisplay) {
+    closingInput.addEventListener('input', () => {
+      const exp  = parseFloat(closingInput.dataset.expected || '0');
+      const val  = parseFloat(closingInput.value || '0');
+      const diff = val - exp;
+      diffDisplay.textContent = fmt(diff);
+      diffDisplay.style.color = Math.abs(diff) < 0.01 ? '#00e676' : diff > 0 ? '#4fc3f7' : '#ff1744';
+    });
+  }
 }
 
 function bindRowEvents() {
   document.querySelectorAll('.finance-row-button[data-entry-id]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      const section = btn.dataset.entrySection;
-      const id = btn.dataset.entryId;
-      if (section === 'bills') openModal('viewBill', section, id);
+      if (btn.dataset.entrySection === 'bills')
+        openModal('viewBill', 'bills', btn.dataset.entryId);
     });
   });
 }
 
+function bindTabEvents() {
+  document.querySelectorAll('[data-fin-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      financeiroState.activeTab = btn.dataset.finTab;
+      rerenderFinanceiro();
+    });
+  });
+}
+
+function bindCashEvents() {
+  document.getElementById('cash-open-btn')?. addEventListener('click', () => openModal('openCash'));
+  document.getElementById('cash-close-btn')?.addEventListener('click', () => openModal('closeCash'));
+  document.getElementById('cash-withdrawal-btn')?.addEventListener('click', () => openModal('withdrawal'));
+  document.getElementById('cash-reinforcement-btn')?.addEventListener('click', () => openModal('reinforcement'));
+  document.getElementById('cash-income-btn')?.addEventListener('click', () => openModal('income'));
+  document.getElementById('cash-expense-btn')?.addEventListener('click', () => openModal('expense'));
+
+  document.getElementById('cash-load-date-btn')?.addEventListener('click', () => {
+    const val = document.getElementById('cash-date-picker')?.value;
+    if (val) loadCashForDate(val);
+  });
+
+  document.getElementById('cash-date-picker')?.addEventListener('change', (e) => {
+    if (e.target.value) loadCashForDate(e.target.value);
+  });
+}
+
 function bindStaticEvents() {
-  document.getElementById('finance-new-bill-btn')?.addEventListener('click', () => {
-    openModal('createBill');
-  });
-
-  document.getElementById('finance-new-transaction-btn')?.addEventListener('click', () => {
-    openModal('createTransaction');
-  });
-
+  document.getElementById('finance-new-bill-btn')?.addEventListener('click',        () => openModal('createBill'));
+  document.getElementById('finance-new-transaction-btn')?.addEventListener('click', () => openModal('createTransaction'));
   document.getElementById('finance-details-modal')?.addEventListener('click', (e) => {
     if (e.target?.id === 'finance-details-modal') closeFinanceModal();
   });
+  bindTabEvents();
 }
 
-// ─── Render ───────────────────────────────────────────────────────────────────
+// ══════════════════════════════════════════════════════════════════════════════
+// RENDER PRINCIPAL
+// ══════════════════════════════════════════════════════════════════════════════
+
+function renderTabBar() {
+  const tabs = [
+    { id: 'caixa',       label: '💰 Caixa' },
+    { id: 'contas',      label: '💸 Contas a Pagar' },
+    { id: 'transacoes',  label: '📊 Transações' },
+  ];
+  return `
+    <div style="
+      display:flex;gap:4px;padding:4px;margin-bottom:16px;
+      background:#0a0c1a;border:1px solid #1e2345;border-radius:14px;
+      overflow-x:auto;
+    ">
+      ${tabs.map(t => `
+        <button type="button" data-fin-tab="${t.id}"
+          style="
+            flex:1;min-width:max-content;padding:10px 16px;border-radius:10px;border:none;
+            font:inherit;font-size:12px;font-weight:700;cursor:pointer;
+            transition:all .2s;white-space:nowrap;
+            ${financeiroState.activeTab === t.id
+              ? 'background:linear-gradient(135deg,#00b4ff22,#6c3fff22);color:#e8f0fe;border:1px solid #6c3fff44;'
+              : 'background:transparent;color:#5a6888;'}
+          ">
+          ${t.label}
+        </button>
+      `).join('')}
+    </div>`;
+}
 
 function rerenderFinanceiro() {
-  const metrics = document.getElementById('finance-metrics');
-  const bills = document.getElementById('finance-payables-list');
-  const transactions = document.getElementById('finance-transactions-list');
+  const root = document.getElementById('finance-root');
+  if (!root) return;
 
   if (financeiroState.isLoading) {
-    if (bills) bills.innerHTML = `<div class="finance-empty">Carregando...</div>`;
-    if (transactions) transactions.innerHTML = `<div class="finance-empty">Carregando...</div>`;
+    root.innerHTML = `
+      <div style="display:flex;align-items:center;justify-content:center;min-height:200px;">
+        <div style="text-align:center;">
+          <div style="font-size:32px;margin-bottom:8px;animation:spin 1s linear infinite;">⟳</div>
+          <div style="color:#5a6888;font-size:12px;">Carregando financeiro...</div>
+        </div>
+      </div>`;
     return;
   }
 
-  if (metrics) metrics.innerHTML = renderMetrics();
-  if (bills) bills.innerHTML = renderBillsSection();
-  if (transactions) transactions.innerHTML = renderTransactionsSection();
+  const tab = financeiroState.activeTab;
 
+  let content = '';
+
+  if (tab === 'caixa') {
+    content = `
+      <div id="finance-cash-container">
+        ${renderCashHero()}
+      </div>`;
+  }
+  else if (tab === 'contas') {
+    content = `
+      ${renderMetricsBar()}
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">💸 Contas a Pagar</div>
+          <button type="button" class="btn-primary-gradient" id="finance-new-bill-btn">+ Adicionar</button>
+        </div>
+        <div id="finance-payables-list">${renderBillsSection()}</div>
+      </div>`;
+  }
+  else if (tab === 'transacoes') {
+    content = `
+      ${renderMetricsBar()}
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">📊 Transações do Mês</div>
+          <button type="button" class="btn-primary-gradient" id="finance-new-transaction-btn">+ Registrar</button>
+        </div>
+        <div id="finance-transactions-list">${renderTransactionsSection()}</div>
+      </div>`;
+  }
+
+  root.innerHTML = `
+    ${renderTabBar()}
+    ${content}
+  `;
+
+  bindStaticEvents();
   bindRowEvents();
+  if (tab === 'caixa') bindCashEvents();
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// EXPORT
+// ══════════════════════════════════════════════════════════════════════════════
 
 export function renderFinanceiro() {
   return /* html */ `
 <section class="page-shell page--financeiro">
-  <div id="finance-metrics">
-    ${renderMetrics()}
+
+  <style>
+    /* ── Caixa action buttons ──────────────────────────────────────────────── */
+    .cash-action-btn {
+      padding: 9px 16px;
+      border-radius: 10px;
+      border: 1px solid transparent;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity .15s, transform .1s;
+      white-space: nowrap;
+    }
+    .cash-action-btn:hover   { opacity: .85; transform: translateY(-1px); }
+    .cash-action-btn:active  { transform: scale(.97); }
+    .cash-action-btn--primary {
+      background: linear-gradient(135deg,#00e676,#00b4ff);
+      color: #000;
+      border-color: transparent;
+    }
+    .cash-action-btn--warning {
+      background: rgba(249,115,22,.12);
+      color: #f97316;
+      border-color: rgba(249,115,22,.3);
+    }
+    .cash-action-btn--info {
+      background: rgba(79,195,247,.12);
+      color: #4fc3f7;
+      border-color: rgba(79,195,247,.3);
+    }
+    .cash-action-btn--success {
+      background: rgba(0,230,118,.12);
+      color: #00e676;
+      border-color: rgba(0,230,118,.3);
+    }
+    .cash-action-btn--danger {
+      background: rgba(255,23,68,.12);
+      color: #ff5c74;
+      border-color: rgba(255,23,68,.3);
+    }
+    .cash-action-btn--close {
+      background: rgba(90,104,136,.15);
+      color: #94a3b8;
+      border-color: rgba(90,104,136,.3);
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Fin rows ─────────────────────────────────────────────────────────── */
+    .finance-row-button {
+      display: block; width: 100%; padding: 0;
+      border: 0; background: transparent;
+      text-align: inherit; cursor: pointer;
+    }
+    .fin-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 12px;
+      align-items: center;
+      padding: 12px 10px;
+      border-left: 3px solid transparent;
+      border-radius: 12px;
+      transition: background .18s;
+    }
+    .finance-row-button:hover .fin-row { background: rgba(79,195,247,.04); }
+    .fin-info { min-width: 0; }
+    .fin-title { font-size: 13px; font-weight: 700; color: #e8f0fe; }
+    .fin-date  { font-size: 10px; color: #5a6888; margin-top: 3px; }
+    .finance-empty {
+      padding: 20px 14px; color: #5a6888;
+      font-size: 12px; text-align: center;
+    }
+    .finance-modal-body { display: grid; gap: 12px; }
+    .finance-form       { display: grid; gap: 12px; }
+
+    @media (max-width: 600px) {
+      .cash-hero { padding: 16px !important; }
+    }
+  </style>
+
+  <div id="finance-root">
+    <div style="display:flex;align-items:center;justify-content:center;min-height:200px;">
+      <div style="color:#5a6888;font-size:12px;">Iniciando financeiro...</div>
+    </div>
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Contas a Pagar</div>
-        <button type="button" class="btn-primary-gradient" id="finance-new-bill-btn">+ Adicionar</button>
-      </div>
-      <div id="finance-payables-list">
-        <div class="finance-empty">Carregando...</div>
-      </div>
-    </div>
-
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Últimas Transações</div>
-        <button type="button" class="btn-primary-gradient" id="finance-new-transaction-btn">+ Registrar</button>
-      </div>
-      <div id="finance-transactions-list">
-        <div class="finance-empty">Carregando...</div>
-      </div>
-    </div>
-  </div>
-
+  <!-- Modal global -->
   <div id="finance-details-modal" class="modal-overlay" style="display:none;">
-    <div class="modal" style="width:min(92vw, 620px);">
+    <div class="modal" style="width:min(92vw,560px);max-height:90vh;overflow-y:auto;">
       <div id="finance-details-content"></div>
     </div>
   </div>
@@ -606,6 +1399,5 @@ export function renderFinanceiro() {
 }
 
 export function initFinanceiroPage() {
-  bindStaticEvents();
   loadFinanceiroData();
 }
