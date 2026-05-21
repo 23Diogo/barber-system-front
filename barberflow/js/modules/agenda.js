@@ -28,6 +28,44 @@ const agendaState = {
   },
 };
 
+// ─── Formas de pagamento disponíveis ─────────────────────────────────────────
+const PAYMENT_METHODS = [
+  { value: 'pix',        label: 'Pix' },
+  { value: 'dinheiro',   label: 'Dinheiro' },
+  { value: 'debito',     label: 'Débito' },
+  { value: 'credito',    label: 'Crédito' },
+  { value: 'pix_cartao', label: 'Pix + Cartão' },
+  { value: 'cortesia',   label: 'Cortesia' },
+];
+
+// ─── API: finalizar atendimento ───────────────────────────────────────────────
+async function apiCompleteAppointment(appointmentId, { paymentMethod, finalPrice }) {
+  const apiUrl = getApiBaseUrl();
+  const token =
+    localStorage.getItem('barberflow_token') ||
+    localStorage.getItem('bf_token') ||
+    localStorage.getItem('token') ||
+    '';
+
+  const response = await fetch(`${apiUrl}/api/appointments/${appointmentId}/complete`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ paymentMethod, finalPrice }),
+  });
+
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err.error || 'Erro ao finalizar atendimento.');
+  }
+
+  return response.json();
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
 function escapeHtml(value) {
   return String(value ?? '')
     .replace(/&/g, '&amp;')
@@ -66,10 +104,8 @@ function formatCurrency(value) {
 
 function formatDateDisplay(value) {
   if (!value) return '—';
-
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return String(value);
-
   return date.toLocaleDateString('pt-BR');
 }
 
@@ -101,7 +137,6 @@ function getBarberInitials(name) {
     .trim()
     .split(/\s+/)
     .filter(Boolean);
-
   return (
     parts
       .slice(0, 2)
@@ -155,50 +190,18 @@ function getStatusMeta(status) {
       summaryBucket: 'cancelled',
     },
   };
-
   return map[status] || map.pending;
 }
 
 function getSubscriptionStatusMeta(status) {
   const map = {
-    active: {
-      label: 'Ativa',
-      color: '#00e676',
-      bg: 'rgba(0,230,118,.1)',
-      border: 'rgba(0,230,118,.18)',
-    },
-    past_due: {
-      label: 'Inadimplente',
-      color: '#ff1744',
-      bg: 'rgba(255,23,68,.1)',
-      border: 'rgba(255,23,68,.18)',
-    },
-    paused: {
-      label: 'Pausada',
-      color: '#f97316',
-      bg: 'rgba(249,115,22,.1)',
-      border: 'rgba(249,115,22,.18)',
-    },
-    canceled: {
-      label: 'Cancelada',
-      color: '#5a6888',
-      bg: 'rgba(90,104,136,.12)',
-      border: 'rgba(90,104,136,.18)',
-    },
-    pending_activation: {
-      label: 'Pendente',
-      color: '#4fc3f7',
-      bg: 'rgba(79,195,247,.1)',
-      border: 'rgba(79,195,247,.18)',
-    },
-    trialing: {
-      label: 'Trial',
-      color: '#9c6fff',
-      bg: 'rgba(156,111,255,.1)',
-      border: 'rgba(156,111,255,.18)',
-    },
+    active: { label: 'Ativa', color: '#00e676', bg: 'rgba(0,230,118,.1)', border: 'rgba(0,230,118,.18)' },
+    past_due: { label: 'Inadimplente', color: '#ff1744', bg: 'rgba(255,23,68,.1)', border: 'rgba(255,23,68,.18)' },
+    paused: { label: 'Pausada', color: '#f97316', bg: 'rgba(249,115,22,.1)', border: 'rgba(249,115,22,.18)' },
+    canceled: { label: 'Cancelada', color: '#5a6888', bg: 'rgba(90,104,136,.12)', border: 'rgba(90,104,136,.18)' },
+    pending_activation: { label: 'Pendente', color: '#4fc3f7', bg: 'rgba(79,195,247,.1)', border: 'rgba(79,195,247,.18)' },
+    trialing: { label: 'Trial', color: '#9c6fff', bg: 'rgba(156,111,255,.1)', border: 'rgba(156,111,255,.18)' },
   };
-
   return map[status] || map.active;
 }
 
@@ -211,7 +214,6 @@ function getInvoiceStatusMeta(status) {
     refunded: { label: 'Estornado', color: '#9c6fff' },
     expired: { label: 'Expirado', color: '#f97316' },
   };
-
   return map[status] || map.pending;
 }
 
@@ -221,14 +223,13 @@ function getStatusDisplayName(status) {
 
 function getAvailableStatusActions(currentStatus) {
   const transitions = {
-    pending: ['confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'],
-    confirmed: ['in_progress', 'completed', 'cancelled', 'no_show'],
-    in_progress: ['completed', 'cancelled', 'no_show'],
-    completed: [],
-    cancelled: ['pending', 'confirmed'],
-    no_show: ['pending', 'confirmed'],
+    pending:    ['confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'],
+    confirmed:  ['in_progress', 'completed', 'cancelled', 'no_show'],
+    in_progress:['completed', 'cancelled', 'no_show'],
+    completed:  [],
+    cancelled:  ['pending', 'confirmed'],
+    no_show:    ['pending', 'confirmed'],
   };
-
   return (
     transitions[currentStatus] ||
     ['pending', 'confirmed', 'in_progress', 'completed', 'cancelled', 'no_show'].filter(
@@ -241,9 +242,7 @@ function getLatestSubscriptionCycle(subscription) {
   const cycles = Array.isArray(subscription?.subscription_cycles)
     ? [...subscription.subscription_cycles]
     : [];
-
   if (!cycles.length) return null;
-
   cycles.sort((a, b) => Number(b?.cycle_number || 0) - Number(a?.cycle_number || 0));
   return cycles[0] || null;
 }
@@ -252,15 +251,12 @@ function getLatestSubscriptionInvoice(subscription) {
   const invoices = Array.isArray(subscription?.subscription_invoices)
     ? [...subscription.subscription_invoices]
     : [];
-
   if (!invoices.length) return null;
-
   invoices.sort((a, b) => {
     const aTime = new Date(a?.created_at || a?.due_at || 0).getTime();
     const bTime = new Date(b?.created_at || b?.due_at || 0).getTime();
     return bTime - aTime;
   });
-
   return invoices[0] || null;
 }
 
@@ -268,56 +264,18 @@ function getServiceBenefitRequirement(appointment) {
   const serviceName = getServiceName(appointment).toLowerCase();
   const hasHaircut = /(\bcorte\b|haircut|degrad[eê]|acabamento|pezinho|navalhado)/i.test(serviceName);
   const hasBeard = /(\bbarba\b|beard)/i.test(serviceName);
-
-  if (hasHaircut && hasBeard) {
-    return {
-      type: 'combo',
-      needsHaircut: true,
-      needsBeard: true,
-      label: 'corte + barba',
-    };
-  }
-
-  if (hasHaircut) {
-    return {
-      type: 'haircut',
-      needsHaircut: true,
-      needsBeard: false,
-      label: 'corte',
-    };
-  }
-
-  if (hasBeard) {
-    return {
-      type: 'beard',
-      needsHaircut: false,
-      needsBeard: true,
-      label: 'barba',
-    };
-  }
-
+  if (hasHaircut && hasBeard) return { type: 'combo', needsHaircut: true, needsBeard: true, label: 'corte + barba' };
+  if (hasHaircut) return { type: 'haircut', needsHaircut: true, needsBeard: false, label: 'corte' };
+  if (hasBeard) return { type: 'beard', needsHaircut: false, needsBeard: true, label: 'barba' };
   return null;
 }
 
 function getSubscriptionActionState(subscription) {
   const status = subscription?.status || '';
-
-  if (status === 'active' || status === 'trialing') {
-    return { canConsume: true, message: 'Benefícios disponíveis para consumo.' };
-  }
-
-  if (status === 'past_due') {
-    return { canConsume: false, message: 'Consumo bloqueado: assinatura inadimplente.' };
-  }
-
-  if (status === 'paused') {
-    return { canConsume: false, message: 'Consumo bloqueado: assinatura pausada.' };
-  }
-
-  if (status === 'pending_activation') {
-    return { canConsume: false, message: 'Consumo bloqueado: assinatura aguardando ativação.' };
-  }
-
+  if (status === 'active' || status === 'trialing') return { canConsume: true, message: 'Benefícios disponíveis para consumo.' };
+  if (status === 'past_due') return { canConsume: false, message: 'Consumo bloqueado: assinatura inadimplente.' };
+  if (status === 'paused') return { canConsume: false, message: 'Consumo bloqueado: assinatura pausada.' };
+  if (status === 'pending_activation') return { canConsume: false, message: 'Consumo bloqueado: assinatura aguardando ativação.' };
   return { canConsume: false, message: 'Cliente sem plano elegível para consumo.' };
 }
 
@@ -341,36 +299,23 @@ function getConsumedTypesForAppointment(appointmentId) {
 function markAppointmentBenefitAsConsumed(appointmentId, consumedType) {
   const key = String(appointmentId);
   const current = getConsumedTypesForAppointment(key);
-
   if (!current.includes(consumedType)) {
     agendaState.consumptionRegistry[key] = [...current, consumedType];
   }
 }
 
 function getConsumedTypeLabel(type) {
-  const map = {
-    haircut: 'corte',
-    beard: 'barba',
-  };
-
+  const map = { haircut: 'corte', beard: 'barba' };
   return map[type] || type;
 }
 
 function evaluateSubscriptionForAppointment(subscription, appointment) {
   if (!subscription) {
     return {
-      hasPlan: false,
-      badges: [],
-      canConsumeForAppointment: false,
-      eligibleConsumeTypes: [],
-      message: 'Cliente sem plano ativo para este atendimento.',
-      messageVariant: 'neutral',
-      shouldShowMessage: false,
-      shouldHighlightRow: false,
-      shouldBlockConsumption: false,
-      requirement: getServiceBenefitRequirement(appointment),
-      remainingHaircuts: 0,
-      remainingBeards: 0,
+      hasPlan: false, badges: [], canConsumeForAppointment: false, eligibleConsumeTypes: [],
+      message: 'Cliente sem plano ativo para este atendimento.', messageVariant: 'neutral',
+      shouldShowMessage: false, shouldHighlightRow: false, shouldBlockConsumption: false,
+      requirement: getServiceBenefitRequirement(appointment), remainingHaircuts: 0, remainingBeards: 0,
     };
   }
 
@@ -388,7 +333,6 @@ function evaluateSubscriptionForAppointment(subscription, appointment) {
   const hasRelevantBalance = requirement ? hasRequiredHaircut && hasRequiredBeard : hasAnyBalance;
 
   const eligibleConsumeTypes = [];
-
   if (eligibleStatus) {
     if (requirement) {
       if (requirement.needsHaircut && remainingHaircuts > 0) eligibleConsumeTypes.push('haircut');
@@ -403,7 +347,6 @@ function evaluateSubscriptionForAppointment(subscription, appointment) {
     eligibleStatus && (requirement ? hasRelevantBalance : eligibleConsumeTypes.length > 0);
 
   const badges = [{ label: 'Possui plano', variant: 'info' }];
-
   if (status === 'past_due') badges.push({ label: 'Inadimplente', variant: 'danger' });
   if (status === 'paused') badges.push({ label: 'Plano pausado', variant: 'warning' });
   if (eligibleStatus && hasRelevantBalance) badges.push({ label: 'Saldo disponível', variant: 'success' });
@@ -414,74 +357,27 @@ function evaluateSubscriptionForAppointment(subscription, appointment) {
   let shouldHighlightRow = false;
   let shouldBlockConsumption = !actionState.canConsume;
 
-  if (!eligibleStatus) {
-    shouldShowMessage = true;
-    shouldHighlightRow = true;
-  } else if (requirement && !hasRelevantBalance) {
+  if (!eligibleStatus) { shouldShowMessage = true; shouldHighlightRow = true; }
+  else if (requirement && !hasRelevantBalance) {
     message = `Consumo bloqueado: saldo insuficiente para ${requirement.label}.`;
-    messageVariant = 'warning';
-    shouldShowMessage = true;
-    shouldHighlightRow = true;
-    shouldBlockConsumption = true;
+    messageVariant = 'warning'; shouldShowMessage = true; shouldHighlightRow = true; shouldBlockConsumption = true;
   } else if (!requirement && !hasAnyBalance) {
     message = 'Plano ativo, mas sem saldo disponível no ciclo atual.';
-    messageVariant = 'warning';
-    shouldShowMessage = true;
-    shouldHighlightRow = true;
-    shouldBlockConsumption = true;
+    messageVariant = 'warning'; shouldShowMessage = true; shouldHighlightRow = true; shouldBlockConsumption = true;
   } else if (requirement && hasRelevantBalance) {
     message = `Saldo disponível para este atendimento (${requirement.label}).`;
-    messageVariant = 'success';
-    shouldShowMessage = false;
-    shouldHighlightRow = false;
-    shouldBlockConsumption = false;
+    messageVariant = 'success'; shouldShowMessage = false; shouldHighlightRow = false; shouldBlockConsumption = false;
   }
 
-  if (status === 'past_due') {
-    message = 'Consumo bloqueado: cliente inadimplente.';
-    messageVariant = 'danger';
-    shouldShowMessage = true;
-    shouldHighlightRow = true;
-    shouldBlockConsumption = true;
-  }
-
-  if (status === 'paused') {
-    message = 'Consumo bloqueado: plano pausado.';
-    messageVariant = 'warning';
-    shouldShowMessage = true;
-    shouldHighlightRow = true;
-    shouldBlockConsumption = true;
-  }
-
-  if (status === 'pending_activation') {
-    message = 'Consumo bloqueado: plano aguardando ativação.';
-    messageVariant = 'warning';
-    shouldShowMessage = true;
-    shouldHighlightRow = true;
-    shouldBlockConsumption = true;
-  }
-
-  if (status === 'canceled') {
-    message = 'Consumo bloqueado: plano cancelado.';
-    messageVariant = 'danger';
-    shouldShowMessage = true;
-    shouldHighlightRow = true;
-    shouldBlockConsumption = true;
-  }
+  if (status === 'past_due') { message = 'Consumo bloqueado: cliente inadimplente.'; messageVariant = 'danger'; shouldShowMessage = true; shouldHighlightRow = true; shouldBlockConsumption = true; }
+  if (status === 'paused') { message = 'Consumo bloqueado: plano pausado.'; messageVariant = 'warning'; shouldShowMessage = true; shouldHighlightRow = true; shouldBlockConsumption = true; }
+  if (status === 'pending_activation') { message = 'Consumo bloqueado: plano aguardando ativação.'; messageVariant = 'warning'; shouldShowMessage = true; shouldHighlightRow = true; shouldBlockConsumption = true; }
+  if (status === 'canceled') { message = 'Consumo bloqueado: plano cancelado.'; messageVariant = 'danger'; shouldShowMessage = true; shouldHighlightRow = true; shouldBlockConsumption = true; }
 
   return {
-    hasPlan: true,
-    badges,
-    canConsumeForAppointment,
-    eligibleConsumeTypes,
-    message,
-    messageVariant,
-    shouldShowMessage,
-    shouldHighlightRow,
-    shouldBlockConsumption,
-    requirement,
-    remainingHaircuts,
-    remainingBeards,
+    hasPlan: true, badges, canConsumeForAppointment, eligibleConsumeTypes,
+    message, messageVariant, shouldShowMessage, shouldHighlightRow, shouldBlockConsumption,
+    requirement, remainingHaircuts, remainingBeards,
   };
 }
 
@@ -490,12 +386,8 @@ function getAppointmentUiContext(appointment) {
   const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
   const consumedTypes = getConsumedTypesForAppointment(appointment.id);
   const hasConsumedInPlan = consumedTypes.length > 0;
-
   return {
-    subscription,
-    evaluation,
-    consumedTypes,
-    hasConsumedInPlan,
+    subscription, evaluation, consumedTypes, hasConsumedInPlan,
     consumedLabel: consumedTypes.map(getConsumedTypeLabel).join(' + '),
     requiresAttention: evaluation.shouldBlockConsumption,
   };
@@ -506,43 +398,19 @@ function createSummary(appointments) {
     (acc, appointment) => {
       const meta = getStatusMeta(appointment.status);
       const price = getServicePrice(appointment);
-
       acc.total += 1;
       acc.receivable += price;
-
-      if (meta.summaryBucket === 'completed') {
-        acc.completed += 1;
-        acc.received += price;
-      }
-
+      if (meta.summaryBucket === 'completed') { acc.completed += 1; acc.received += price; }
       if (meta.summaryBucket === 'inProgress') acc.inProgress += 1;
       if (meta.summaryBucket === 'upcoming' || meta.summaryBucket === 'pending') acc.upcoming += 1;
-
-      if (meta.summaryBucket === 'cancelled') {
-        acc.cancelled += 1;
-        acc.receivable -= price;
-      }
-
+      if (meta.summaryBucket === 'cancelled') { acc.cancelled += 1; acc.receivable -= price; }
       const barberName = getBarberName(appointment);
-      if (!acc.byBarber[barberName]) {
-        acc.byBarber[barberName] = { name: barberName, appointments: 0, revenue: 0 };
-      }
-
+      if (!acc.byBarber[barberName]) acc.byBarber[barberName] = { name: barberName, appointments: 0, revenue: 0 };
       acc.byBarber[barberName].appointments += 1;
       if (appointment.status === 'completed') acc.byBarber[barberName].revenue += price;
-
       return acc;
     },
-    {
-      total: 0,
-      completed: 0,
-      inProgress: 0,
-      upcoming: 0,
-      cancelled: 0,
-      received: 0,
-      receivable: 0,
-      byBarber: {},
-    },
+    { total: 0, completed: 0, inProgress: 0, upcoming: 0, cancelled: 0, received: 0, receivable: 0, byBarber: {} },
   );
 }
 
@@ -550,90 +418,47 @@ function getAgendaCounters(appointments) {
   return appointments.reduce(
     (acc, appointment) => {
       const ui = getAppointmentUiContext(appointment);
-
       acc.total += 1;
       if (ui.evaluation.hasPlan) acc.withPlan += 1;
       if (ui.requiresAttention) acc.blocked += 1;
       if (ui.hasConsumedInPlan) acc.consumed += 1;
-
       return acc;
     },
-    {
-      total: 0,
-      withPlan: 0,
-      blocked: 0,
-      consumed: 0,
-    },
+    { total: 0, withPlan: 0, blocked: 0, consumed: 0 },
   );
 }
 
 function renderAppointmentBadges(ui) {
   const badges = [...ui.evaluation.badges];
-
-  if (ui.requiresAttention) {
-    badges.push({
-      label: 'Requer atenção',
-      variant: ui.evaluation.messageVariant === 'danger' ? 'danger' : 'warning',
-    });
-  }
-
-  if (ui.hasConsumedInPlan) {
-    badges.push({
-      label: 'Consumido no plano',
-      variant: 'neutral',
-    });
-  }
-
+  if (ui.requiresAttention) badges.push({ label: 'Requer atenção', variant: ui.evaluation.messageVariant === 'danger' ? 'danger' : 'warning' });
+  if (ui.hasConsumedInPlan) badges.push({ label: 'Consumido no plano', variant: 'neutral' });
   if (!badges.length) return '';
-
   return `
     <div class="agenda-badges">
-      ${badges
-        .map(
-          (badge) => `
-            <span class="agenda-badge agenda-badge--${escapeHtml(badge.variant)}">
-              ${escapeHtml(badge.label)}
-            </span>
-          `,
-        )
-        .join('')}
+      ${badges.map((badge) => `<span class="agenda-badge agenda-badge--${escapeHtml(badge.variant)}">${escapeHtml(badge.label)}</span>`).join('')}
     </div>
   `;
 }
 
 function renderAppointmentPlanAlert(ui) {
   if (!ui.evaluation.shouldShowMessage) return '';
-
-  return `
-    <div class="agenda-row-alert agenda-row-alert--${escapeHtml(ui.evaluation.messageVariant)}">
-      ${escapeHtml(ui.evaluation.message)}
-    </div>
-  `;
+  return `<div class="agenda-row-alert agenda-row-alert--${escapeHtml(ui.evaluation.messageVariant)}">${escapeHtml(ui.evaluation.message)}</div>`;
 }
 
 function renderAppointmentConsumedAlert(ui) {
   if (!ui.hasConsumedInPlan) return '';
-
-  return `
-    <div class="agenda-row-alert agenda-row-alert--neutral">
-      Benefício já lançado neste atendimento: ${escapeHtml(ui.consumedLabel)}.
-    </div>
-  `;
+  return `<div class="agenda-row-alert agenda-row-alert--neutral">Benefício já lançado neste atendimento: ${escapeHtml(ui.consumedLabel)}.</div>`;
 }
 
 function renderAppointmentRow(appointment) {
   const meta = getStatusMeta(appointment.status);
   const ui = getAppointmentUiContext(appointment);
-
   const serviceText = `${escapeHtml(getServiceName(appointment))} · ${escapeHtml(getBarberName(appointment))} · ${escapeHtml(formatCurrency(getServicePrice(appointment)))}`;
-
   const rowClasses = [
     'appt-row',
     ui.evaluation.shouldHighlightRow ? `appt-row--plan-${ui.evaluation.messageVariant}` : '',
     ui.hasConsumedInPlan ? 'appt-row--consumed' : '',
-  ]
-    .filter(Boolean)
-    .join(' ');
+  ].filter(Boolean).join(' ');
 
   return `
     <div
@@ -658,13 +483,8 @@ function renderAppointmentRow(appointment) {
 }
 
 function renderBarberPerformance(summary) {
-  const rows = Object.values(summary.byBarber)
-    .sort((a, b) => b.appointments - a.appointments)
-    .slice(0, 4);
-
-  if (!rows.length) {
-    return '<div class="row-sub" style="padding:8px 10px">Nenhum barbeiro com atendimento nesta data.</div>';
-  }
+  const rows = Object.values(summary.byBarber).sort((a, b) => b.appointments - a.appointments).slice(0, 4);
+  if (!rows.length) return '<div class="row-sub" style="padding:8px 10px">Nenhum barbeiro com atendimento nesta data.</div>';
 
   const maxAppointments = Math.max(...rows.map((row) => row.appointments), 1);
   const gradients = [
@@ -674,10 +494,9 @@ function renderBarberPerformance(summary) {
     'linear-gradient(135deg,#00b4ff,#6c3fff)',
   ];
 
-  return rows
-    .map((row, index) => {
-      const width = Math.max((row.appointments / maxAppointments) * 100, 15);
-      return `
+  return rows.map((row, index) => {
+    const width = Math.max((row.appointments / maxAppointments) * 100, 15);
+    return `
       <div class="row-item">
         <div class="row-avatar" style="background:${gradients[index % gradients.length]};color:${index === 0 ? '#000' : '#fff'}">${escapeHtml(getBarberInitials(row.name))}</div>
         <div class="row-info">
@@ -687,28 +506,24 @@ function renderBarberPerformance(summary) {
         <div class="row-value">${escapeHtml(formatCurrency(row.revenue))}</div>
       </div>
     `;
-    })
-    .join('');
+  }).join('');
 }
 
 function renderSummaryPanel(summary, counters) {
   return `
     <div class="card-header"><div class="card-title">Resumo do Dia</div></div>
-
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
       <div class="mini-card"><div class="mini-val" style="color:#00e676">${summary.completed}</div><div class="mini-lbl">Concluídos</div></div>
       <div class="mini-card"><div class="mini-val" style="color:#4fc3f7">${summary.inProgress}</div><div class="mini-lbl">Em andamento</div></div>
       <div class="mini-card"><div class="mini-val" style="color:#ffd700">${escapeHtml(formatCurrency(summary.received))}</div><div class="mini-lbl">Recebido</div></div>
       <div class="mini-card"><div class="mini-val" style="color:#5a6888">${escapeHtml(formatCurrency(Math.max(summary.receivable - summary.received, 0)))}</div><div class="mini-lbl">A receber</div></div>
     </div>
-
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
       <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#4fc3f7">${counters.withPlan}</div><div class="mini-lbl">Com plano</div></div>
       <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#ff6b81">${counters.blocked}</div><div class="mini-lbl">Bloqueados</div></div>
       <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#94a3b8">${counters.consumed}</div><div class="mini-lbl">Consumidos</div></div>
       <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#c0cce8">${counters.total}</div><div class="mini-lbl">Total do dia</div></div>
     </div>
-
     <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;margin-bottom:8px">Por barbeiro</div>
     ${renderBarberPerformance(summary)}
   `;
@@ -750,34 +565,141 @@ function renderModalSelectOptions(items, getValue, getLabel) {
 }
 
 function getSourceLabel(source) {
-  const map = {
-    dashboard: 'Dashboard',
-    whatsapp: 'WhatsApp',
-    walk_in: 'Walk-in',
-    link: 'Link',
-  };
-
+  const map = { dashboard: 'Dashboard', whatsapp: 'WhatsApp', walk_in: 'Walk-in', link: 'Link' };
   return map[source] || source || 'Não informado';
 }
 
-function renderStatusActions(appointment) {
+// ─── Painel de finalização (comanda) ─────────────────────────────────────────
+function renderFinalizationPanel(appointment) {
   const actions = getAvailableStatusActions(appointment.status);
+  // Só exibe se "completed" é uma transição válida a partir do status atual
+  if (!actions.includes('completed')) return '';
+
+  const basePrice = getServicePrice(appointment);
+
+  const paymentOptions = PAYMENT_METHODS.map(
+    (m) => `<option value="${escapeHtml(m.value)}">${escapeHtml(m.label)}</option>`
+  ).join('');
+
+  return `
+    <div
+      id="agenda-finalization-panel"
+      style="
+        padding:14px;
+        border:1px solid rgba(0,230,118,.25);
+        border-radius:12px;
+        background:rgba(0,230,118,.04);
+      "
+    >
+      <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#00e676;margin-bottom:12px;">
+        💳 Finalizar Atendimento
+      </div>
+
+      <div style="display:grid;gap:10px;">
+
+        <!-- Forma de pagamento -->
+        <div>
+          <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5a6888;margin-bottom:6px;">
+            Forma de pagamento *
+          </div>
+          <select id="agenda-payment-method" class="modal-input" style="margin:0;">
+            <option value="">Selecione a forma de pagamento</option>
+            ${paymentOptions}
+          </select>
+        </div>
+
+        <!-- Desconto + Valor final -->
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5a6888;margin-bottom:6px;">
+              Desconto (R$)
+            </div>
+            <input
+              id="agenda-discount-input"
+              type="number"
+              min="0"
+              max="${basePrice}"
+              step="0.01"
+              value="0"
+              class="modal-input"
+              style="margin:0;"
+              data-base-price="${basePrice}"
+              placeholder="0,00"
+            />
+          </div>
+          <div style="flex:1;min-width:120px;">
+            <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5a6888;margin-bottom:6px;">
+              Valor final
+            </div>
+            <div
+              id="agenda-final-price-display"
+              style="
+                font-size:20px;
+                font-weight:700;
+                color:#00e676;
+                padding:10px 12px;
+                background:#0a0c1a;
+                border:1px solid #1e2345;
+                border-radius:10px;
+                min-height:42px;
+                display:flex;
+                align-items:center;
+              "
+            >
+              ${escapeHtml(formatCurrency(basePrice))}
+            </div>
+          </div>
+        </div>
+
+        <!-- Botão de finalizar -->
+        <button
+          type="button"
+          id="agenda-finalize-btn"
+          data-appointment-id="${escapeHtml(String(appointment.id))}"
+          data-base-price="${basePrice}"
+          style="
+            width:100%;
+            padding:13px 16px;
+            border-radius:10px;
+            border:none;
+            background:linear-gradient(135deg,#00e676,#00b4ff);
+            color:#000;
+            font-size:13px;
+            font-weight:800;
+            cursor:pointer;
+            transition:opacity .15s, transform .1s;
+            letter-spacing:.02em;
+          "
+        >
+          ✓ Confirmar e finalizar atendimento
+        </button>
+
+      </div>
+    </div>
+  `;
+}
+
+// ─── Ações de status rápido (excluindo "completed" — tratado pelo painel acima) ─
+function renderStatusActions(appointment) {
+  // "completed" é tratado pelo painel de finalização — removemos daqui para forçar
+  // o preenchimento da forma de pagamento antes de concluir
+  const actions = getAvailableStatusActions(appointment.status).filter(
+    (s) => s !== 'completed',
+  );
 
   if (!actions.length) {
     return `
       <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
-        Este agendamento já está finalizado neste status.
+        Este agendamento está no status final.
       </div>
     `;
   }
 
   return `
     <div style="display:flex;flex-wrap:wrap;gap:8px;">
-      ${actions
-        .map((status) => {
-          const meta = getStatusMeta(status);
-
-          return `
+      ${actions.map((status) => {
+        const meta = getStatusMeta(status);
+        return `
           <button
             type="button"
             class="agenda-status-action"
@@ -791,13 +713,13 @@ function renderStatusActions(appointment) {
               color:${meta.text};
               font-weight:700;
               cursor:pointer;
+              font-size:12px;
             "
           >
             ${escapeHtml(getStatusDisplayName(status))}
           </button>
         `;
-        })
-        .join('')}
+      }).join('')}
     </div>
   `;
 }
@@ -805,64 +727,45 @@ function renderStatusActions(appointment) {
 function renderConsumptionButtons(evaluation, subscription, appointment) {
   const consumedTypes = getConsumedTypesForAppointment(appointment.id);
   const availableTypes = evaluation.eligibleConsumeTypes.filter((type) => !consumedTypes.includes(type));
-
   if (appointment.status === 'cancelled' || appointment.status === 'no_show') return '';
   if (!evaluation.canConsumeForAppointment && !consumedTypes.length) return '';
 
   const buttons = [];
-
   if (availableTypes.includes('haircut')) {
     buttons.push(`
-      <button
-        type="button"
-        class="agenda-consume-action"
+      <button type="button" class="agenda-consume-action"
         data-subscription-id="${escapeHtml(subscription.id)}"
         data-appointment-id="${escapeHtml(appointment.id)}"
         data-consumed-type="haircut"
-        style="padding:8px 12px;border-radius:8px;border:1px solid rgba(0,230,118,.2);background:rgba(0,230,118,.1);color:#00e676;font-weight:700;cursor:pointer;"
-      >
+        style="padding:8px 12px;border-radius:8px;border:1px solid rgba(0,230,118,.2);background:rgba(0,230,118,.1);color:#00e676;font-weight:700;cursor:pointer;font-size:12px;">
         Consumir corte do plano
       </button>
     `);
   }
-
   if (availableTypes.includes('beard')) {
     buttons.push(`
-      <button
-        type="button"
-        class="agenda-consume-action"
+      <button type="button" class="agenda-consume-action"
         data-subscription-id="${escapeHtml(subscription.id)}"
         data-appointment-id="${escapeHtml(appointment.id)}"
         data-consumed-type="beard"
-        style="padding:8px 12px;border-radius:8px;border:1px solid rgba(156,111,255,.2);background:rgba(156,111,255,.1);color:#9c6fff;font-weight:700;cursor:pointer;"
-      >
+        style="padding:8px 12px;border-radius:8px;border:1px solid rgba(156,111,255,.2);background:rgba(156,111,255,.1);color:#9c6fff;font-weight:700;cursor:pointer;font-size:12px;">
         Consumir barba do plano
       </button>
     `);
   }
 
   const alreadyConsumedNote = consumedTypes.length
-    ? `
-      <div class="row-sub" style="padding:0;color:#5a6888;font-size:10px;">
-        Já consumido neste atendimento: ${escapeHtml(consumedTypes.map(getConsumedTypeLabel).join(' + '))}.
-      </div>
-    `
+    ? `<div class="row-sub" style="padding:0;color:#5a6888;font-size:10px;">Já consumido neste atendimento: ${escapeHtml(consumedTypes.map(getConsumedTypeLabel).join(' + '))}.</div>`
     : '';
 
-  if (!buttons.length) {
-    return alreadyConsumedNote;
-  }
+  if (!buttons.length) return alreadyConsumedNote;
 
   return `
-    <div style="display:flex;flex-wrap:wrap;gap:8px;">
-      ${buttons.join('')}
-    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;">${buttons.join('')}</div>
     ${alreadyConsumedNote}
-    ${
-      evaluation.requirement?.type === 'combo' && buttons.length >= 1
-        ? '<div class="row-sub" style="padding:0;color:#5a6888;font-size:10px;">Atendimento combo detectado: lance corte e barba separadamente quando necessário.</div>'
-        : ''
-    }
+    ${evaluation.requirement?.type === 'combo' && buttons.length >= 1
+      ? '<div class="row-sub" style="padding:0;color:#5a6888;font-size:10px;">Atendimento combo detectado: lance corte e barba separadamente quando necessário.</div>'
+      : ''}
   `;
 }
 
@@ -889,9 +792,7 @@ function renderSubscriptionPanel(subscription, appointment) {
             ${statusMeta.label}
           </span>
         </div>
-        <div style="margin-top:8px;color:#c0cce8;">
-          ${escapeHtml(subscription?.plans?.name || 'Plano')}
-        </div>
+        <div style="margin-top:8px;color:#c0cce8;">${escapeHtml(subscription?.plans?.name || 'Plano')}</div>
         <div style="margin-top:6px;color:#5a6888;font-size:10px;line-height:1.5;">
           Próxima cobrança: ${escapeHtml(formatDateDisplay(subscription.next_billing_at || subscription.current_period_end))}
           · Última fatura: <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
@@ -923,32 +824,38 @@ function renderSubscriptionPanel(subscription, appointment) {
   `;
 }
 
+// ─── Modal de detalhes (comanda) ──────────────────────────────────────────────
 function renderAppointmentDetails(appointment, subscription = null) {
   const meta = getStatusMeta(appointment.status);
+  const isFinalStatus = ['completed', 'cancelled', 'no_show'].includes(appointment.status);
 
   return `
     <div style="display:grid;grid-template-columns:1fr;gap:10px;">
+
+      <!-- Cabeçalho: nome + status -->
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
         <div>
           <div class="modal-title" style="margin:0;">${escapeHtml(getClientName(appointment))}</div>
-          <div class="modal-sub" style="margin-top:4px;">Detalhes do agendamento</div>
+          <div class="modal-sub" style="margin-top:4px;">Comanda do atendimento</div>
         </div>
         <div class="status-pill" style="background:${meta.pillBg};color:${meta.text};border:1px solid ${meta.border};">
           ${meta.label}
         </div>
       </div>
 
+      <!-- Horário + Valor -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div class="mini-card">
           <div class="mini-lbl">Horário</div>
           <div class="mini-val" style="font-size:18px;">${escapeHtml(formatTime(appointment.scheduled_at))}</div>
         </div>
         <div class="mini-card">
-          <div class="mini-lbl">Valor</div>
-          <div class="mini-val" style="font-size:18px;">${escapeHtml(formatCurrency(getServicePrice(appointment)))}</div>
+          <div class="mini-lbl">${isFinalStatus && appointment.status === 'completed' ? 'Valor cobrado' : 'Valor do serviço'}</div>
+          <div class="mini-val" style="font-size:18px;color:#00e676;">${escapeHtml(formatCurrency(getServicePrice(appointment)))}</div>
         </div>
       </div>
 
+      <!-- Informações do atendimento -->
       <div style="display:grid;grid-template-columns:1fr;gap:8px;">
         <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
           <strong style="color:#c0cce8;">Serviço:</strong> ${escapeHtml(getServiceName(appointment))}
@@ -959,11 +866,16 @@ function renderAppointmentDetails(appointment, subscription = null) {
         <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
           <strong style="color:#c0cce8;">Origem:</strong> ${escapeHtml(getSourceLabel(appointment.source))}
         </div>
-        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
-          <strong style="color:#c0cce8;">Status atual:</strong> ${escapeHtml(getStatusDisplayName(appointment.status))}
-        </div>
+        ${appointment.payment_method ? `
+          <div class="row-sub" style="padding:10px 12px;border:1px solid rgba(0,230,118,.18);border-radius:10px;background:rgba(0,230,118,.04);">
+            <strong style="color:#00e676;">Pagamento:</strong> ${escapeHtml(
+              PAYMENT_METHODS.find(m => m.value === appointment.payment_method)?.label || appointment.payment_method
+            )}
+          </div>
+        ` : ''}
       </div>
 
+      <!-- Plano do cliente -->
       <div style="margin-top:4px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a6888;margin-bottom:8px;">
           Plano do cliente
@@ -971,9 +883,17 @@ function renderAppointmentDetails(appointment, subscription = null) {
         ${renderSubscriptionPanel(subscription, appointment)}
       </div>
 
+      <!-- Painel de finalização (só exibe quando o atendimento pode ser concluído) -->
+      ${!isFinalStatus ? `
+        <div style="margin-top:4px;">
+          ${renderFinalizationPanel(appointment)}
+        </div>
+      ` : ''}
+
+      <!-- Outras ações de status (não inclui "Feito" — tratado acima) -->
       <div style="margin-top:4px;">
         <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a6888;margin-bottom:8px;">
-          Alterar status
+          Outras ações
         </div>
         ${renderStatusActions(appointment)}
       </div>
@@ -990,25 +910,17 @@ function renderAppointmentDetails(appointment, subscription = null) {
 function setAppointmentDetailsFeedback(message, variant = 'neutral') {
   const el = document.getElementById('agenda-details-feedback');
   if (!el) return;
-
   el.textContent = message || '';
-  el.style.color =
-    variant === 'error'
-      ? '#ff8a8a'
-      : variant === 'success'
-        ? '#00e676'
-        : '#5a6888';
+  el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
 async function getAppointmentSubscription(appointment) {
   const clientId = getClientId(appointment);
   if (!clientId) return null;
-
   const cacheKey = String(clientId);
   if (Object.prototype.hasOwnProperty.call(agendaState.subscriptionLookup, cacheKey)) {
     return agendaState.subscriptionLookup[cacheKey];
   }
-
   const subscription = await getActiveSubscriptionByClient(clientId);
   agendaState.subscriptionLookup[cacheKey] = subscription || null;
   return agendaState.subscriptionLookup[cacheKey];
@@ -1016,116 +928,159 @@ async function getAppointmentSubscription(appointment) {
 
 async function hydrateSubscriptionsForAppointments(appointments) {
   const uniqueClientIds = [...new Set(appointments.map(getClientId).filter(Boolean).map(String))];
-
   if (!uniqueClientIds.length) return;
-
   await Promise.all(
     uniqueClientIds.map(async (clientId) => {
       if (
         Object.prototype.hasOwnProperty.call(agendaState.subscriptionLookup, clientId) ||
         Object.prototype.hasOwnProperty.call(agendaState.subscriptionErrors, clientId)
-      ) {
-        return;
-      }
-
+      ) return;
       try {
         const subscription = await getActiveSubscriptionByClient(clientId);
         agendaState.subscriptionLookup[clientId] = subscription || null;
       } catch (error) {
         agendaState.subscriptionLookup[clientId] = null;
-        agendaState.subscriptionErrors[clientId] =
-          error instanceof Error ? error.message : 'Erro ao carregar plano.';
+        agendaState.subscriptionErrors[clientId] = error instanceof Error ? error.message : 'Erro ao carregar plano.';
       }
     }),
   );
 }
 
+// ─── Finalizar atendimento ────────────────────────────────────────────────────
+async function handleFinalizeAppointment(appointmentId, basePrice) {
+  const paymentMethodEl = document.getElementById('agenda-payment-method');
+  const discountEl      = document.getElementById('agenda-discount-input');
+  const paymentMethod   = paymentMethodEl?.value || '';
+
+  if (!paymentMethod) {
+    setAppointmentDetailsFeedback('Selecione a forma de pagamento antes de finalizar.', 'error');
+    return;
+  }
+
+  const discountRaw = parseFloat(discountEl?.value || '0');
+  const discount    = isNaN(discountRaw) || discountRaw < 0 ? 0 : Math.min(discountRaw, basePrice);
+  const finalPrice  = Math.max(basePrice - discount, 0);
+
+  const btn = document.getElementById('agenda-finalize-btn');
+
+  try {
+    if (btn) { btn.setAttribute('disabled', 'disabled'); btn.textContent = 'Finalizando...'; }
+    setAppointmentDetailsFeedback('Finalizando atendimento...', 'neutral');
+
+    await apiCompleteAppointment(appointmentId, { paymentMethod, finalPrice });
+
+    setAppointmentDetailsFeedback('Atendimento finalizado com sucesso!', 'success');
+
+    setTimeout(async () => {
+      closeAppointmentDetails();
+      await loadAgendaForDate(agendaState.currentDate);
+    }, 500);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Erro ao finalizar atendimento.';
+    setAppointmentDetailsFeedback(message, 'error');
+    if (btn) {
+      btn.removeAttribute('disabled');
+      btn.textContent = '✓ Confirmar e finalizar atendimento';
+    }
+  }
+}
+
 async function openAppointmentDetails(appointmentId) {
-  const modal = document.getElementById('agenda-details-modal');
+  const modal   = document.getElementById('agenda-details-modal');
   const content = document.getElementById('agenda-details-content');
   if (!modal || !content) return;
 
   const appointment = agendaState.currentAppointments.find(
     (item) => String(item.id) === String(appointmentId),
   );
-
   if (!appointment) return;
 
   content.innerHTML = `
     <div style="display:grid;gap:10px;">
       <div class="modal-title" style="margin:0;">${escapeHtml(getClientName(appointment))}</div>
-      <div class="modal-sub">Carregando detalhes do agendamento...</div>
+      <div class="modal-sub">Carregando comanda...</div>
     </div>
   `;
 
   modal.style.display = 'flex';
   modal.classList.add('open');
 
-  try {
-    const subscription = await getAppointmentSubscription(appointment);
-    content.innerHTML = renderAppointmentDetails(appointment, subscription);
-
+  const bindModalEvents = () => {
     document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
 
+    // Status rápido (não inclui completed)
     document.querySelectorAll('.agenda-status-action').forEach((button) => {
       button.addEventListener('click', () => {
         const nextStatus = button.dataset.status;
         const currentAppointmentId = button.dataset.appointmentId;
-
         if (!nextStatus || !currentAppointmentId) return;
         handleAppointmentStatusChange(currentAppointmentId, nextStatus);
       });
     });
 
+    // Consumo de plano
     document.querySelectorAll('.agenda-consume-action').forEach((button) => {
       button.addEventListener('click', () => {
-        const subscriptionId = button.dataset.subscriptionId;
+        const subscriptionId       = button.dataset.subscriptionId;
         const currentAppointmentId = button.dataset.appointmentId;
-        const consumedType = button.dataset.consumedType;
-
+        const consumedType         = button.dataset.consumedType;
         if (!subscriptionId || !currentAppointmentId || !consumedType) return;
-
         handleConsumeSubscriptionBenefit(subscriptionId, currentAppointmentId, consumedType);
       });
     });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Não foi possível carregar o plano do cliente.';
-    content.innerHTML = renderAppointmentDetails(appointment, null);
 
-    setTimeout(() => {
-      setAppointmentDetailsFeedback(message, 'error');
-    }, 0);
+    // ── Painel de finalização ─────────────────────────────────────────────────
+    const finalizeBtn       = document.getElementById('agenda-finalize-btn');
+    const discountInput     = document.getElementById('agenda-discount-input');
+    const finalPriceDisplay = document.getElementById('agenda-final-price-display');
 
-    document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
-
-    document.querySelectorAll('.agenda-status-action').forEach((button) => {
-      button.addEventListener('click', () => {
-        const nextStatus = button.dataset.status;
-        const currentAppointmentId = button.dataset.appointmentId;
-
-        if (!nextStatus || !currentAppointmentId) return;
-        handleAppointmentStatusChange(currentAppointmentId, nextStatus);
+    // Recalcula valor final em tempo real conforme desconto é digitado
+    if (discountInput && finalPriceDisplay) {
+      discountInput.addEventListener('input', () => {
+        const base     = parseFloat(discountInput.dataset.basePrice || '0');
+        const discount = parseFloat(discountInput.value || '0');
+        const safe     = isNaN(discount) || discount < 0 ? 0 : Math.min(discount, base);
+        const final    = Math.max(base - safe, 0);
+        finalPriceDisplay.textContent = formatCurrency(final);
+        finalPriceDisplay.style.color = safe > 0 ? '#ffd700' : '#00e676';
       });
-    });
+    }
+
+    if (finalizeBtn) {
+      finalizeBtn.addEventListener('mouseenter', () => { if (!finalizeBtn.disabled) finalizeBtn.style.opacity = '.88'; });
+      finalizeBtn.addEventListener('mouseleave', () => { finalizeBtn.style.opacity = '1'; });
+      finalizeBtn.addEventListener('click', () => {
+        const apptId    = finalizeBtn.dataset.appointmentId;
+        const basePrice = parseFloat(finalizeBtn.dataset.basePrice || '0');
+        if (apptId) handleFinalizeAppointment(apptId, basePrice);
+      });
+    }
+  };
+
+  try {
+    const subscription = await getAppointmentSubscription(appointment);
+    content.innerHTML  = renderAppointmentDetails(appointment, subscription);
+    bindModalEvents();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível carregar o plano do cliente.';
+    content.innerHTML = renderAppointmentDetails(appointment, null);
+    setTimeout(() => setAppointmentDetailsFeedback(message, 'error'), 0);
+    bindModalEvents();
   }
 }
 
 function closeAppointmentDetails() {
-  const modal = document.getElementById('agenda-details-modal');
+  const modal   = document.getElementById('agenda-details-modal');
   const content = document.getElementById('agenda-details-content');
   if (!modal) return;
-
   modal.classList.remove('open');
   modal.style.display = 'none';
-
   if (content) content.innerHTML = '';
 }
 
 function openCreateModal() {
   const modal = document.getElementById('agenda-create-modal');
   if (!modal) return;
-
   modal.classList.add('open');
   modal.style.display = 'flex';
 }
@@ -1133,7 +1088,6 @@ function openCreateModal() {
 function closeCreateModal() {
   const modal = document.getElementById('agenda-create-modal');
   if (!modal) return;
-
   modal.classList.remove('open');
   modal.style.display = 'none';
 }
@@ -1143,12 +1097,7 @@ function setCreateFeedback(message, variant = 'neutral') {
   if (!el) return;
   el.textContent = message || '';
   el.dataset.variant = variant;
-  el.style.color =
-    variant === 'error'
-      ? '#ff8a8a'
-      : variant === 'success'
-        ? '#00e676'
-        : '#5a6888';
+  el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
 function updateAgendaHeader(dateValue) {
@@ -1162,75 +1111,44 @@ function toScheduledAtIso(dateValue, timeValue) {
 }
 
 async function ensureCreateDependencies() {
-  if (!agendaState.cachedClients) agendaState.cachedClients = await getClients();
-  if (!agendaState.cachedBarbers) agendaState.cachedBarbers = await getBarbers();
+  if (!agendaState.cachedClients)  agendaState.cachedClients  = await getClients();
+  if (!agendaState.cachedBarbers)  agendaState.cachedBarbers  = await getBarbers();
   if (!agendaState.cachedServices) agendaState.cachedServices = await getServices();
-
   return {
-    clients: Array.isArray(agendaState.cachedClients) ? agendaState.cachedClients : [],
-    barbers: Array.isArray(agendaState.cachedBarbers) ? agendaState.cachedBarbers : [],
+    clients:  Array.isArray(agendaState.cachedClients)  ? agendaState.cachedClients  : [],
+    barbers:  Array.isArray(agendaState.cachedBarbers)  ? agendaState.cachedBarbers  : [],
     services: Array.isArray(agendaState.cachedServices) ? agendaState.cachedServices : [],
   };
 }
 
 async function populateCreateModal() {
-  const clientSelect = document.getElementById('agenda-create-client');
-  const barberSelect = document.getElementById('agenda-create-barber');
+  const clientSelect  = document.getElementById('agenda-create-client');
+  const barberSelect  = document.getElementById('agenda-create-barber');
   const serviceSelect = document.getElementById('agenda-create-service');
-  const dateInput = document.getElementById('agenda-create-date');
+  const dateInput     = document.getElementById('agenda-create-date');
 
   if (dateInput) dateInput.value = agendaState.currentDate;
-
   setCreateFeedback('Carregando opções...', 'neutral');
 
   try {
     const { clients, barbers, services } = await ensureCreateDependencies();
-
-    if (clientSelect) {
-      clientSelect.innerHTML =
-        '<option value="">Selecione o cliente</option>' +
-        renderModalSelectOptions(clients, (item) => item.id, (item) => item.name || 'Cliente');
-    }
-
-    if (barberSelect) {
-      barberSelect.innerHTML =
-        '<option value="">Selecione o barbeiro</option>' +
-        renderModalSelectOptions(
-          barbers,
-          (item) => item.id,
-          (item) => item?.users?.name || 'Barbeiro',
-        );
-    }
-
-    if (serviceSelect) {
-      serviceSelect.innerHTML =
-        '<option value="">Selecione o serviço</option>' +
-        renderModalSelectOptions(
-          services,
-          (item) => item.id,
-          (item) => `${item.name || 'Serviço'} · ${formatCurrency(item.price)}`,
-        );
-    }
-
+    if (clientSelect)  clientSelect.innerHTML  = '<option value="">Selecione o cliente</option>'  + renderModalSelectOptions(clients,  (i) => i.id, (i) => i.name || 'Cliente');
+    if (barberSelect)  barberSelect.innerHTML  = '<option value="">Selecione o barbeiro</option>' + renderModalSelectOptions(barbers,  (i) => i.id, (i) => i?.users?.name || 'Barbeiro');
+    if (serviceSelect) serviceSelect.innerHTML = '<option value="">Selecione o serviço</option>'  + renderModalSelectOptions(services, (i) => i.id, (i) => `${i.name || 'Serviço'} · ${formatCurrency(i.price)}`);
     setCreateFeedback('', 'neutral');
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Não foi possível carregar clientes, barbeiros e serviços.';
-    setCreateFeedback(message, 'error');
+    setCreateFeedback(error instanceof Error ? error.message : 'Não foi possível carregar as opções.', 'error');
   }
 }
 
 async function handleCreateAppointment(event) {
   event.preventDefault();
-
-  const submitBtn = document.getElementById('agenda-create-submit');
-  const clientId = document.getElementById('agenda-create-client')?.value;
-  const barberId = document.getElementById('agenda-create-barber')?.value;
-  const serviceId = document.getElementById('agenda-create-service')?.value;
-  const dateValue = document.getElementById('agenda-create-date')?.value;
-  const timeValue = document.getElementById('agenda-create-time')?.value;
+  const submitBtn   = document.getElementById('agenda-create-submit');
+  const clientId    = document.getElementById('agenda-create-client')?.value;
+  const barberId    = document.getElementById('agenda-create-barber')?.value;
+  const serviceId   = document.getElementById('agenda-create-service')?.value;
+  const dateValue   = document.getElementById('agenda-create-date')?.value;
+  const timeValue   = document.getElementById('agenda-create-time')?.value;
   const sourceValue = document.getElementById('agenda-create-source')?.value || 'dashboard';
 
   if (!clientId || !barberId || !serviceId || !dateValue || !timeValue) {
@@ -1242,13 +1160,7 @@ async function handleCreateAppointment(event) {
     submitBtn?.setAttribute('disabled', 'disabled');
     if (submitBtn) submitBtn.textContent = 'Salvando...';
 
-    await createAppointment({
-      clientId,
-      barberId,
-      serviceId,
-      scheduledAt: toScheduledAtIso(dateValue, timeValue),
-      source: sourceValue,
-    });
+    await createAppointment({ clientId, barberId, serviceId, scheduledAt: toScheduledAtIso(dateValue, timeValue), source: sourceValue });
 
     setCreateFeedback('Agendamento criado com sucesso.', 'success');
     agendaState.currentDate = dateValue;
@@ -1267,9 +1179,7 @@ async function handleCreateAppointment(event) {
       if (modalDateInput) modalDateInput.value = agendaState.currentDate;
     }, 350);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Não foi possível criar o agendamento.';
-    setCreateFeedback(message, 'error');
+    setCreateFeedback(error instanceof Error ? error.message : 'Não foi possível criar o agendamento.', 'error');
   } finally {
     submitBtn?.removeAttribute('disabled');
     if (submitBtn) submitBtn.textContent = 'Salvar agendamento';
@@ -1277,10 +1187,8 @@ async function handleCreateAppointment(event) {
 }
 
 async function handleConsumeSubscriptionBenefit(subscriptionId, appointmentId, consumedType) {
-  const buttons = document.querySelectorAll('.agenda-consume-action');
-  const appointment = agendaState.currentAppointments.find(
-    (item) => String(item.id) === String(appointmentId),
-  );
+  const buttons     = document.querySelectorAll('.agenda-consume-action');
+  const appointment = agendaState.currentAppointments.find((item) => String(item.id) === String(appointmentId));
 
   try {
     buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
@@ -1288,27 +1196,19 @@ async function handleConsumeSubscriptionBenefit(subscriptionId, appointmentId, c
 
     await consumeSubscriptionBenefit(subscriptionId, {
       appointment_id: appointmentId,
-      consumed_type: consumedType,
-      quantity: 1,
-      notes: 'Consumo manual pela agenda',
+      consumed_type:  consumedType,
+      quantity:       1,
+      notes:          'Consumo manual pela agenda',
     });
 
     markAppointmentBenefitAsConsumed(appointmentId, consumedType);
-
-    if (appointment) {
-      clearCachedSubscriptionByClient(getClientId(appointment));
-    }
+    if (appointment) clearCachedSubscriptionByClient(getClientId(appointment));
 
     setAppointmentDetailsFeedback('Benefício consumido com sucesso.', 'success');
-
     await loadAgendaForDate(agendaState.currentDate);
     await openAppointmentDetails(appointmentId);
   } catch (error) {
-    const message =
-      error instanceof Error
-        ? error.message
-        : 'Não foi possível consumir o benefício do plano.';
-    setAppointmentDetailsFeedback(message, 'error');
+    setAppointmentDetailsFeedback(error instanceof Error ? error.message : 'Não foi possível consumir o benefício.', 'error');
   } finally {
     buttons.forEach((button) => button.removeAttribute('disabled'));
   }
@@ -1316,21 +1216,15 @@ async function handleConsumeSubscriptionBenefit(subscriptionId, appointmentId, c
 
 async function handleAppointmentStatusChange(appointmentId, status) {
   const buttons = document.querySelectorAll('.agenda-status-action');
-
   try {
     buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
     setAppointmentDetailsFeedback('Atualizando status...', 'neutral');
-
     await updateAppointmentStatus(appointmentId, status);
-
     setAppointmentDetailsFeedback('Status atualizado com sucesso.', 'success');
-
     closeAppointmentDetails();
     await loadAgendaForDate(agendaState.currentDate);
   } catch (error) {
-    const message =
-      error instanceof Error ? error.message : 'Não foi possível atualizar o status.';
-    setAppointmentDetailsFeedback(message, 'error');
+    setAppointmentDetailsFeedback(error instanceof Error ? error.message : 'Não foi possível atualizar o status.', 'error');
   } finally {
     buttons.forEach((button) => button.removeAttribute('disabled'));
   }
@@ -1347,11 +1241,7 @@ function getBarberFilterOptions(appointments) {
 
 function ensureValidAgendaFilters(appointments) {
   const barberOptions = getBarberFilterOptions(appointments);
-
-  if (
-    agendaState.filters.barber !== 'all' &&
-    !barberOptions.includes(agendaState.filters.barber)
-  ) {
+  if (agendaState.filters.barber !== 'all' && !barberOptions.includes(agendaState.filters.barber)) {
     agendaState.filters.barber = 'all';
   }
 }
@@ -1359,85 +1249,46 @@ function ensureValidAgendaFilters(appointments) {
 function applyAgendaFilters(appointments) {
   return appointments.filter((appointment) => {
     const ui = getAppointmentUiContext(appointment);
-
-    if (agendaState.filters.status !== 'all' && appointment.status !== agendaState.filters.status) {
-      return false;
-    }
-
-    if (agendaState.filters.barber !== 'all' && getBarberName(appointment) !== agendaState.filters.barber) {
-      return false;
-    }
-
-    if (agendaState.filters.focus === 'withPlan' && !ui.evaluation.hasPlan) {
-      return false;
-    }
-
-    if (agendaState.filters.focus === 'blocked' && !ui.requiresAttention) {
-      return false;
-    }
-
-    if (agendaState.filters.focus === 'consumed' && !ui.hasConsumedInPlan) {
-      return false;
-    }
-
+    if (agendaState.filters.status !== 'all' && appointment.status !== agendaState.filters.status) return false;
+    if (agendaState.filters.barber !== 'all' && getBarberName(appointment) !== agendaState.filters.barber) return false;
+    if (agendaState.filters.focus === 'withPlan'  && !ui.evaluation.hasPlan)    return false;
+    if (agendaState.filters.focus === 'blocked'   && !ui.requiresAttention)     return false;
+    if (agendaState.filters.focus === 'consumed'  && !ui.hasConsumedInPlan)     return false;
     return true;
   });
 }
 
 function renderAgendaToolbar(appointments, counters, filteredCount) {
   const barberOptions = getBarberFilterOptions(appointments);
-
   return `
     <div class="agenda-toolbar">
       <div class="agenda-focus-chips">
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'all' ? 'is-active' : ''}" data-focus-filter="all">
-          Todos <span>${counters.total}</span>
-        </button>
-
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'withPlan' ? 'is-active' : ''}" data-focus-filter="withPlan">
-          Com plano <span>${counters.withPlan}</span>
-        </button>
-
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'blocked' ? 'is-active' : ''}" data-focus-filter="blocked">
-          Bloqueados <span>${counters.blocked}</span>
-        </button>
-
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'consumed' ? 'is-active' : ''}" data-focus-filter="consumed">
-          Consumidos <span>${counters.consumed}</span>
-        </button>
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'all'      ? 'is-active' : ''}" data-focus-filter="all">Todos <span>${counters.total}</span></button>
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'withPlan' ? 'is-active' : ''}" data-focus-filter="withPlan">Com plano <span>${counters.withPlan}</span></button>
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'blocked'  ? 'is-active' : ''}" data-focus-filter="blocked">Bloqueados <span>${counters.blocked}</span></button>
+        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'consumed' ? 'is-active' : ''}" data-focus-filter="consumed">Consumidos <span>${counters.consumed}</span></button>
       </div>
-
       <div class="agenda-filter-row">
         <div class="agenda-filter-field">
           <label for="agenda-filter-status">Status</label>
           <select id="agenda-filter-status" class="agenda-filter-select">
-            <option value="all" ${agendaState.filters.status === 'all' ? 'selected' : ''}>Todos</option>
-            <option value="pending" ${agendaState.filters.status === 'pending' ? 'selected' : ''}>Agendado</option>
-            <option value="confirmed" ${agendaState.filters.status === 'confirmed' ? 'selected' : ''}>Confirmado</option>
+            <option value="all"         ${agendaState.filters.status === 'all'         ? 'selected' : ''}>Todos</option>
+            <option value="pending"     ${agendaState.filters.status === 'pending'     ? 'selected' : ''}>Agendado</option>
+            <option value="confirmed"   ${agendaState.filters.status === 'confirmed'   ? 'selected' : ''}>Confirmado</option>
             <option value="in_progress" ${agendaState.filters.status === 'in_progress' ? 'selected' : ''}>Em andamento</option>
-            <option value="completed" ${agendaState.filters.status === 'completed' ? 'selected' : ''}>Concluído</option>
-            <option value="cancelled" ${agendaState.filters.status === 'cancelled' ? 'selected' : ''}>Cancelado</option>
-            <option value="no_show" ${agendaState.filters.status === 'no_show' ? 'selected' : ''}>No-show</option>
+            <option value="completed"   ${agendaState.filters.status === 'completed'   ? 'selected' : ''}>Concluído</option>
+            <option value="cancelled"   ${agendaState.filters.status === 'cancelled'   ? 'selected' : ''}>Cancelado</option>
+            <option value="no_show"     ${agendaState.filters.status === 'no_show'     ? 'selected' : ''}>No-show</option>
           </select>
         </div>
-
         <div class="agenda-filter-field">
           <label for="agenda-filter-barber">Barbeiro</label>
           <select id="agenda-filter-barber" class="agenda-filter-select">
             <option value="all">Todos</option>
-            ${barberOptions
-              .map(
-                (barber) => `
-                  <option value="${escapeHtml(barber)}" ${agendaState.filters.barber === barber ? 'selected' : ''}>
-                    ${escapeHtml(barber)}
-                  </option>
-                `,
-              )
-              .join('')}
+            ${barberOptions.map((b) => `<option value="${escapeHtml(b)}" ${agendaState.filters.barber === b ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('')}
           </select>
         </div>
       </div>
-
       <div class="agenda-filter-result">
         Exibindo <strong>${filteredCount}</strong> de <strong>${appointments.length}</strong> atendimentos.
       </div>
@@ -1446,25 +1297,15 @@ function renderAgendaToolbar(appointments, counters, filteredCount) {
 }
 
 function renderFilteredEmptyState() {
-  return `
-    <div class="agenda-filter-empty">
-      Nenhum atendimento encontrado com os filtros aplicados.
-    </div>
-  `;
+  return `<div class="agenda-filter-empty">Nenhum atendimento encontrado com os filtros aplicados.</div>`;
 }
 
 function bindAgendaListInteractions() {
-  document.getElementById('agenda-refresh-action')?.addEventListener('click', () => {
-    loadAgendaForDate(agendaState.currentDate);
-  });
-
+  document.getElementById('agenda-refresh-action')?.addEventListener('click', () => loadAgendaForDate(agendaState.currentDate));
   document.getElementById('agenda-new-action')?.addEventListener('click', handleOpenCreateModal);
 
   document.querySelectorAll('.appt-row[data-appointment-id]').forEach((row) => {
-    row.addEventListener('click', () => {
-      openAppointmentDetails(row.dataset.appointmentId);
-    });
-
+    row.addEventListener('click', () => openAppointmentDetails(row.dataset.appointmentId));
     row.addEventListener('keydown', (event) => {
       if (event.key === 'Enter' || event.key === ' ') {
         event.preventDefault();
@@ -1492,23 +1333,22 @@ function bindAgendaListInteractions() {
 }
 
 function renderAgendaData() {
-  const listContainer = document.getElementById('agenda-list-container');
+  const listContainer    = document.getElementById('agenda-list-container');
   const summaryContainer = document.getElementById('agenda-summary-container');
-
   if (!listContainer || !summaryContainer) return;
 
   const appointments = Array.isArray(agendaState.currentAppointments) ? agendaState.currentAppointments : [];
 
   if (!appointments.length) {
-    listContainer.innerHTML = renderEmptyState('Nenhum agendamento encontrado para a data selecionada.');
+    listContainer.innerHTML    = renderEmptyState('Nenhum agendamento encontrado para a data selecionada.');
     summaryContainer.innerHTML = renderEmptyState('Sem dados para resumir nesta data.');
     return;
   }
 
   ensureValidAgendaFilters(appointments);
 
-  const counters = getAgendaCounters(appointments);
-  const summary = createSummary(appointments);
+  const counters             = getAgendaCounters(appointments);
+  const summary              = createSummary(appointments);
   const filteredAppointments = applyAgendaFilters(appointments);
 
   listContainer.innerHTML = `
@@ -1516,34 +1356,22 @@ function renderAgendaData() {
       <div class="card-header">
         <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(agendaState.currentDate))}</div>
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button class="btn-primary-gradient" id="agenda-new-action" type="button">
-            + Novo agendamento
-          </button>
-          <button class="btn-primary-gradient" id="agenda-refresh-action" type="button">
-            Atualizar
-          </button>
+          <button class="btn-primary-gradient" id="agenda-new-action"     type="button">+ Novo agendamento</button>
+          <button class="btn-primary-gradient" id="agenda-refresh-action" type="button">Atualizar</button>
         </div>
       </div>
-
       ${renderAgendaToolbar(appointments, counters, filteredAppointments.length)}
-
-      ${
-        filteredAppointments.length
-          ? filteredAppointments.map(renderAppointmentRow).join('')
-          : renderFilteredEmptyState()
-      }
+      ${filteredAppointments.length ? filteredAppointments.map(renderAppointmentRow).join('') : renderFilteredEmptyState()}
     </div>
   `;
 
   summaryContainer.innerHTML = `<div class="card">${renderSummaryPanel(summary, counters)}</div>`;
-
   bindAgendaListInteractions();
 }
 
 async function loadAgendaForDate(dateValue) {
   agendaState.currentDate = dateValue;
-
-  const listContainer = document.getElementById('agenda-list-container');
+  const listContainer    = document.getElementById('agenda-list-container');
   const summaryContainer = document.getElementById('agenda-summary-container');
   if (!listContainer || !summaryContainer) return;
 
@@ -1552,47 +1380,37 @@ async function loadAgendaForDate(dateValue) {
   const apiUrl = getApiBaseUrl();
   if (!apiUrl) {
     agendaState.currentAppointments = [];
-    listContainer.innerHTML = renderConfigHint(
-      'API não configurada',
-      'Abra o login dev e informe a URL pública do backend no Railway para começar a integrar os menus.',
-      true,
-    );
+    listContainer.innerHTML    = renderConfigHint('API não configurada', 'Informe a URL pública do backend para integrar a Agenda.', true);
     summaryContainer.innerHTML = renderEmptyState('Aguardando configuração da API.');
     return;
   }
 
   if (!hasAuthToken()) {
     agendaState.currentAppointments = [];
-    listContainer.innerHTML = renderConfigHint(
-      'Login de desenvolvimento pendente',
-      'Faça o login dev com o e-mail do usuário cadastrado no backend para liberar as rotas protegidas da Agenda.',
-      true,
-    );
-    summaryContainer.innerHTML = renderEmptyState('Aguardando autenticação para exibir a agenda real.');
+    listContainer.innerHTML    = renderConfigHint('Login pendente', 'Faça o login para liberar as rotas protegidas da Agenda.', true);
+    summaryContainer.innerHTML = renderEmptyState('Aguardando autenticação.');
     return;
   }
 
-  listContainer.innerHTML = renderLoadingState();
+  listContainer.innerHTML    = renderLoadingState();
   summaryContainer.innerHTML = renderLoadingState();
 
   try {
-    const appointments = await getAppointmentsByDate(dateValue);
-    const safeAppointments = Array.isArray(appointments) ? appointments : [];
+    const appointments      = await getAppointmentsByDate(dateValue);
+    const safeAppointments  = Array.isArray(appointments) ? appointments : [];
     agendaState.currentAppointments = safeAppointments;
-
     await hydrateSubscriptionsForAppointments(safeAppointments);
     renderAgendaData();
   } catch (error) {
     agendaState.currentAppointments = [];
     const message = error instanceof Error ? error.message : 'Não foi possível carregar a agenda.';
-    listContainer.innerHTML = renderConfigHint('Erro ao consultar a agenda', message, true);
-    summaryContainer.innerHTML = renderEmptyState('Sem resumo disponível por causa do erro de integração.');
+    listContainer.innerHTML    = renderConfigHint('Erro ao consultar a agenda', message, true);
+    summaryContainer.innerHTML = renderEmptyState('Sem resumo disponível.');
   }
 }
 
 export function renderAgenda() {
   const today = agendaState.currentDate || formatDateForApi(new Date());
-
   return /* html */ `
 <section class="page-shell page--agenda">
   <div class="grid-2">
@@ -1606,12 +1424,8 @@ export function renderAgenda() {
             value="${today}"
             style="background:#0a0c1a;border:1px solid #1e2345;border-radius:8px;padding:8px 10px;color:#e8f0fe;font:inherit;min-width:160px;"
           />
-          <button id="agenda-create-cta" type="button" class="btn-primary-gradient">
-            + Novo agendamento
-          </button>
-          <button id="agenda-load-action" type="button" class="btn-primary-gradient">
-            Carregar data
-          </button>
+          <button id="agenda-create-cta"  type="button" class="btn-primary-gradient">+ Novo agendamento</button>
+          <button id="agenda-load-action" type="button" class="btn-primary-gradient">Carregar data</button>
         </div>
       </div>
       <div id="agenda-list-container"></div>
@@ -1619,18 +1433,19 @@ export function renderAgenda() {
     <div id="agenda-summary-container"></div>
   </div>
 
+  <!-- Modal: criar agendamento -->
   <div id="agenda-create-modal" class="modal-overlay" style="display:none;">
     <div class="modal" style="width:min(92vw, 520px);">
       <div class="modal-title">Novo agendamento</div>
-      <div class="modal-sub">Preencha os dados abaixo para incluir um horário real na agenda.</div>
+      <div class="modal-sub">Preencha os dados para incluir um horário na agenda.</div>
       <form id="agenda-create-form">
         <div style="display:grid;grid-template-columns:1fr;gap:10px;">
-          <select id="agenda-create-client" class="modal-input"><option value="">Selecione o cliente</option></select>
-          <select id="agenda-create-barber" class="modal-input"><option value="">Selecione o barbeiro</option></select>
+          <select id="agenda-create-client"  class="modal-input"><option value="">Selecione o cliente</option></select>
+          <select id="agenda-create-barber"  class="modal-input"><option value="">Selecione o barbeiro</option></select>
           <select id="agenda-create-service" class="modal-input"><option value="">Selecione o serviço</option></select>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <input id="agenda-create-date" class="modal-input" type="date" value="${today}" />
-            <input id="agenda-create-time" class="modal-input" type="time" value="14:30" step="1800" />
+            <input id="agenda-create-date" class="modal-input" type="date"  value="${today}" />
+            <input id="agenda-create-time" class="modal-input" type="time"  value="14:30" step="1800" />
           </div>
           <select id="agenda-create-source" class="modal-input">
             <option value="dashboard">Dashboard</option>
@@ -1642,14 +1457,15 @@ export function renderAgenda() {
         <div id="agenda-create-feedback" style="min-height:20px;font-size:10px;color:#5a6888;margin:10px 0 4px;"></div>
         <div class="modal-buttons" style="margin-top:10px;">
           <button type="button" class="btn-cancel" id="agenda-create-cancel">Cancelar</button>
-          <button type="submit" class="btn-save" id="agenda-create-submit">Salvar agendamento</button>
+          <button type="submit"                    class="btn-save"   id="agenda-create-submit">Salvar agendamento</button>
         </div>
       </form>
     </div>
   </div>
 
+  <!-- Modal: detalhes / comanda -->
   <div id="agenda-details-modal" class="modal-overlay" style="display:none;">
-    <div class="modal" style="width:min(92vw, 520px);">
+    <div class="modal" style="width:min(92vw, 520px);max-height:90vh;overflow-y:auto;">
       <div id="agenda-details-content"></div>
     </div>
   </div>
@@ -1658,14 +1474,14 @@ export function renderAgenda() {
 }
 
 export function initAgendaPage() {
-  const dateInput = document.getElementById('agenda-date-input');
-  const loadButton = document.getElementById('agenda-load-action');
-  const createButton = document.getElementById('agenda-create-cta');
-  const createForm = document.getElementById('agenda-create-form');
-  const createCancel = document.getElementById('agenda-create-cancel');
-  const modal = document.getElementById('agenda-create-modal');
-  const detailsModal = document.getElementById('agenda-details-modal');
-  const initialDate = dateInput?.value || agendaState.currentDate || formatDateForApi(new Date());
+  const dateInput     = document.getElementById('agenda-date-input');
+  const loadButton    = document.getElementById('agenda-load-action');
+  const createButton  = document.getElementById('agenda-create-cta');
+  const createForm    = document.getElementById('agenda-create-form');
+  const createCancel  = document.getElementById('agenda-create-cancel');
+  const modal         = document.getElementById('agenda-create-modal');
+  const detailsModal  = document.getElementById('agenda-details-modal');
+  const initialDate   = dateInput?.value || agendaState.currentDate || formatDateForApi(new Date());
 
   const loadCurrentSelection = () => {
     const selectedDate = dateInput?.value || formatDateForApi(new Date());
@@ -1678,13 +1494,8 @@ export function initAgendaPage() {
   createForm?.addEventListener('submit', handleCreateAppointment);
   createCancel?.addEventListener('click', closeCreateModal);
 
-  modal?.addEventListener('click', (event) => {
-    if (event.target === modal) closeCreateModal();
-  });
-
-  detailsModal?.addEventListener('click', (event) => {
-    if (event.target === detailsModal) closeAppointmentDetails();
-  });
+  modal?.addEventListener('click', (event) => { if (event.target === modal) closeCreateModal(); });
+  detailsModal?.addEventListener('click', (event) => { if (event.target === detailsModal) closeAppointmentDetails(); });
 
   loadAgendaForDate(initialDate);
 }
