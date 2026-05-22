@@ -8,10 +8,38 @@ import {
 } from '../services/api.js';
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 60000;
+const DASHBOARD_WIDGET_PREFS_STORAGE_KEY = 'barberflow.dashboard.widgetPrefs.v23';
+const DASHBOARD_WIDGET_DEFAULT_HEIGHT = 380;
+
+const DASHBOARD_WIDGETS = {
+  'widget-fin': { contentId: 'dashboardFinContent', label: 'Financeiro', defaultChart: 'bar' },
+  'widget-agenda': { contentId: 'dashboardAgendaContent', label: 'Agenda', defaultChart: 'pie' },
+  'widget-recorrencia': { contentId: 'dashboardRecorrenciaContent', label: 'Recorrência', defaultChart: 'bar' },
+  'widget-alertas': { contentId: 'dashboardAlertasContent', label: 'Alertas', defaultChart: 'bar' },
+  'widget-aval': { contentId: 'dashboardAvalContent', label: 'Avaliações', defaultChart: 'bar' },
+  'widget-servicos': { contentId: 'dashboardServicosContent', label: 'Serviços', defaultChart: 'bar' },
+};
+
+const DASHBOARD_WIDGET_ORDER = [
+  'widget-fin',
+  'widget-agenda',
+  'widget-recorrencia',
+  'widget-alertas',
+  'widget-aval',
+  'widget-servicos',
+];
+
+const DASHBOARD_WIDGET_HEIGHT_PRESETS = {
+  m: 380,
+  g: 470,
+  gg: 560,
+};
 
 let dashboardBootstrapped = false;
 let dashboardRefreshTimer = null;
 let dashboardAuthRefreshTimer = null;
+let dashboardWidgetControlsBound = false;
+let dashboardLastPayload = null;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -422,9 +450,10 @@ function renderServicosWidget(data) {
 
 function ensureDashboardWidgets() {
   const hero = document.getElementById('hero');
-  if (!hero || document.getElementById('dashboardWidgetRecorrencia')) return;
+  if (!hero) return;
 
-  hero.insertAdjacentHTML('beforeend', `
+  if (!document.getElementById('dashboardWidgetRecorrencia')) {
+    hero.insertAdjacentHTML('beforeend', `
     <div id="dashboardWidgetRecorrencia"
       class="analytics-card pos-ml dashboard-widget dashboard-widget--recurrence"
       data-target="planos" data-widget-id="widget-recorrencia" title="Abrir Planos">
@@ -453,6 +482,10 @@ function ensureDashboardWidgets() {
       <div class="widget-module">Módulo: Operação</div>
     </div>
   `);
+  }
+
+  ensureDashboardWidgetLayer();
+  enhanceDashboardWidgets();
 }
 
 function flattenInvoices(subscriptions) {
@@ -660,6 +693,565 @@ function renderAlertas(snap) {
   `;
 }
 
+
+// ─── Widget preferences, charts and resize ───────────────────────────────────
+
+function readDashboardWidgetPrefs() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(DASHBOARD_WIDGET_PREFS_STORAGE_KEY) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDashboardWidgetPrefs(prefs) {
+  try {
+    localStorage.setItem(DASHBOARD_WIDGET_PREFS_STORAGE_KEY, JSON.stringify(prefs || {}));
+  } catch {
+    // noop
+  }
+}
+
+function getWidgetPrefs(widgetId) {
+  const all = readDashboardWidgetPrefs();
+  const meta = DASHBOARD_WIDGETS[widgetId] || {};
+  return {
+    mode: all?.[widgetId]?.mode || 'summary',
+    chart: all?.[widgetId]?.chart || meta.defaultChart || 'bar',
+    size: all?.[widgetId]?.size || 'm',
+    height: toNumber(all?.[widgetId]?.height, DASHBOARD_WIDGET_DEFAULT_HEIGHT),
+    span: toNumber(all?.[widgetId]?.span, 1),
+  };
+}
+
+function updateWidgetPrefs(widgetId, patch = {}) {
+  const all = readDashboardWidgetPrefs();
+  const current = getWidgetPrefs(widgetId);
+  all[widgetId] = { ...current, ...patch };
+  writeDashboardWidgetPrefs(all);
+  return all[widgetId];
+}
+
+function resetDashboardWidgetPrefs() {
+  try {
+    localStorage.removeItem(DASHBOARD_WIDGET_PREFS_STORAGE_KEY);
+  } catch {
+    // noop
+  }
+}
+
+function ensureDashboardWidgetLayer() {
+  const hero = document.getElementById('hero');
+  if (!hero) return null;
+
+  let layer = document.getElementById('dashboardWidgetLayer');
+  if (!layer) {
+    layer = document.createElement('div');
+    layer.id = 'dashboardWidgetLayer';
+    layer.className = 'dashboard-widget-layer';
+    hero.appendChild(layer);
+  }
+
+  DASHBOARD_WIDGET_ORDER.forEach(widgetId => {
+    const widget = hero.querySelector(`[data-widget-id="${widgetId}"]`);
+    if (widget && widget.parentElement !== layer) {
+      layer.appendChild(widget);
+    }
+  });
+
+  return layer;
+}
+
+function widgetContentElement(widgetId) {
+  const contentId = DASHBOARD_WIDGETS[widgetId]?.contentId;
+  return contentId ? document.getElementById(contentId) : null;
+}
+
+function getWidgetElement(widgetId) {
+  return document.querySelector(`[data-widget-id="${CSS.escape(widgetId)}"]`);
+}
+
+function updateWidgetChrome(widget) {
+  if (!(widget instanceof HTMLElement)) return;
+  const widgetId = widget.dataset.widgetId;
+  if (!widgetId) return;
+
+  const prefs = getWidgetPrefs(widgetId);
+  widget.dataset.widgetMode = prefs.mode;
+  widget.dataset.widgetChart = prefs.chart;
+  widget.dataset.widgetSize = prefs.size;
+  widget.classList.toggle('widget-span-2', prefs.span === 2);
+
+  const height = clamp(toNumber(prefs.height, DASHBOARD_WIDGET_DEFAULT_HEIGHT), 300, 760);
+  widget.style.setProperty('--widget-custom-height', `${height}px`);
+
+  widget.querySelectorAll('[data-widget-mode]').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.widgetMode === prefs.mode);
+  });
+
+  widget.querySelectorAll('[data-widget-chart]').forEach(btn => {
+    btn.classList.toggle('is-active', btn.dataset.widgetChart === prefs.chart);
+  });
+
+  widget.querySelectorAll('[data-widget-size]').forEach(btn => {
+    const key = btn.dataset.widgetSize;
+    const active = key === prefs.size || (key === 'wide' && prefs.span === 2);
+    btn.classList.toggle('is-active', active);
+  });
+}
+
+function enhanceDashboardWidgets() {
+  ensureDashboardWidgetLayer();
+
+  document.querySelectorAll('.dashboard-widget[data-widget-id]').forEach(widget => {
+    if (!(widget instanceof HTMLElement)) return;
+
+    const widgetId = widget.dataset.widgetId;
+    const topbar = widget.querySelector('.widget-topbar');
+    const actions = widget.querySelector('.widget-actions');
+
+    if (!widgetId || !topbar || !actions) return;
+
+    if (!actions.querySelector('[data-widget-tools]')) {
+      actions.insertAdjacentHTML('afterbegin', `
+        <div class="widget-view-tools" data-widget-tools>
+          <button type="button" class="widget-tool-btn" data-widget-mode="summary" title="Ver resumo operacional">Resumo</button>
+          <button type="button" class="widget-tool-btn" data-widget-mode="chart" title="Ver como gráfico">Gráfico</button>
+          <span class="widget-tool-sep"></span>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-chart="bar" title="Gráfico de barras">▥</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-chart="pie" title="Gráfico de pizza/donut">◔</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-chart="trend" title="Linha de tendência">⌁</button>
+          <span class="widget-tool-sep"></span>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="m" title="Altura média">M</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="g" title="Altura grande">G</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="gg" title="Altura extra grande">GG</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="wide" title="Ocupar 2 colunas">↔</button>
+        </div>
+      `);
+    }
+
+    if (!widget.querySelector('[data-widget-resize-handle]')) {
+      widget.insertAdjacentHTML('beforeend', `
+        <button type="button" class="widget-resize-edge" data-widget-resize-edge aria-label="Ajustar altura do widget" title="Arraste para ajustar a altura"></button>
+        <button type="button" class="widget-resize-handle" data-widget-resize-handle aria-label="Redimensionar widget" title="Arraste para redimensionar"></button>
+      `);
+    }
+
+    updateWidgetChrome(widget);
+  });
+}
+
+function renderDashboardWidgetContent(widgetId) {
+  const prefs = getWidgetPrefs(widgetId);
+  const state = dashboardLastPayload || {};
+
+  if (prefs.mode === 'chart') {
+    return renderWidgetChart(widgetId, prefs.chart, state);
+  }
+
+  switch (widgetId) {
+    case 'widget-fin': return renderFinWidget(state.dashData);
+    case 'widget-agenda': return renderAgendaWidget(state.dashData);
+    case 'widget-recorrencia': return renderRecorrencia(state.snap || buildOperationalSnapshot(state.subscriptions, state.todayApts, state.dashData));
+    case 'widget-alertas': return renderAlertas(state.snap || buildOperationalSnapshot(state.subscriptions, state.todayApts, state.dashData));
+    case 'widget-aval': return renderAvalWidget(state.reviews);
+    case 'widget-servicos': return renderServicosWidget(state.dashData);
+    default: return simpleEmpty('Widget sem configuração', 'Não foi possível montar este card.', '◇');
+  }
+}
+
+function renderAllDashboardWidgets() {
+  enhanceDashboardWidgets();
+
+  DASHBOARD_WIDGET_ORDER.forEach(widgetId => {
+    const content = widgetContentElement(widgetId);
+    if (content) content.innerHTML = renderDashboardWidgetContent(widgetId);
+    const widget = getWidgetElement(widgetId);
+    if (widget instanceof HTMLElement) updateWidgetChrome(widget);
+  });
+}
+
+function chartItem(label, value, tone = 'info') {
+  return { label, value: Math.max(0, toNumber(value)), tone };
+}
+
+function getServiceChartItems(data) {
+  const schedule = getDashboardSummary(data).todaySchedule;
+  const counts = {};
+  schedule.forEach(apt => {
+    const name = apt?.services?.name || 'Serviço';
+    counts[name] = (counts[name] || 0) + 1;
+  });
+  return Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 6)
+    .map(([label, value]) => chartItem(label, value, 'info'));
+}
+
+function getReviewChartItems(reviews) {
+  const list = Array.isArray(reviews) ? reviews : [];
+  return [5,4,3,2,1].map(star => {
+    const value = list.filter(r => toNumber(r.rating) === star).length;
+    return chartItem(`${star}★`, value, star >= 4 ? 'purple' : star === 3 ? 'warning' : 'danger');
+  });
+}
+
+function getTrendFromRevenueChart(revenueChart) {
+  const rows = Array.isArray(revenueChart) ? revenueChart : [];
+  return rows.slice(-12).map((row, index) => ({
+    label: row?.day ? String(row.day).slice(5) : `D${index + 1}`,
+    value: toNumber(row?.gross_income ?? row?.revenue ?? row?.income ?? row?.total ?? row?.amount),
+    tone: 'info',
+  })).filter(item => item.value > 0 || rows.length > 0);
+}
+
+function getWidgetChartItems(widgetId, state = dashboardLastPayload || {}) {
+  const dash = state.dashData || {};
+  const summary = getDashboardSummary(dash);
+  const snap = state.snap || buildOperationalSnapshot(state.subscriptions, state.todayApts, dash);
+  const appointments = dash?.appointments || {};
+  const today = dash?.today || {};
+
+  if (widgetId === 'widget-fin') {
+    return [
+      chartItem('Receita', summary.grossIncome, 'info'),
+      chartItem('Lucro', Math.max(summary.netProfit, 0), 'success'),
+      chartItem('Despesas', summary.totalExpenses, 'danger'),
+      chartItem('Ticket', summary.ticketAvg, 'purple'),
+    ];
+  }
+
+  if (widgetId === 'widget-agenda') {
+    return [
+      chartItem('Confirmados', toNumber(appointments.confirmed) + toNumber(today.confirmed), 'purple'),
+      chartItem('Pendentes', toNumber(appointments.pending) + toNumber(today.pending), 'warning'),
+      chartItem('Concluídos', toNumber(appointments.completed) + toNumber(today.completed), 'success'),
+      chartItem('Ausentes', toNumber(appointments.no_show), 'danger'),
+    ];
+  }
+
+  if (widgetId === 'widget-recorrencia') {
+    return [
+      chartItem('Ativas', snap.activeCount, 'info'),
+      chartItem('Pendentes', snap.pendingCount, 'purple'),
+      chartItem('Inadimpl.', snap.pastDueCount, 'danger'),
+      chartItem('Receita', Math.round(snap.revCents / 100), 'success'),
+    ];
+  }
+
+  if (widgetId === 'widget-alertas') {
+    return [
+      chartItem('Vencidas', snap.overdueCount, 'danger'),
+      chartItem('Falhas', snap.failedCount, 'danger'),
+      chartItem('Estoque', snap.lowStockCount, 'warning'),
+      chartItem('Agenda', snap.agendaPending, 'success'),
+    ];
+  }
+
+  if (widgetId === 'widget-aval') return getReviewChartItems(state.reviews);
+  if (widgetId === 'widget-servicos') return getServiceChartItems(dash);
+
+  return [];
+}
+
+function getTrendItems(widgetId, state = dashboardLastPayload || {}) {
+  if (widgetId === 'widget-fin') {
+    const revenueTrend = getTrendFromRevenueChart(state.revenueChart);
+    if (revenueTrend.length) return revenueTrend;
+  }
+
+  const base = getWidgetChartItems(widgetId, state);
+  if (!base.length) return [];
+
+  return base.map((item, index) => ({
+    ...item,
+    label: item.label,
+    value: item.value + index,
+  }));
+}
+
+function chartToneColor(tone) {
+  const map = {
+    info: '#4fc3f7',
+    success: '#00e676',
+    warning: '#f59e0b',
+    danger: '#ff6b7a',
+    purple: '#9c6fff',
+    muted: '#5a6888',
+  };
+  return map[tone] || map.info;
+}
+
+function chartToneGradient(tone) {
+  const map = {
+    info: 'linear-gradient(180deg,#4fc3f7,#0066ff)',
+    success: 'linear-gradient(180deg,#00e676,#10b981)',
+    warning: 'linear-gradient(180deg,#f59e0b,#fb923c)',
+    danger: 'linear-gradient(180deg,#ff6b7a,#ff1744)',
+    purple: 'linear-gradient(180deg,#9c6fff,#7c3aed)',
+    muted: 'linear-gradient(180deg,#5a6888,#343868)',
+  };
+  return map[tone] || map.info;
+}
+
+function renderChartBars(items) {
+  const max = Math.max(...items.map(i => toNumber(i.value)), 1);
+
+  return `
+    <div class="widget-chart-bars">
+      ${items.map(item => {
+        const height = Math.round(24 + (toNumber(item.value) / max) * 120);
+        return `
+          <div class="widget-chart-bar-item" title="${escapeHtml(item.label)}: ${escapeHtml(item.value)}">
+            <div class="widget-chart-bar-value">${escapeHtml(item.value)}</div>
+            <div class="widget-chart-bar" style="height:${height}px;background:${chartToneGradient(item.tone)}"></div>
+            <div class="widget-chart-label">${escapeHtml(String(item.label).slice(0, 14))}</div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderChartPie(items) {
+  const safeItems = items.filter(i => toNumber(i.value) > 0);
+  const total = safeItems.reduce((sum, item) => sum + toNumber(item.value), 0);
+
+  if (!safeItems.length || total <= 0) {
+    return simpleEmpty('Sem composição para gráfico', 'Quando houver dados, a distribuição aparece em pizza/donut.', '◔');
+  }
+
+  let acc = 0;
+  const segments = safeItems.map(item => {
+    const start = (acc / total) * 360;
+    acc += toNumber(item.value);
+    const end = (acc / total) * 360;
+    return `${chartToneColor(item.tone)} ${start.toFixed(1)}deg ${end.toFixed(1)}deg`;
+  }).join(', ');
+
+  return `
+    <div class="widget-chart-pie-wrap">
+      <div class="widget-chart-donut" style="background:conic-gradient(${segments})">
+        <div class="widget-chart-donut-core">
+          <strong>${escapeHtml(total)}</strong>
+          <span>Total</span>
+        </div>
+      </div>
+      <div class="widget-chart-legend">
+        ${safeItems.map(item => `
+          <div class="widget-chart-legend-row">
+            <span class="legend-dot" style="background:${chartToneColor(item.tone)}"></span>
+            <span>${escapeHtml(item.label)}</span>
+            <strong>${escapeHtml(item.value)}</strong>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderChartTrend(items) {
+  const safeItems = items.length ? items : [];
+  const max = Math.max(...safeItems.map(i => toNumber(i.value)), 1);
+  const min = Math.min(...safeItems.map(i => toNumber(i.value)), 0);
+  const range = Math.max(max - min, 1);
+  const width = 520;
+  const height = 180;
+  const pad = 18;
+  const points = safeItems.map((item, index) => {
+    const x = safeItems.length <= 1 ? width / 2 : pad + (index / (safeItems.length - 1)) * (width - pad * 2);
+    const y = height - pad - ((toNumber(item.value) - min) / range) * (height - pad * 2);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  if (!safeItems.length) {
+    return simpleEmpty('Sem tendência calculada', 'A linha aparece quando houver série ou categorias suficientes.', '⌁');
+  }
+
+  return `
+    <div class="widget-chart-trend">
+      <svg viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" role="img" aria-label="Linha de tendência">
+        <defs>
+          <linearGradient id="trendGradient" x1="0" x2="1" y1="0" y2="0">
+            <stop offset="0%" stop-color="#4fc3f7" />
+            <stop offset="50%" stop-color="#9c6fff" />
+            <stop offset="100%" stop-color="#00e676" />
+          </linearGradient>
+        </defs>
+        <polyline points="${points}" fill="none" stroke="url(#trendGradient)" stroke-width="5" stroke-linecap="round" stroke-linejoin="round" />
+        ${safeItems.map((item, index) => {
+          const [x, y] = points.split(' ')[index].split(',');
+          return `<circle cx="${x}" cy="${y}" r="5" fill="${chartToneColor(item.tone)}"></circle>`;
+        }).join('')}
+      </svg>
+      <div class="widget-chart-trend-labels">
+        ${safeItems.map(item => `<span>${escapeHtml(String(item.label).slice(0, 10))}</span>`).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderWidgetChart(widgetId, chartType, state = dashboardLastPayload || {}) {
+  const meta = DASHBOARD_WIDGETS[widgetId] || {};
+  const items = chartType === 'trend'
+    ? getTrendItems(widgetId, state)
+    : getWidgetChartItems(widgetId, state);
+
+  const total = items.reduce((sum, item) => sum + toNumber(item.value), 0);
+  const title = meta.label || 'Widget';
+  const subtitle = chartType === 'pie'
+    ? 'Distribuição dos indicadores'
+    : chartType === 'trend'
+      ? 'Leitura em linha de tendência'
+      : 'Comparativo operacional';
+
+  return `
+    <div class="widget-chart-shell">
+      <div class="widget-chart-head">
+        <div>
+          <div class="dashboard-widget-section-title">${escapeHtml(title)} em gráfico</div>
+          <div class="widget-chart-subtitle">${escapeHtml(subtitle)}</div>
+        </div>
+        <div class="widget-chart-total">${escapeHtml(total)}</div>
+      </div>
+      ${chartType === 'pie'
+        ? renderChartPie(items)
+        : chartType === 'trend'
+          ? renderChartTrend(items)
+          : renderChartBars(items)}
+      <div class="widget-action-row widget-action-row--chart">
+        ${actionButton('Voltar ao módulo', getWidgetElement(widgetId)?.dataset?.target || '', 'info')}
+      </div>
+    </div>
+  `;
+}
+
+function bindWidgetResizeStart(event, widget, mode = 'corner') {
+  if (!(widget instanceof HTMLElement)) return;
+
+  event.preventDefault();
+  event.stopPropagation();
+
+  const widgetId = widget.dataset.widgetId;
+  if (!widgetId) return;
+
+  const prefs = getWidgetPrefs(widgetId);
+  const startX = event.clientX;
+  const startY = event.clientY;
+  const startHeight = widget.getBoundingClientRect().height;
+  const startSpan = prefs.span === 2 ? 2 : 1;
+
+  widget.classList.add('widget-resizing');
+  widget.setPointerCapture?.(event.pointerId);
+
+  const onMove = moveEvent => {
+    const nextHeight = clamp(startHeight + (moveEvent.clientY - startY), 300, 760);
+    const deltaX = moveEvent.clientX - startX;
+    const nextSpan = mode === 'corner'
+      ? (deltaX > 120 ? 2 : deltaX < -120 ? 1 : startSpan)
+      : startSpan;
+
+    updateWidgetPrefs(widgetId, {
+      size: 'custom',
+      height: Math.round(nextHeight),
+      span: nextSpan,
+    });
+
+    updateWidgetChrome(widget);
+  };
+
+  const onUp = upEvent => {
+    widget.classList.remove('widget-resizing');
+    widget.releasePointerCapture?.(upEvent.pointerId);
+    window.removeEventListener('pointermove', onMove);
+    window.removeEventListener('pointerup', onUp);
+  };
+
+  window.addEventListener('pointermove', onMove);
+  window.addEventListener('pointerup', onUp);
+}
+
+function bindDashboardWidgetControls() {
+  if (dashboardWidgetControlsBound) return;
+  dashboardWidgetControlsBound = true;
+
+  document.addEventListener('click', event => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const control = target.closest('[data-widget-mode], [data-widget-chart], [data-widget-size]');
+    if (!(control instanceof HTMLElement)) return;
+
+    const widget = control.closest('.dashboard-widget');
+    if (!(widget instanceof HTMLElement)) return;
+
+    const widgetId = widget.dataset.widgetId;
+    if (!widgetId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (control.dataset.widgetMode) {
+      updateWidgetPrefs(widgetId, { mode: control.dataset.widgetMode });
+    }
+
+    if (control.dataset.widgetChart) {
+      updateWidgetPrefs(widgetId, {
+        mode: 'chart',
+        chart: control.dataset.widgetChart,
+      });
+    }
+
+    if (control.dataset.widgetSize) {
+      const size = control.dataset.widgetSize;
+      if (size === 'wide') {
+        const current = getWidgetPrefs(widgetId);
+        updateWidgetPrefs(widgetId, { span: current.span === 2 ? 1 : 2 });
+      } else {
+        updateWidgetPrefs(widgetId, {
+          size,
+          height: DASHBOARD_WIDGET_HEIGHT_PRESETS[size] || DASHBOARD_WIDGET_DEFAULT_HEIGHT,
+        });
+      }
+    }
+
+    updateWidgetChrome(widget);
+    const content = widgetContentElement(widgetId);
+    if (content) content.innerHTML = renderDashboardWidgetContent(widgetId);
+  });
+
+  document.addEventListener('pointerdown', event => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
+    const corner = target.closest('[data-widget-resize-handle]');
+    const edge = target.closest('[data-widget-resize-edge]');
+    const handle = corner || edge;
+
+    if (!(handle instanceof HTMLElement)) return;
+
+    const widget = handle.closest('.dashboard-widget');
+    if (!(widget instanceof HTMLElement)) return;
+
+    bindWidgetResizeStart(event, widget, corner ? 'corner' : 'edge');
+  });
+
+  const restoreButton = document.getElementById('restoreWidgetsBtn');
+  if (restoreButton) {
+    restoreButton.addEventListener('click', () => {
+      resetDashboardWidgetPrefs();
+      document.querySelectorAll('.dashboard-widget[data-widget-id]').forEach(widget => {
+        if (widget instanceof HTMLElement) {
+          widget.style.removeProperty('--widget-custom-height');
+          widget.classList.remove('widget-span-2');
+        }
+      });
+      renderAllDashboardWidgets();
+    });
+  }
+}
+
 // ─── Loading / Error states ───────────────────────────────────────────────────
 
 const DASHBOARD_CONTENT_IDS = [
@@ -717,30 +1309,26 @@ async function refreshDashboardWidgets() {
   try {
     const today = formatDateForApi(new Date());
 
-    const [subscriptions, todayApts, dashData, reviews] = await Promise.all([
+    const [subscriptions, todayApts, dashData, reviews, revenueChart] = await Promise.all([
       getSubscriptions().catch(() => []),
       getAppointmentsByDate(today).catch(() => []),
       apiFetch('/api/dashboard').catch(() => null),
       apiFetch('/api/reviews').catch(() => []),
+      apiFetch('/api/dashboard/revenue').catch(() => []),
     ]);
-
-    const fin = document.getElementById('dashboardFinContent');
-    const aval = document.getElementById('dashboardAvalContent');
-    const agenda = document.getElementById('dashboardAgendaContent');
-    const svc = document.getElementById('dashboardServicosContent');
-
-    if (fin) fin.innerHTML = renderFinWidget(dashData);
-    if (aval) aval.innerHTML = renderAvalWidget(reviews);
-    if (agenda) agenda.innerHTML = renderAgendaWidget(dashData);
-    if (svc) svc.innerHTML = renderServicosWidget(dashData);
 
     const snap = buildOperationalSnapshot(subscriptions, todayApts, dashData);
 
-    const recContent = document.getElementById('dashboardRecorrenciaContent');
-    const altContent = document.getElementById('dashboardAlertasContent');
+    dashboardLastPayload = {
+      subscriptions,
+      todayApts,
+      dashData,
+      reviews,
+      revenueChart,
+      snap,
+    };
 
-    if (recContent) recContent.innerHTML = renderRecorrencia(snap);
-    if (altContent) altContent.innerHTML = renderAlertas(snap);
+    renderAllDashboardWidgets();
   } catch (error) {
     const msg = error instanceof Error ? error.message : 'Não foi possível carregar os widgets.';
     setAllWidgetsMessage(msg, '#ff8a8a');
@@ -786,6 +1374,7 @@ export function initDashboard() {
     });
 
     bindDashboardActions();
+    bindDashboardWidgetControls();
 
     window.addEventListener('storage', refreshDashboardWidgets);
 
