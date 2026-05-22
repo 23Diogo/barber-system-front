@@ -844,3 +844,240 @@ body.light-theme .widget-action-btn{
     white-space:normal;
   }
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+   HOTFIX V2.1 — Widgets do Dashboard sem sobreposição
+   Objetivo: manter a cadeira/identidade visual intacta e dar aos widgets
+   uma área própria com rolagem interna quando o conteúdo crescer.
+───────────────────────────────────────────────────────────────────────────── */
+
+#hero{
+  overflow-x:hidden;
+  overflow-y:auto;
+  scrollbar-gutter:stable;
+}
+
+#hero::after{
+  content:"";
+  display:block;
+  width:1px;
+  height:var(--dashboard-scroll-height, 980px);
+  pointer-events:none;
+}
+
+#hero::-webkit-scrollbar{
+  width:8px;
+}
+
+#hero::-webkit-scrollbar-track{
+  background:rgba(8,13,28,.35);
+}
+
+#hero::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,rgba(79,195,247,.35),rgba(156,111,255,.35));
+  border-radius:999px;
+}
+
+#hero::-webkit-scrollbar-thumb:hover{
+  background:linear-gradient(180deg,rgba(79,195,247,.58),rgba(156,111,255,.58));
+}
+
+@media (min-width:901px){
+  #hero{
+    --dash-side-x:clamp(18px,1.45vw,28px);
+    --dash-top:118px;
+    --dash-gap:18px;
+    --dash-card-w:clamp(340px,26vw,395px);
+    --dash-card-max-h:246px;
+    --dashboard-scroll-height:max(930px,calc(100vh + 160px));
+  }
+
+  .analytics-card{
+    box-sizing:border-box;
+    width:var(--dash-card-w);
+    min-width:320px;
+    max-width:395px;
+    max-height:var(--dash-card-max-h);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+
+  .widget-topbar,
+  .widget-module{
+    flex:0 0 auto;
+  }
+
+  .dashboard-widget > div[id^="dashboard"][id$="Content"]{
+    min-height:0;
+    overflow-x:hidden;
+    overflow-y:auto;
+    padding-right:6px;
+    margin-right:-6px;
+  }
+
+  .dashboard-widget > div[id^="dashboard"][id$="Content"]::-webkit-scrollbar{
+    width:5px;
+  }
+
+  .dashboard-widget > div[id^="dashboard"][id$="Content"]::-webkit-scrollbar-track{
+    background:rgba(26,31,56,.55);
+    border-radius:999px;
+  }
+
+  .dashboard-widget > div[id^="dashboard"][id$="Content"]::-webkit-scrollbar-thumb{
+    background:linear-gradient(180deg,rgba(79,195,247,.58),rgba(156,111,255,.58));
+    border-radius:999px;
+  }
+
+  .pos-tl{
+    top:var(--dash-top)!important;
+    left:var(--dash-side-x)!important;
+    right:auto!important;
+    bottom:auto!important;
+  }
+
+  .pos-bl{
+    top:calc(var(--dash-top) + var(--dash-card-max-h) + var(--dash-gap))!important;
+    left:var(--dash-side-x)!important;
+    right:auto!important;
+    bottom:auto!important;
+  }
+
+  .pos-tr{
+    top:var(--dash-top)!important;
+    right:var(--dash-side-x)!important;
+    left:auto!important;
+    bottom:auto!important;
+  }
+
+  .pos-mr{
+    top:calc(var(--dash-top) + var(--dash-card-max-h) + var(--dash-gap))!important;
+    right:var(--dash-side-x)!important;
+    left:auto!important;
+    bottom:auto!important;
+  }
+
+  .pos-ml{
+    top:var(--dash-top)!important;
+    left:50%!important;
+    right:auto!important;
+    bottom:auto!important;
+    transform:translateX(-50%);
+  }
+
+  .pos-br{
+    top:calc(var(--dash-top) + var(--dash-card-max-h) + var(--dash-gap))!important;
+    left:50%!important;
+    right:auto!important;
+    bottom:auto!important;
+    transform:translateX(-50%);
+  }
+
+  .pos-ml.dashboard-widget:hover,
+  .pos-br.dashboard-widget:hover{
+    transform:translateX(-50%) translateY(-3px);
+  }
+
+  .pos-ml.dashboard-widget:active,
+  .pos-br.dashboard-widget:active{
+    transform:translateX(-50%) translateY(-1px) scale(.995);
+  }
+
+  .pos-ml.dashboard-widget.widget-dragging,
+  .pos-br.dashboard-widget.widget-dragging{
+    transform:translateX(-50%);
+  }
+}
+
+@media (min-width:901px) and (max-height:820px){
+  #hero{
+    --dash-top:104px;
+    --dash-card-max-h:226px;
+    --dashboard-scroll-height:920px;
+  }
+
+  .hero-logo{
+    top:14px;
+  }
+
+  .hero-B{
+    font-size:70px;
+  }
+
+  .hero-name{
+    font-size:46px;
+  }
+
+  .hero-actions{
+    top:82px;
+  }
+
+  .analytics-card{
+    padding:15px 17px;
+  }
+
+  .dashboard-widget-grid{
+    gap:7px;
+    margin-top:8px;
+    margin-bottom:8px;
+  }
+
+  .dashboard-widget-stat{
+    padding:8px;
+  }
+}
+
+@media (min-width:901px) and (max-width:1320px){
+  #hero{
+    --dash-card-w:clamp(315px,25vw,350px);
+    --dash-side-x:14px;
+  }
+
+  .analytics-card{
+    min-width:300px;
+    padding:15px;
+  }
+
+  .dashboard-widget-stat-value{
+    font-size:14px;
+  }
+}
+
+@media (max-width:900px){
+  #hero{
+    overflow:auto;
+    padding:154px 12px 32px;
+  }
+
+  #hero::after{
+    display:none;
+  }
+
+  .analytics-card{
+    max-height:none;
+    overflow:visible;
+  }
+
+  .dashboard-widget > div[id^="dashboard"][id$="Content"]{
+    overflow:visible;
+    padding-right:0;
+    margin-right:0;
+  }
+}
+
+body.light-theme #hero::-webkit-scrollbar-track{
+  background:rgba(226,232,240,.65);
+}
+
+body.light-theme #hero::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,rgba(14,165,233,.42),rgba(124,58,237,.35));
+}
+
+body.light-theme .dashboard-widget > div[id^="dashboard"][id$="Content"]::-webkit-scrollbar-track{
+  background:rgba(226,232,240,.75);
+}
+
+body.light-theme .dashboard-widget > div[id^="dashboard"][id$="Content"]::-webkit-scrollbar-thumb{
+  background:linear-gradient(180deg,rgba(14,165,233,.48),rgba(124,58,237,.38));
+}
