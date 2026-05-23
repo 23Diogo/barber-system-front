@@ -463,6 +463,21 @@ export async function cancelSubscription(subscriptionId) {
   });
 }
 
+
+export async function markSubscriptionManualPayment(subscriptionId, payload = {}) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/manual-payment`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function retrySubscriptionCharge(subscriptionId, payload = {}) {
+  return apiFetch(`/api/subscriptions/${subscriptionId}/retry-charge`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function generateNextSubscriptionCycle(subscriptionId, payload = {}) {
   return apiFetch(`/api/subscriptions/${subscriptionId}/generate-next-cycle`, {
     method: 'POST',
@@ -617,6 +632,8 @@ window.BarberFlowApi = {
   pauseSubscription,
   reactivateSubscription,
   cancelSubscription,
+  markSubscriptionManualPayment,
+  retrySubscriptionCharge,
   generateNextSubscriptionCycle,
   consumeSubscriptionBenefit,
   getSubscriptionInvoices,
