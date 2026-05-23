@@ -137,8 +137,22 @@ function buildProgressBar(value, max, className = '') {
 function formatDateDisplay(value) {
   if (!value) return '—';
 
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
+  const raw = String(value).trim();
+
+  // Datas vindas do Postgres como DATE chegam no formato YYYY-MM-DD.
+  // Usar new Date('YYYY-MM-DD') desloca para UTC e, no Brasil, mostra o dia anterior.
+  // Por isso montamos a data local manualmente nesses casos.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    const [year, month, day] = raw.split('-').map(Number);
+    const localDate = new Date(year, month - 1, day);
+
+    if (!Number.isNaN(localDate.getTime())) {
+      return localDate.toLocaleDateString('pt-BR');
+    }
+  }
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return raw;
 
   return date.toLocaleDateString('pt-BR');
 }
