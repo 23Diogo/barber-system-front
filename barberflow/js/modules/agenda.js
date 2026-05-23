@@ -1605,7 +1605,6 @@ export function renderAgenda() {
 <section class="page-shell page--agenda">
   <div class="agenda-page-head">
     <div>
-      <div class="agenda-eyebrow">Agenda V2 Premium</div>
       <h1>Operação do dia</h1>
       <p>Controle horários, planos, recebimentos e comissões no mesmo painel.</p>
     </div>
