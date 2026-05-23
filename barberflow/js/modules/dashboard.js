@@ -12,12 +12,12 @@ const DASHBOARD_WIDGET_PREFS_STORAGE_KEY = 'barberflow.dashboard.widgetPrefs.v23
 const DASHBOARD_WIDGET_DEFAULT_HEIGHT = 380;
 
 const DASHBOARD_WIDGETS = {
-  'widget-fin': { contentId: 'dashboardFinContent', label: 'Financeiro', defaultChart: 'bar' },
-  'widget-agenda': { contentId: 'dashboardAgendaContent', label: 'Agenda', defaultChart: 'pie' },
-  'widget-recorrencia': { contentId: 'dashboardRecorrenciaContent', label: 'Recorrência', defaultChart: 'bar' },
-  'widget-alertas': { contentId: 'dashboardAlertasContent', label: 'Alertas', defaultChart: 'bar' },
-  'widget-aval': { contentId: 'dashboardAvalContent', label: 'Avaliações', defaultChart: 'bar' },
-  'widget-servicos': { contentId: 'dashboardServicosContent', label: 'Serviços', defaultChart: 'bar' },
+  'widget-fin': { contentId: 'dashboardFinContent', label: 'Financeiro', defaultChart: 'bar', target: 'fin' },
+  'widget-agenda': { contentId: 'dashboardAgendaContent', label: 'Agenda', defaultChart: 'pie', target: 'agenda' },
+  'widget-recorrencia': { contentId: 'dashboardRecorrenciaContent', label: 'Recorrência', defaultChart: 'bar', target: 'planos' },
+  'widget-alertas': { contentId: 'dashboardAlertasContent', label: 'Alertas', defaultChart: 'bar', target: 'agenda' },
+  'widget-aval': { contentId: 'dashboardAvalContent', label: 'Avaliações', defaultChart: 'bar', target: 'aval' },
+  'widget-servicos': { contentId: 'dashboardServicosContent', label: 'Serviços', defaultChart: 'bar', target: 'servicos' },
 };
 
 const DASHBOARD_WIDGET_ORDER = [
@@ -125,12 +125,6 @@ function resolveAction(target) {
   const nav = document.querySelector(`[data-nav-target="${CSS.escape(target)}"]`);
   if (nav instanceof HTMLElement) {
     nav.click();
-    return;
-  }
-
-  const widget = document.querySelector(`[data-target="${CSS.escape(target)}"]`);
-  if (widget instanceof HTMLElement) {
-    widget.click();
   }
 }
 
@@ -456,7 +450,7 @@ function ensureDashboardWidgets() {
     hero.insertAdjacentHTML('beforeend', `
     <div id="dashboardWidgetRecorrencia"
       class="analytics-card pos-ml dashboard-widget dashboard-widget--recurrence"
-      data-target="planos" data-widget-id="widget-recorrencia" title="Abrir Planos">
+      data-widget-target="planos" data-widget-id="widget-recorrencia">
       <div class="widget-topbar">
         <div class="ac-title">Recorrência</div>
         <div class="widget-actions">
@@ -470,7 +464,7 @@ function ensureDashboardWidgets() {
 
     <div id="dashboardWidgetAlertas"
       class="analytics-card pos-mr dashboard-widget dashboard-widget--alerts"
-      data-target="agenda" data-widget-id="widget-alertas" title="Abrir Agenda">
+      data-widget-target="agenda" data-widget-id="widget-alertas">
       <div class="widget-topbar">
         <div class="ac-title">Atenção necessária</div>
         <div class="widget-actions">
@@ -772,6 +766,38 @@ function getWidgetElement(widgetId) {
   return document.querySelector(`[data-widget-id="${CSS.escape(widgetId)}"]`);
 }
 
+function getWidgetModuleTarget(widgetId) {
+  const widget = getWidgetElement(widgetId);
+  const meta = DASHBOARD_WIDGETS[widgetId] || {};
+  return String(
+    widget?.dataset?.widgetTarget ||
+    widget?.dataset?.target ||
+    meta.target ||
+    ''
+  ).trim();
+}
+
+function normalizeDashboardWidgetNavigationTargets() {
+  document.querySelectorAll('.dashboard-widget[data-widget-id]').forEach(widget => {
+    if (!(widget instanceof HTMLElement)) return;
+
+    const widgetId = widget.dataset.widgetId || '';
+    const moduleTarget = getWidgetModuleTarget(widgetId);
+
+    if (moduleTarget) {
+      widget.dataset.widgetTarget = moduleTarget;
+    }
+
+    // Importante: o widget inteiro não deve navegar ao módulo.
+    // A navegação deve acontecer somente pelos botões explícitos do widget.
+    widget.removeAttribute('data-target');
+    widget.removeAttribute('title');
+
+    const label = DASHBOARD_WIDGETS[widgetId]?.label || 'Widget';
+    widget.setAttribute('aria-label', `${label}. Use os botões internos para abrir o módulo.`);
+  });
+}
+
 function updateWidgetChrome(widget) {
   if (!(widget instanceof HTMLElement)) return;
   const widgetId = widget.dataset.widgetId;
@@ -803,6 +829,7 @@ function updateWidgetChrome(widget) {
 
 function enhanceDashboardWidgets() {
   ensureDashboardWidgetLayer();
+  normalizeDashboardWidgetNavigationTargets();
 
   document.querySelectorAll('.dashboard-widget[data-widget-id]').forEach(widget => {
     if (!(widget instanceof HTMLElement)) return;
@@ -1121,7 +1148,7 @@ function renderWidgetChart(widgetId, chartType, state = dashboardLastPayload || 
           ? renderChartTrend(items)
           : renderChartBars(items)}
       <div class="widget-action-row widget-action-row--chart">
-        ${actionButton('Voltar ao módulo', getWidgetElement(widgetId)?.dataset?.target || '', 'info')}
+        ${actionButton('Voltar ao módulo', getWidgetModuleTarget(widgetId), 'info')}
       </div>
     </div>
   `;
