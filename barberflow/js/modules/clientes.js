@@ -823,7 +823,24 @@ async function openClientModal(clientId) {
   try {
     clientesState.detailClient = await getClientPremiumById(clientId);
   } catch (error) {
-    clientesState.detailClient = null;
+    const fallbackClient = (clientesState.items || []).find(item => String(item.id) === String(clientId));
+
+    if (fallbackClient) {
+      clientesState.detailClient = {
+        ...fallbackClient,
+        raw: {
+          ...(fallbackClient.raw || {}),
+          appointments: fallbackClient.raw?.appointments || [],
+          subscriptions: fallbackClient.raw?.subscriptions || [],
+          reviews: fallbackClient.raw?.reviews || [],
+          client_style_history: fallbackClient.raw?.client_style_history || [],
+          loyalty_transactions: fallbackClient.raw?.loyalty_transactions || [],
+        },
+        detail_load_error: error instanceof Error ? error.message : 'Não foi possível carregar todos os detalhes premium.',
+      };
+    } else {
+      clientesState.detailClient = null;
+    }
   } finally {
     clientesState.isDetailLoading = false;
     renderClientModal();
