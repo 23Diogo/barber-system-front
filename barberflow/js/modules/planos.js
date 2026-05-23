@@ -18,12 +18,18 @@ import {
   getClubCommissionEntries,
   getClubCommissionConsumptions,
   markClubCommissionPeriodPaid,
+  getClubCommissionSettings,
+  updateClubCommissionSettings,
+  getClubCommissionServicePoints,
+  updateClubCommissionServicePoint,
+  getClubCommissionPlanRules,
+  updateClubCommissionPlanRule,
 } from '../services/api.js';
 
 const PLAN_NAME_MAX_LENGTH = 100;
 const PLAN_DESCRIPTION_MAX_LENGTH = 500;
 const PLANOS_ACTIVE_TAB_STORAGE_KEY = 'barberflow.planos.activeTab';
-const PLANOS_TABS = ['planos', 'assinaturas', 'comissoes'];
+const PLANOS_TABS = ['planos', 'assinaturas', 'comissoes', 'regras'];
 
 function getInitialActiveTab() {
   try {
@@ -52,6 +58,12 @@ const planosState = {
   clubSelectedPeriodId: null,
   clubIsLoading: false,
   clubError: '',
+  clubSettings: null,
+  clubServicePoints: [],
+  clubPlanRules: [],
+  rulesIsLoading: false,
+  rulesError: '',
+  rulesFeedback: '',
   isLoaded: false,
   isLoading: false,
   modalMode: 'closed',
@@ -68,6 +80,13 @@ function escapeHtml(value) {
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
 }
+
+
+function escapeSelector(value) {
+  if (window.CSS?.escape) return CSS.escape(String(value));
+  return String(value).replace(/["\\]/g, '\\$&');
+}
+
 
 function formatCurrencyFromCents(cents) {
   return new Intl.NumberFormat('pt-BR', {
@@ -1004,6 +1023,7 @@ function renderPlanosTabs() {
     { id: 'planos', label: 'Planos', hint: 'Produtos recorrentes' },
     { id: 'assinaturas', label: 'Assinaturas', hint: 'Clientes do clube' },
     { id: 'comissoes', label: 'Comissões do Clube', hint: 'Pontos e rateio' },
+    { id: 'regras', label: 'Regras do Clube', hint: 'Comissões e fatores' },
   ];
 
   return `
@@ -1232,6 +1252,240 @@ function renderClubCommissions() {
   `;
 }
 
+
+function getClubSettingsOrDefault() {
+  return planosState.clubSettings || {
+    barbershop_share_pct: 50,
+    team_share_pct: 50,
+    deduct_gateway_fees: true,
+    allow_manual_adjustments: true,
+    default_plan_point_multiplier_pct: 100,
+    notes: '',
+  };
+}
+
+function renderRulesFeedback() {
+  if (!planosState.rulesFeedback) return '';
+
+  return `
+    <div class="planos-rules-feedback">
+      ${escapeHtml(planosState.rulesFeedback)}
+    </div>
+  `;
+}
+
+function renderClubRulesRevenueSplit() {
+  const settings = getClubSettingsOrDefault();
+
+  return `
+    <div class="planos-rules-panel">
+      <div class="planos-rules-panel-head">
+        <div>
+          <div class="planos-section-title">Divisão da receita</div>
+          <h3>De cada R$ 100, quanto fica para cada lado?</h3>
+          <p>Essa regra define o pool mensal usado no fechamento das comissões do Clube.</p>
+        </div>
+        <div class="planos-rules-split-preview">
+          <span>Barbearia<br><strong>${escapeHtml(formatCurrencyFromReais(Number(settings.barbershop_share_pct || 0)))}</strong></span>
+          <span>Time<br><strong>${escapeHtml(formatCurrencyFromReais(Number(settings.team_share_pct || 0)))}</strong></span>
+        </div>
+      </div>
+
+      <form id="planos-rules-settings-form" class="planos-rules-form">
+        <div class="planos-form-grid">
+          <div>
+            <div class="color-section-label">Parte da barbearia (%)</div>
+            <input class="modal-input" name="barbershopSharePct" type="number" min="0" max="100" step="0.01" value="${escapeHtml(settings.barbershop_share_pct)}" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Parte do time (%)</div>
+            <input class="modal-input" name="teamSharePct" type="number" min="0" max="100" step="0.01" value="${escapeHtml(settings.team_share_pct)}" />
+          </div>
+
+          <div>
+            <div class="color-section-label">Fator padrão de novos planos (%)</div>
+            <input class="modal-input" name="defaultPlanMultiplierPct" type="number" min="0" step="0.01" value="${escapeHtml(settings.default_plan_point_multiplier_pct)}" />
+          </div>
+
+          <label class="planos-rules-check">
+            <input type="checkbox" name="deductGatewayFees" ${settings.deduct_gateway_fees ? 'checked' : ''} />
+            <span>Descontar taxas do gateway antes do rateio</span>
+          </label>
+
+          <label class="planos-rules-check">
+            <input type="checkbox" name="allowManualAdjustments" ${settings.allow_manual_adjustments ? 'checked' : ''} />
+            <span>Permitir ajustes manuais no fechamento</span>
+          </label>
+        </div>
+
+        <div class="planos-rules-explain">
+          Exemplo: se entrarem R$ 10.000 no Clube e a regra for 50% / 50%, R$ 5.000 ficam para a barbearia e R$ 5.000 viram o valor a ser dividido entre os barbeiros por pontos.
+        </div>
+
+        <div class="modal-buttons" style="margin-top:12px;">
+          <button type="submit" class="btn-save">Salvar divisão</button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function renderClubRulesServicePoints() {
+  if (!planosState.clubServicePoints.length) {
+    return `
+      <div class="planos-rules-panel">
+        <div class="planos-section-title">Pontos por serviço</div>
+        <div class="planos-modal-info-row">
+          Nenhum serviço encontrado para parametrizar pontos.
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="planos-rules-panel">
+      <div class="planos-rules-panel-head">
+        <div>
+          <div class="planos-section-title">Pontos por serviço</div>
+          <h3>Quanto cada serviço vale para o barbeiro?</h3>
+          <p>O ponto nasce aqui. Um corte pode valer 1,00 ponto, uma barba 0,70 e um serviço maior pode valer mais.</p>
+        </div>
+      </div>
+
+      <div class="planos-rules-list">
+        ${planosState.clubServicePoints.map((item) => `
+          <div class="planos-rules-row" data-service-rule-row="${escapeHtml(item.id)}">
+            <div class="planos-rules-row-main">
+              <div class="planos-row-title">${escapeHtml(item.service_name || 'Serviço')}</div>
+              <div class="planos-row-sub">
+                ${escapeHtml(item.service_duration_min ? `${item.service_duration_min} min` : 'Duração não informada')}
+                · ${escapeHtml(item.calculation_hint || 'Pontos definidos manualmente')}
+              </div>
+            </div>
+
+            <div class="planos-rules-row-controls">
+              <input class="modal-input planos-rules-number" data-service-points-input="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(item.points)}" />
+              <label class="planos-rules-mini-check">
+                <input type="checkbox" data-service-active-input="${escapeHtml(item.id)}" ${item.is_active ? 'checked' : ''} />
+                <span>Ativo</span>
+              </label>
+              <button type="button" class="planos-action-btn planos-rule-service-save" data-service-point-id="${escapeHtml(item.id)}">
+                Salvar
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderClubRulesPlanRules() {
+  if (!planosState.clubPlanRules.length) {
+    return `
+      <div class="planos-rules-panel">
+        <div class="planos-section-title">Fator por plano</div>
+        <div class="planos-modal-info-row">
+          Nenhum plano encontrado para parametrizar fator.
+        </div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="planos-rules-panel">
+      <div class="planos-rules-panel-head">
+        <div>
+          <div class="planos-section-title">Fator por plano</div>
+          <h3>Planos baratos podem gerar menos pontos.</h3>
+          <p>Use 100% para plano normal, 80% para plano econômico, 70% para promocional e 0% para cortesia.</p>
+        </div>
+      </div>
+
+      <div class="planos-rules-list">
+        ${planosState.clubPlanRules.map((item) => `
+          <div class="planos-rules-row" data-plan-rule-row="${escapeHtml(item.id)}">
+            <div class="planos-rules-row-main">
+              <div class="planos-row-title">${escapeHtml(item.plan_name || 'Plano')}</div>
+              <div class="planos-row-sub">
+                ${escapeHtml(item.commission_model === 'none' ? 'Sem comissão por pontos' : 'Rateio por pontos')}
+                · ${escapeHtml(item.notes || 'Ajuste o fator conforme a estratégia do plano')}
+              </div>
+            </div>
+
+            <div class="planos-rules-row-controls">
+              <select class="modal-input planos-rules-select" data-plan-model-input="${escapeHtml(item.id)}">
+                <option value="points_pool" ${item.commission_model === 'points_pool' ? 'selected' : ''}>Rateio por pontos</option>
+                <option value="none" ${item.commission_model === 'none' ? 'selected' : ''}>Sem comissão</option>
+              </select>
+              <input class="modal-input planos-rules-number" data-plan-multiplier-input="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(item.point_multiplier_pct)}" />
+              <label class="planos-rules-mini-check">
+                <input type="checkbox" data-plan-active-input="${escapeHtml(item.id)}" ${item.is_active ? 'checked' : ''} />
+                <span>Ativo</span>
+              </label>
+              <button type="button" class="planos-action-btn planos-rule-plan-save" data-plan-rule-id="${escapeHtml(item.id)}">
+                Salvar
+              </button>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+
+      <div class="planos-rules-explain">
+        Fórmula do atendimento: pontos do serviço × fator do plano. Exemplo: Corte simples 1,00 ponto em plano econômico 80% gera 0,80 ponto.
+      </div>
+    </div>
+  `;
+}
+
+function renderClubRules() {
+  if (planosState.rulesIsLoading) {
+    return renderLoadingState('Regras do Clube', 'Carregando parametrizações de comissão...');
+  }
+
+  if (planosState.rulesError) {
+    return `
+      <div class="card planos-club-card">
+        <div class="card-header">
+          <div class="card-title">Regras do Clube</div>
+          <button type="button" class="btn-primary-gradient" id="planos-rules-refresh-button">Tentar novamente</button>
+        </div>
+        <div class="planos-modal-info-row">${escapeHtml(planosState.rulesError)}</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card planos-club-card planos-rules-card">
+      <div class="card-header planos-club-header">
+        <div>
+          <div class="card-title">Regras do Clube</div>
+          <div class="row-sub" style="margin-top:4px;">Parametrize a divisão da receita, os pontos por serviço e o fator por plano.</div>
+        </div>
+        <button type="button" class="planos-action-btn" id="planos-rules-refresh-button">Atualizar regras</button>
+      </div>
+
+      ${renderRulesFeedback()}
+
+      <div class="planos-rules-hero">
+        <div>
+          <div class="planos-club-eyebrow">Configuração profissional</div>
+          <h3>O dono define as regras uma vez. O sistema calcula sem adivinhação.</h3>
+          <p>Essas configurações controlam como os atendimentos de assinantes viram pontos e como o dinheiro do Clube é dividido no fechamento.</p>
+        </div>
+      </div>
+
+      <div class="planos-rules-stack">
+        ${renderClubRulesRevenueSplit()}
+        ${renderClubRulesServicePoints()}
+        ${renderClubRulesPlanRules()}
+      </div>
+    </div>
+  `;
+}
+
+
 function setPlanFormFeedback(message, variant = 'neutral') {
   const el = document.getElementById('planos-form-feedback');
   if (!el) return;
@@ -1264,6 +1518,17 @@ function setSubscriptionDetailsFeedback(message, variant = 'neutral') {
     variant === 'success' ? '#00e676' :
     '#5a6888';
 }
+
+function setRulesFeedback(message, variant = 'neutral') {
+  planosState.rulesFeedback = message || '';
+
+  if (variant === 'error' && message) {
+    planosState.rulesError = message;
+  } else if (variant !== 'error') {
+    planosState.rulesError = '';
+  }
+}
+
 
 async function ensureClientsLoaded() {
   if (Array.isArray(planosState.clients) && planosState.clients.length > 0) return;
@@ -1316,13 +1581,47 @@ async function loadClubCommissionsData({ render = true } = {}) {
   }
 }
 
+
+async function loadClubRulesData({ render = true } = {}) {
+  if (!hasApiConfig() || !hasAuthToken()) return;
+
+  planosState.rulesIsLoading = true;
+  planosState.rulesError = '';
+
+  if (render) rerenderPlanos();
+
+  try {
+    const [settingsPayload, servicePointsPayload, planRulesPayload] = await Promise.all([
+      getClubCommissionSettings(),
+      getClubCommissionServicePoints(),
+      getClubCommissionPlanRules(),
+    ]);
+
+    planosState.clubSettings = settingsPayload || null;
+    planosState.clubServicePoints = Array.isArray(servicePointsPayload) ? servicePointsPayload : [];
+    planosState.clubPlanRules = Array.isArray(planRulesPayload) ? planRulesPayload : [];
+  } catch (error) {
+    planosState.clubSettings = null;
+    planosState.clubServicePoints = [];
+    planosState.clubPlanRules = [];
+    planosState.rulesError = error instanceof Error
+      ? error.message
+      : 'Não foi possível carregar as regras do clube.';
+  } finally {
+    planosState.rulesIsLoading = false;
+    if (render) rerenderPlanos();
+  }
+}
+
+
 async function loadPlanosData() {
   const metricsEl = document.getElementById('planos-metrics');
   const plansListEl = document.getElementById('planos-list');
   const subscriptionsListEl = document.getElementById('planos-subscriptions-list');
   const clubCommissionsEl = document.getElementById('planos-club-commissions');
+  const clubRulesEl = document.getElementById('planos-club-rules');
 
-  if (!metricsEl || !plansListEl || !subscriptionsListEl || !clubCommissionsEl) return;
+  if (!metricsEl || !plansListEl || !subscriptionsListEl || !clubCommissionsEl || !clubRulesEl) return;
 
   if (!hasApiConfig()) {
     planosState.isLoaded = false;
@@ -1339,6 +1638,10 @@ async function loadPlanosData() {
     clubCommissionsEl.innerHTML = renderEmptyState(
       'Comissões do Clube',
       'Aguardando configuração da API para exibir os fechamentos.',
+    );
+    clubRulesEl.innerHTML = renderEmptyState(
+      'Regras do Clube',
+      'Aguardando configuração da API para exibir as regras.',
     );
     return;
   }
@@ -1359,6 +1662,10 @@ async function loadPlanosData() {
       'Comissões do Clube',
       'Aguardando autenticação para exibir os fechamentos.',
     );
+    clubRulesEl.innerHTML = renderEmptyState(
+      'Regras do Clube',
+      'Aguardando autenticação para exibir as regras.',
+    );
     return;
   }
 
@@ -1367,6 +1674,7 @@ async function loadPlanosData() {
   plansListEl.innerHTML = renderLoadingState('Planos', 'Carregando planos...');
   subscriptionsListEl.innerHTML = renderLoadingState('Assinaturas', 'Carregando assinaturas...');
   clubCommissionsEl.innerHTML = renderLoadingState('Comissões do Clube', 'Carregando comissões por pontos...');
+  clubRulesEl.innerHTML = renderLoadingState('Regras do Clube', 'Carregando parametrizações...');
 
   try {
     const [plansPayload, subscriptionsPayload] = await Promise.all([
@@ -1382,7 +1690,10 @@ async function loadPlanosData() {
     planosState.plans = applySubscriberCounts(mappedPlans, mappedSubscriptions);
     planosState.subscriptions = mappedSubscriptions;
 
-    await loadClubCommissionsData({ render: false });
+    await Promise.all([
+      loadClubCommissionsData({ render: false }),
+      loadClubRulesData({ render: false }),
+    ]);
 
     planosState.isLoaded = true;
 
@@ -1398,6 +1709,10 @@ async function loadPlanosData() {
     );
     clubCommissionsEl.innerHTML = renderEmptyState(
       'Comissões do Clube',
+      'Sem dados por causa do erro de integração.',
+    );
+    clubRulesEl.innerHTML = renderEmptyState(
+      'Regras do Clube',
       'Sem dados por causa do erro de integração.',
     );
   } finally {
@@ -1710,7 +2025,10 @@ async function handleMarkClubPeriodPaid() {
     planosState.clubIsLoading = true;
     rerenderPlanos();
     await markClubCommissionPeriodPaid(period.id);
-    await loadClubCommissionsData({ render: false });
+    await Promise.all([
+      loadClubCommissionsData({ render: false }),
+      loadClubRulesData({ render: false }),
+    ]);
     rerenderPlanos();
   } catch (error) {
     planosState.clubError = error instanceof Error
@@ -1720,6 +2038,121 @@ async function handleMarkClubPeriodPaid() {
     rerenderPlanos();
   }
 }
+
+
+async function handleRulesSettingsSubmit(event) {
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const formData = new FormData(form);
+
+  const barbershopSharePct = Number(formData.get('barbershopSharePct') || 0);
+  const teamSharePct = Number(formData.get('teamSharePct') || 0);
+  const defaultPlanMultiplierPct = Number(formData.get('defaultPlanMultiplierPct') || 0);
+
+  if (!Number.isFinite(barbershopSharePct) || !Number.isFinite(teamSharePct)) {
+    setRulesFeedback('Informe percentuais válidos.', 'error');
+    rerenderPlanos();
+    return;
+  }
+
+  if (Math.abs((barbershopSharePct + teamSharePct) - 100) > 0.01) {
+    setRulesFeedback('A soma da parte da barbearia e da parte do time precisa ser 100%.', 'error');
+    rerenderPlanos();
+    return;
+  }
+
+  try {
+    planosState.rulesIsLoading = true;
+    setRulesFeedback('Salvando divisão da receita...');
+    rerenderPlanos();
+
+    await updateClubCommissionSettings({
+      barbershop_share_pct: barbershopSharePct,
+      team_share_pct: teamSharePct,
+      default_plan_point_multiplier_pct: defaultPlanMultiplierPct,
+      deduct_gateway_fees: Boolean(formData.get('deductGatewayFees')),
+      allow_manual_adjustments: Boolean(formData.get('allowManualAdjustments')),
+    });
+
+    await loadClubRulesData({ render: false });
+    planosState.rulesIsLoading = false;
+    setRulesFeedback('Regras de divisão salvas com sucesso.', 'success');
+    rerenderPlanos();
+  } catch (error) {
+    planosState.rulesIsLoading = false;
+    setRulesFeedback(error instanceof Error ? error.message : 'Não foi possível salvar a divisão.', 'error');
+    rerenderPlanos();
+  }
+}
+
+async function handleSaveServicePoint(pointId) {
+  const pointsInput = document.querySelector(`[data-service-points-input="${escapeSelector(pointId)}"]`);
+  const activeInput = document.querySelector(`[data-service-active-input="${escapeSelector(pointId)}"]`);
+  const points = Number(pointsInput?.value || 0);
+
+  if (!Number.isFinite(points) || points < 0) {
+    setRulesFeedback('Informe uma pontuação válida para o serviço.', 'error');
+    rerenderPlanos();
+    return;
+  }
+
+  try {
+    planosState.rulesIsLoading = true;
+    setRulesFeedback('Salvando pontos do serviço...');
+    rerenderPlanos();
+
+    await updateClubCommissionServicePoint(pointId, {
+      points,
+      is_active: Boolean(activeInput?.checked),
+      calculation_hint: 'Ajustado manualmente pelo dono da barbearia',
+    });
+
+    await loadClubRulesData({ render: false });
+    planosState.rulesIsLoading = false;
+    setRulesFeedback('Pontos do serviço salvos com sucesso.', 'success');
+    rerenderPlanos();
+  } catch (error) {
+    planosState.rulesIsLoading = false;
+    setRulesFeedback(error instanceof Error ? error.message : 'Não foi possível salvar os pontos do serviço.', 'error');
+    rerenderPlanos();
+  }
+}
+
+async function handleSavePlanRule(ruleId) {
+  const multiplierInput = document.querySelector(`[data-plan-multiplier-input="${escapeSelector(ruleId)}"]`);
+  const modelInput = document.querySelector(`[data-plan-model-input="${escapeSelector(ruleId)}"]`);
+  const activeInput = document.querySelector(`[data-plan-active-input="${escapeSelector(ruleId)}"]`);
+  const pointMultiplierPct = Number(multiplierInput?.value || 0);
+
+  if (!Number.isFinite(pointMultiplierPct) || pointMultiplierPct < 0) {
+    setRulesFeedback('Informe um fator válido para o plano.', 'error');
+    rerenderPlanos();
+    return;
+  }
+
+  try {
+    planosState.rulesIsLoading = true;
+    setRulesFeedback('Salvando fator do plano...');
+    rerenderPlanos();
+
+    await updateClubCommissionPlanRule(ruleId, {
+      commission_model: modelInput?.value || 'points_pool',
+      point_multiplier_pct: pointMultiplierPct,
+      is_active: Boolean(activeInput?.checked),
+    });
+
+    await loadClubRulesData({ render: false });
+    planosState.rulesIsLoading = false;
+    setRulesFeedback('Fator do plano salvo com sucesso.', 'success');
+    rerenderPlanos();
+  } catch (error) {
+    planosState.rulesIsLoading = false;
+    setRulesFeedback(error instanceof Error ? error.message : 'Não foi possível salvar o fator do plano.', 'error');
+    rerenderPlanos();
+  }
+}
+
 
 function renderPlanosModal() {
   const modal = document.getElementById('planos-details-modal');
@@ -1861,6 +2294,32 @@ function bindClubCommissionEvents() {
   });
 }
 
+
+function bindClubRulesEvents() {
+  document.getElementById('planos-rules-refresh-button')?.addEventListener('click', () => {
+    loadClubRulesData({ render: true });
+  });
+
+  document.getElementById('planos-rules-settings-form')?.addEventListener('submit', handleRulesSettingsSubmit);
+
+  document.querySelectorAll('.planos-rule-service-save').forEach((button) => {
+    button.addEventListener('click', () => {
+      const pointId = button.dataset.servicePointId;
+      if (!pointId) return;
+      handleSaveServicePoint(pointId);
+    });
+  });
+
+  document.querySelectorAll('.planos-rule-plan-save').forEach((button) => {
+    button.addEventListener('click', () => {
+      const ruleId = button.dataset.planRuleId;
+      if (!ruleId) return;
+      handleSavePlanRule(ruleId);
+    });
+  });
+}
+
+
 function bindPlanosStaticEvents() {
   document.getElementById('planos-new-plan-button')?.addEventListener('click', () => {
     openCreatePlanModal();
@@ -1883,6 +2342,7 @@ function rerenderPlanos() {
   const plansList = document.getElementById('planos-list');
   const subscriptionsList = document.getElementById('planos-subscriptions-list');
   const clubCommissions = document.getElementById('planos-club-commissions');
+  const clubRules = document.getElementById('planos-club-rules');
 
   if (metrics) metrics.innerHTML = renderMetrics();
   if (tabs) tabs.innerHTML = renderPlanosTabs();
@@ -1908,10 +2368,15 @@ function rerenderPlanos() {
     clubCommissions.innerHTML = renderClubCommissions();
   }
 
+  if (clubRules) {
+    clubRules.innerHTML = renderClubRules();
+  }
+
   bindPlanosTabsEvents();
   bindPlanEvents();
   bindSubscriptionEvents();
   bindClubCommissionEvents();
+  bindClubRulesEvents();
 }
 
 export function renderPlanos() {
@@ -1963,6 +2428,12 @@ export function renderPlanos() {
         ${renderLoadingState('Comissões do Clube', 'Carregando comissões por pontos...')}
       </div>
     </div>
+
+    <div class="planos-tab-panel" data-planos-panel="regras" ${planosState.activeTab === 'regras' ? '' : 'hidden'}>
+      <div id="planos-club-rules">
+        ${renderLoadingState('Regras do Clube', 'Carregando parametrizações...')}
+      </div>
+    </div>
   </div>
 
   <div id="planos-details-modal" class="modal-overlay" style="display:none;">
@@ -1980,5 +2451,6 @@ export function initPlanosPage() {
   bindPlanEvents();
   bindSubscriptionEvents();
   bindClubCommissionEvents();
+  bindClubRulesEvents();
   loadPlanosData();
 }
