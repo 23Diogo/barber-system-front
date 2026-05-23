@@ -1081,7 +1081,6 @@ export function renderClientes() {
 <section class="page-shell page--clientes">
   <div class="clients-premium-hero">
     <div>
-      <div class="clients-premium-eyebrow">Clientes V2 Premium</div>
       <h1>Central de relacionamento</h1>
       <p>Entenda quem volta, quem sumiu, quem tem plano, quem merece campanha e quem está virando cliente VIP.</p>
     </div>
