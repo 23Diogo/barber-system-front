@@ -511,6 +511,32 @@ export async function cancelInvoice(invoiceId) {
 }
 
 /* =========================
+   COMISSÕES DO CLUBE
+========================= */
+
+export async function getClubCommissionPeriods(filters = {}) {
+  return apiFetch(`/api/club-commissions/periods${buildQueryString(filters)}`);
+}
+
+export async function getClubCommissionPeriod(periodId) {
+  return apiFetch(`/api/club-commissions/periods/${periodId}`);
+}
+
+export async function getClubCommissionEntries(periodId) {
+  return apiFetch(`/api/club-commissions/periods/${periodId}/entries`);
+}
+
+export async function getClubCommissionConsumptions(periodId, filters = {}) {
+  return apiFetch(`/api/club-commissions/periods/${periodId}/consumptions${buildQueryString(filters)}`);
+}
+
+export async function markClubCommissionPeriodPaid(periodId) {
+  return apiFetch(`/api/club-commissions/periods/${periodId}/mark-paid`, {
+    method: 'POST',
+  });
+}
+
+/* =========================
    MERCADO PAGO
 ========================= */
 
@@ -565,5 +591,10 @@ window.BarberFlowApi = {
   markInvoicePaid,
   markInvoiceFailed,
   cancelInvoice,
+  getClubCommissionPeriods,
+  getClubCommissionPeriod,
+  getClubCommissionEntries,
+  getClubCommissionConsumptions,
+  markClubCommissionPeriodPaid,
   createMercadoPagoPreference,
 };
