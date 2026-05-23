@@ -820,7 +820,7 @@ async function openClientModal(clientId) {
   renderClientModal();
 
   try {
-    clientesState.detailClient = await apiFetch(`/api/clients/premium/${clientId}`);
+    clientesState.detailClient = await apiFetch(`/api/clients/insights/${clientId}`);
   } catch (error) {
     const fallbackClient = (clientesState.items || []).find(item => String(item.id) === String(clientId));
 
