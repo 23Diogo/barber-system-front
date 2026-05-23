@@ -1,3 +1,4 @@
+// BBarberFlow Financeiro - Comissões do Time V1.2 Ações Premium
 import { apiFetch } from '../services/api.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
