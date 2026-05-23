@@ -654,3 +654,19 @@ window.BarberFlowApi = {
   updateClubCommissionPlanRule,
   createMercadoPagoPreference,
 };
+
+/* =========================
+   CLIENTES PREMIUM
+========================= */
+
+export async function getClientsPremium(filters = {}) {
+  return apiFetch(`/api/clients/premium${buildQueryString(filters)}`);
+}
+
+export async function getClientsPremiumDashboard() {
+  return apiFetch('/api/clients/premium/dashboard');
+}
+
+export async function getClientPremiumById(clientId) {
+  return apiFetch(`/api/clients/${clientId}/premium`);
+}
