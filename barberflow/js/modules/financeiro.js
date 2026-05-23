@@ -1,4 +1,4 @@
-// BBarberFlow Financeiro - Comissões do Time V1.2 Ações Premium
+// BBarberFlow Financeiro V2 Premium - Owner Cockpit
 import { apiFetch } from '../services/api.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -138,6 +138,84 @@ const hasTeamCommissionData = (summary) => {
   const items = Array.isArray(summary?.items) ? summary.items : [];
   return items.length > 0 || Number(totals.totalGeneratedCents || 0) > 0 || Number(totals.pendingCents || 0) > 0;
 };
+
+const startOfCurrentMonthBR = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
+};
+
+const endOfCurrentMonthBR = () => {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
+};
+
+const isBillPaid = (bill) => String(bill?.status || '').toLowerCase() === 'paid';
+const isBillCancelled = (bill) => String(bill?.status || '').toLowerCase() === 'cancelled';
+const isBillOpen = (bill) => !isBillPaid(bill) && !isBillCancelled(bill);
+const isBillOverdue = (bill) => isBillOpen(bill) && bill?.due_date && new Date(`${bill.due_date}T23:59:59`) < new Date();
+const isBillDueSoon = (bill) => {
+  if (!isBillOpen(bill) || !bill?.due_date || isBillOverdue(bill)) return false;
+  const due = new Date(`${bill.due_date}T23:59:59`);
+  const diff = Math.ceil((due - new Date()) / 86400000);
+  return diff >= 0 && diff <= 3;
+};
+
+const sumAmount = (items, field = 'amount') =>
+  (items || []).reduce((sum, item) => sum + Number(item?.[field] || 0), 0);
+
+const getBillCockpit = () => {
+  const bills = financeiroState.bills || [];
+  const open = bills.filter(isBillOpen);
+  const overdue = open.filter(isBillOverdue);
+  const dueSoon = open.filter(isBillDueSoon);
+  const paid = bills.filter(isBillPaid);
+
+  return {
+    totalCount: bills.length,
+    open,
+    overdue,
+    dueSoon,
+    paid,
+    openAmount: sumAmount(open),
+    overdueAmount: sumAmount(overdue),
+    dueSoonAmount: sumAmount(dueSoon),
+    paidAmount: sumAmount(paid),
+  };
+};
+
+const getTransactionCockpit = () => {
+  const transactions = financeiroState.transactions || [];
+  const income = transactions.filter(t => t.type === 'income');
+  const expense = transactions.filter(t => t.type === 'expense');
+  const byMethod = {};
+  const byCategory = {};
+
+  for (const t of transactions) {
+    if (t.payment_method) byMethod[t.payment_method] = (byMethod[t.payment_method] || 0) + Number(t.amount || 0);
+    if (t.category) byCategory[t.category] = (byCategory[t.category] || 0) + Number(t.amount || 0);
+  }
+
+  return {
+    total: transactions.length,
+    income,
+    expense,
+    incomeAmount: sumAmount(income),
+    expenseAmount: sumAmount(expense),
+    byMethod,
+    byCategory,
+  };
+};
+
+const getFinanceHealth = (metrics) => {
+  const revenue = Number(metrics.revenue || 0);
+  const obligations = Number(metrics.expenses || 0) + Number(metrics.openBillsAmount || 0) + Number(metrics.commissions || 0);
+  const coverage = obligations > 0 ? Math.round((revenue / obligations) * 100) : revenue > 0 ? 100 : 0;
+
+  if (coverage >= 120) return { label: 'Saúde boa', color: '#00e676', icon: '🟢', coverage };
+  if (coverage >= 80) return { label: 'Atenção', color: '#f97316', icon: '🟠', coverage };
+  return { label: 'Pressão no caixa', color: '#ff5c74', icon: '🔴', coverage };
+};
+
 
 const getPreviousMonthRange = (periodStart, offset = 1) => {
   const monthValue = getMonthValueFromPeriod(periodStart);
@@ -290,217 +368,137 @@ function renderBarChart(bars, maxVal, height = 60) {
 
 function renderCashHero() {
   const { register, summary, movements } = financeiroState.cash;
-
-  // ── Status badge ──────────────────────────────────────────────────────────
-  const isOpen   = register?.status === 'open';
+  const isOpen = register?.status === 'open';
   const isClosed = register?.status === 'closed';
   const noRegister = !register;
 
   const statusColor = isOpen ? '#00e676' : isClosed ? '#5a6888' : '#f97316';
-  const statusLabel = isOpen ? '● Aberto' : isClosed ? '■ Fechado' : '○ Não iniciado';
-  const statusBg    = isOpen ? 'rgba(0,230,118,.08)' : isClosed ? 'rgba(90,104,136,.1)' : 'rgba(249,115,22,.08)';
-
+  const statusLabel = isOpen ? 'Caixa aberto' : isClosed ? 'Caixa fechado' : 'Não iniciado';
   const balance = summary?.expectedBalance ?? 0;
   const totalIn = (summary?.totalIncome ?? 0) + (summary?.totalReinforcement ?? 0);
   const totalOut = (summary?.totalExpense ?? 0) + (summary?.totalWithdrawal ?? 0);
+  const opening = summary?.openingBalance ?? 0;
 
-  // ── Donut: breakdown por método de pagamento ───────────────────────────────
   const byMethod = summary?.byMethod || {};
   const methodSegments = Object.entries(byMethod)
-    .filter(([, v]) => v > 0)
+    .filter(([, v]) => Number(v) > 0)
     .map(([key, value]) => ({
       label: PAYMENT_METHODS[key]?.label || key,
-      value,
+      value: Number(value),
       color: PAYMENT_METHODS[key]?.color || '#4fc3f7',
     }))
     .sort((a, b) => b.value - a.value);
 
-  const donut = renderDonutChart(methodSegments, 110, 16);
+  const donut = renderDonutChart(methodSegments, 120, 16);
 
-  // ── Bar: movimentações por tipo ───────────────────────────────────────────
   const typeAgg = { income: 0, expense: 0, withdrawal: 0, reinforcement: 0 };
   for (const m of movements) {
     if (m.type in typeAgg) typeAgg[m.type] += Number(m.amount || 0);
   }
   const barMax = Math.max(...Object.values(typeAgg), 1);
   const bars = [
-    { label: 'Entrada', value: typeAgg.income,        color: '#00e676' },
-    { label: 'Saída',   value: typeAgg.expense,       color: '#ff1744' },
-    { label: 'Sangria', value: typeAgg.withdrawal,    color: '#f97316' },
+    { label: 'Entrada', value: typeAgg.income, color: '#00e676' },
+    { label: 'Saída', value: typeAgg.expense, color: '#ff5c74' },
+    { label: 'Sangria', value: typeAgg.withdrawal, color: '#f97316' },
     { label: 'Reforço', value: typeAgg.reinforcement, color: '#4fc3f7' },
   ];
   const barChart = renderBarChart(bars, barMax, 64);
 
+  const dayChecklist = [
+    { label: 'Caixa aberto', done: isOpen || isClosed },
+    { label: 'Movimentos registrados', done: movements.length > 0 },
+    { label: 'Fechamento conferido', done: isClosed },
+  ];
+
   return `
-    <!-- ─── Hero card: status + saldo ──────────────────────────────────────── -->
-    <div class="cash-hero" style="
-      position:relative;overflow:hidden;
-      background:linear-gradient(135deg,#08091a 0%,#0d1030 60%,#0a1528 100%);
-      border:1px solid #1e2345;border-radius:20px;padding:24px;margin-bottom:16px;
-    ">
-      <!-- glow -->
-      <div style="
-        position:absolute;top:-40px;right:-40px;width:200px;height:200px;
-        background:radial-gradient(circle,${statusColor}22 0%,transparent 70%);
-        pointer-events:none;
-      "></div>
+    <section class="cash-v2-hero" style="--cash-status:${statusColor}">
+      <div class="cash-v2-glow"></div>
 
-      <!-- Header row -->
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:20px;">
+      <div class="cash-v2-head">
         <div>
-          <div style="font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:#3a4568;margin-bottom:6px;">
-            CAIXA DO DIA
-          </div>
-          <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
-            <div style="
-              font-size:11px;font-weight:700;padding:5px 12px;border-radius:999px;
-              background:${statusBg};color:${statusColor};border:1px solid ${statusColor}44;
-            ">${statusLabel}</div>
-            ${register ? `
-              <div style="font-size:10px;color:#5a6888;">
-                ${isOpen ? `Aberto às ${fmtTime(register.opened_at)}` : `Fechado às ${fmtTime(register.closed_at)}`}
-              </div>` : ''}
-          </div>
+          <div class="finance-kicker">CAIXA DIÁRIO</div>
+          <h2>Torre de controle do dia</h2>
+          <p>Abra, acompanhe, movimente e feche o caixa com leitura visual de entradas, saídas e diferença.</p>
         </div>
-
-        <!-- Date picker -->
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <input type="date" id="cash-date-picker" value="${financeiroState.cashDate}"
-            style="background:#0a0c1a;border:1px solid #1e2345;border-radius:10px;
-                   padding:7px 10px;color:#e8f0fe;font:inherit;font-size:11px;"/>
-          <button type="button" id="cash-load-date-btn"
-            style="padding:7px 14px;border-radius:10px;border:1px solid #1e2345;
-                   background:#0f1428;color:#c0cce8;font:inherit;font-size:11px;
-                   font-weight:700;cursor:pointer;">Carregar</button>
+        <div class="cash-v2-datebox">
+          <label for="cash-date-picker">Data do caixa</label>
+          <div>
+            <input type="date" id="cash-date-picker" value="${financeiroState.cashDate}">
+            <button type="button" id="cash-load-date-btn">Carregar</button>
+          </div>
         </div>
       </div>
 
-      <!-- Saldo principal -->
-      <div style="margin-bottom:20px;">
-        <div style="font-size:11px;color:#5a6888;margin-bottom:6px;font-weight:600;">
-          ${isClosed ? 'Saldo de fechamento' : 'Saldo atual (projetado)'}
+      <div class="cash-v2-grid">
+        <div class="cash-v2-main">
+          <div class="cash-v2-status"><span></span>${esc(statusLabel)}</div>
+          <small>${isOpen ? `Aberto às ${fmtTime(register?.opened_at)}` : isClosed ? `Fechado às ${fmtTime(register?.closed_at)}` : 'Abra o caixa para iniciar os lançamentos do dia'}</small>
+          <strong class="${balance >= 0 ? 'is-positive' : 'is-negative'}">${fmt(isClosed ? register.closing_balance : balance)}</strong>
+          <em>${isClosed && register.difference !== null ? `Diferença no fechamento: ${fmt(register.difference)}` : 'Saldo projetado considerando movimentos do dia'}</em>
         </div>
-        <div style="
-          font-size:clamp(28px,5vw,44px);font-weight:900;
-          font-family:'Orbitron',monospace;
-          color:${balance >= 0 ? '#00e676' : '#ff1744'};
-          letter-spacing:-.02em;line-height:1;
-        ">
-          ${fmt(isClosed ? register.closing_balance : balance)}
-        </div>
-        ${isClosed && register.difference !== null ? `
-          <div style="font-size:11px;margin-top:6px;color:${Math.abs(register.difference) < 1 ? '#00e676' : '#f97316'};">
-            Diferença: ${fmt(register.difference)}
-          </div>` : ''}
-      </div>
 
-      <!-- Mini métricas -->
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-bottom:20px;">
-        ${[
-          { label: 'Abertura',  value: summary?.openingBalance ?? 0, color: '#c0cce8' },
-          { label: 'Entradas',  value: totalIn,                       color: '#00e676' },
-          { label: 'Saídas',    value: totalOut,                      color: '#ff1744' },
-          { label: 'Movimentos',value: movements.length,              color: '#4fc3f7', isCount: true },
-        ].map(m => `
-          <div style="
-            background:rgba(255,255,255,.03);border:1px solid #1e2345;
-            border-radius:12px;padding:12px;text-align:center;
-          ">
-            <div style="font-size:9px;color:#5a6888;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;">
-              ${m.label}
+        <div class="cash-v2-metrics">
+          ${[
+            ['Abertura', opening, '#c0cce8', 'Fundo inicial'],
+            ['Entradas', totalIn, '#00e676', 'Receitas + reforços'],
+            ['Saídas', totalOut, '#ff5c74', 'Despesas + sangrias'],
+            ['Movimentos', movements.length, '#4fc3f7', 'Lançamentos', true],
+          ].map(([label, value, color, hint, isCount]) => `
+            <div class="cash-v2-chip" style="--accent:${color}">
+              <span>${esc(label)}</span>
+              <strong>${isCount ? value : fmtCompact(value)}</strong>
+              <small>${esc(hint)}</small>
             </div>
-            <div style="font-size:${m.isCount ? '22px' : '14px'};font-weight:800;color:${m.color};
-                        ${!m.isCount ? 'font-family:\'Orbitron\',monospace;' : ''}">
-              ${m.isCount ? m.value : fmtCompact(m.value)}
-            </div>
-          </div>
-        `).join('')}
+          `).join('')}
+        </div>
       </div>
 
-      <!-- Charts row -->
-      <div style="display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap;">
-
-        <!-- Donut: por método de pagamento -->
-        ${methodSegments.length ? `
-          <div style="display:flex;align-items:center;gap:16px;flex:1;min-width:200px;">
-            <div style="position:relative;">
-              ${donut}
-              <div style="
-                position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
-                text-align:center;pointer-events:none;
-              ">
-                <div style="font-size:9px;color:#5a6888;line-height:1.2;">métodos</div>
+      <div class="cash-v2-insights">
+        <div class="cash-v2-chart-card">
+          <div class="finance-kicker">FORMAS DE PAGAMENTO</div>
+          ${methodSegments.length ? `
+            <div class="cash-v2-donut">
+              <div>${donut}</div>
+              <div class="cash-v2-methods">
+                ${methodSegments.slice(0, 5).map(s => `
+                  <p><i style="background:${s.color}"></i><span>${esc(s.label)}</span><b>${fmtCompact(s.value)}</b></p>
+                `).join('')}
               </div>
+            </div>` : `<div class="finance-empty-soft">Sem entradas por método ainda.</div>`}
+        </div>
+        <div class="cash-v2-chart-card">
+          <div class="finance-kicker">MOVIMENTOS POR TIPO</div>
+          <div class="cash-v2-bars">${barChart || '<div class="finance-empty-soft">Sem movimentos.</div>'}</div>
+        </div>
+        <div class="cash-v2-check-card">
+          <div class="finance-kicker">CHECKLIST DO DIA</div>
+          ${dayChecklist.map(item => `
+            <div class="cash-v2-check ${item.done ? 'is-done' : ''}">
+              <span>${item.done ? '✓' : '○'}</span>
+              <b>${esc(item.label)}</b>
             </div>
-            <div style="display:grid;gap:5px;flex:1;">
-              ${methodSegments.slice(0, 4).map(s => `
-                <div style="display:flex;align-items:center;gap:7px;">
-                  <div style="width:8px;height:8px;border-radius:50%;background:${s.color};flex-shrink:0;"></div>
-                  <div style="font-size:10px;color:#c0cce8;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                    ${esc(s.label)}
-                  </div>
-                  <div style="font-size:10px;color:${s.color};font-weight:700;white-space:nowrap;">
-                    ${fmtCompact(s.value)}
-                  </div>
-                </div>
-              `).join('')}
-            </div>
-          </div>
-        ` : `
-          <div style="flex:1;display:flex;align-items:center;justify-content:center;min-height:80px;">
-            <span style="font-size:11px;color:#3a4568;">Nenhuma movimentação registrada</span>
-          </div>
-        `}
-
-        <!-- Bar: por tipo -->
-        ${barChart ? `
-          <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
-            <div style="font-size:9px;color:#5a6888;font-weight:700;text-transform:uppercase;letter-spacing:.08em;">
-              por tipo
-            </div>
-            ${barChart}
-          </div>
-        ` : ''}
+          `).join('')}
+        </div>
       </div>
 
-      <!-- Ações do caixa -->
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px;padding-top:16px;border-top:1px solid #1e2345;">
-        ${noRegister ? `
-          <button type="button" id="cash-open-btn"
-            class="cash-action-btn cash-action-btn--primary">
-            🔓 Abrir caixa
-          </button>
-        ` : ''}
+      <div class="cash-v2-actions">
+        ${noRegister ? `<button type="button" id="cash-open-btn" class="cash-action-btn cash-action-btn--primary">🔓 Abrir caixa</button>` : ''}
         ${isOpen ? `
-          <button type="button" id="cash-withdrawal-btn"
-            class="cash-action-btn cash-action-btn--warning">
-            ⬇ Sangria
-          </button>
-          <button type="button" id="cash-reinforcement-btn"
-            class="cash-action-btn cash-action-btn--info">
-            ⬆ Reforço
-          </button>
-          <button type="button" id="cash-income-btn"
-            class="cash-action-btn cash-action-btn--success">
-            + Entrada
-          </button>
-          <button type="button" id="cash-expense-btn"
-            class="cash-action-btn cash-action-btn--danger">
-            − Saída
-          </button>
-          <div style="flex:1;"></div>
-          <button type="button" id="cash-close-btn"
-            class="cash-action-btn cash-action-btn--close">
-            🔒 Fechar caixa
-          </button>
+          <button type="button" id="cash-withdrawal-btn" class="cash-action-btn cash-action-btn--warning">⬇ Sangria</button>
+          <button type="button" id="cash-reinforcement-btn" class="cash-action-btn cash-action-btn--info">⬆ Reforço</button>
+          <button type="button" id="cash-income-btn" class="cash-action-btn cash-action-btn--success">+ Entrada</button>
+          <button type="button" id="cash-expense-btn" class="cash-action-btn cash-action-btn--danger">− Saída</button>
+          <div class="cash-v2-spacer"></div>
+          <button type="button" id="cash-close-btn" class="cash-action-btn cash-action-btn--close">🔒 Fechar caixa</button>
         ` : ''}
       </div>
-    </div>
+    </section>
 
-    <!-- ─── Lista de movimentações ──────────────────────────────────────────── -->
     ${renderMovementsList()}
   `;
 }
+
+
 
 function renderMovementsList() {
   const { movements } = financeiroState.cash;
@@ -588,23 +586,8 @@ function renderMovementsList() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function getMetrics() {
-  const revenue = financeiroState.transactions
-    .filter(t => t.type === 'income')
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
-
-  const paidExpenses = financeiroState.transactions
-    .filter(t => t.type === 'expense')
-    .reduce((s, t) => s + Number(t.amount || 0), 0);
-
-  const openBills = financeiroState.bills
-    .filter(b => !['paid', 'cancelled'].includes(String(b.status || '').toLowerCase()));
-
-  const openBillsAmount = openBills
-    .reduce((s, b) => s + Number(b.amount || 0), 0);
-
-  const overdueBillsAmount = openBills
-    .filter(b => b.due_date && new Date(`${b.due_date}T23:59:59`) < new Date())
-    .reduce((s, b) => s + Number(b.amount || 0), 0);
+  const tx = getTransactionCockpit();
+  const bills = getBillCockpit();
 
   const legacyCommissions = financeiroState.commissions
     .reduce((s, c) => s + Number(c.commission_amount || 0), 0);
@@ -614,101 +597,101 @@ function getMetrics() {
   );
 
   const commissions = Math.max(legacyCommissions, teamCommissionGenerated);
-  const realizedProfit = revenue - paidExpenses - commissions;
-  const projectedProfit = revenue - paidExpenses - openBillsAmount - commissions;
-  const margin = revenue > 0 ? Math.round((realizedProfit / revenue) * 100) : 0;
+  const realizedProfit = tx.incomeAmount - tx.expenseAmount - commissions;
+  const projectedProfit = tx.incomeAmount - tx.expenseAmount - bills.openAmount - commissions;
+  const margin = tx.incomeAmount > 0 ? Math.round((realizedProfit / tx.incomeAmount) * 100) : 0;
 
   return {
-    revenue,
-    expenses: paidExpenses,
-    openBillsAmount,
-    overdueBillsAmount,
-    openBillsCount: openBills.length,
+    revenue: tx.incomeAmount,
+    expenses: tx.expenseAmount,
+    openBillsAmount: bills.openAmount,
+    overdueBillsAmount: bills.overdueAmount,
+    dueSoonBillsAmount: bills.dueSoonAmount,
+    openBillsCount: bills.open.length,
+    overdueBillsCount: bills.overdue.length,
+    dueSoonBillsCount: bills.dueSoon.length,
+    paidBillsAmount: bills.paidAmount,
+    paidBillsCount: bills.paid.length,
     profit: realizedProfit,
     projectedProfit,
     commissions,
     margin,
+    transactionsCount: tx.total,
   };
 }
 
+
+
 function renderMetricsBar() {
   const m = getMetrics();
-
-  const cards = [
-    { label: 'Receita realizada',  value: m.revenue,          color: '#4fc3f7', sub: 'Entradas registradas' },
-    { label: 'Despesas pagas',     value: m.expenses,         color: '#ff1744', sub: 'Já saiu do caixa' },
-    { label: 'Contas em aberto',   value: m.openBillsAmount,  color: '#f97316', sub: `${m.openBillsCount} pendente(s)` },
-    { label: 'Resultado previsto', value: m.projectedProfit,  color: m.projectedProfit >= 0 ? '#00e676' : '#ff5c74', sub: `Realizado ${fmtCompact(m.profit)}` },
-    { label: 'Comissões',          value: m.commissions,      color: '#ffd700', sub: 'Time e Clube' },
-  ];
-
-  // Mini bar chart de receita vs obrigações
+  const health = getFinanceHealth(m);
   const totalObligations = m.expenses + m.openBillsAmount + m.commissions;
   const maxM = Math.max(m.revenue, totalObligations, 1);
   const revW = Math.round((m.revenue / maxM) * 100);
   const obligationsW = Math.round((totalObligations / maxM) * 100);
+  const monthLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+
+  const cards = [
+    { label: 'Receita realizada', value: m.revenue, color: '#4fc3f7', sub: 'Entradas já registradas', icon: '↗' },
+    { label: 'Despesas pagas', value: m.expenses, color: '#ff5c74', sub: 'Já virou saída', icon: '↘' },
+    { label: 'Contas em aberto', value: m.openBillsAmount, color: '#f97316', sub: `${m.openBillsCount} pendente(s)`, icon: '⌁' },
+    { label: 'Comissões', value: m.commissions, color: '#ffd700', sub: 'Time, Clube e baixas', icon: '✦' },
+    { label: 'Resultado previsto', value: m.projectedProfit, color: m.projectedProfit >= 0 ? '#00e676' : '#ff5c74', sub: `Realizado ${fmtCompact(m.profit)}`, icon: '◇' },
+  ];
 
   return `
-    <div style="
-      background:linear-gradient(135deg,#08091a,#0d1030);
-      border:1px solid #1e2345;border-radius:20px;padding:20px;margin-bottom:16px;
-    ">
-      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+    <section class="finance-command-center">
+      <div class="finance-command-glow"></div>
+      <div class="finance-command-head">
         <div>
-          <div style="font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:#3a4568;margin-bottom:6px;">
-            VISÃO FINANCEIRA — ${new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}
-          </div>
-          <div style="font-size:11px;color:#5a6888;line-height:1.45;">
-            Despesas pagas entram quando viram transação. Contas em aberto aparecem como previsão para não esconder o compromisso financeiro.
-          </div>
+          <div class="finance-kicker">CENTRAL FINANCEIRA · ${esc(monthLabel)}</div>
+          <h2>Dinheiro claro, decisão rápida.</h2>
+          <p>
+            Separação limpa entre <strong>despesa paga</strong>, <strong>conta em aberto</strong>,
+            <strong>comissão do time</strong> e <strong>resultado previsto</strong>. Sem número fantasma no balcão.
+          </p>
         </div>
-        ${m.overdueBillsAmount > 0 ? `
-          <div style="padding:8px 12px;border-radius:999px;background:rgba(255,23,68,.1);border:1px solid rgba(255,23,68,.24);color:#ff5c74;font-size:11px;font-weight:800;">
-            ${fmt(m.overdueBillsAmount)} vencido(s)
-          </div>` : ''}
+        <div class="finance-health-pill" style="--health:${health.color}">
+          <span>${health.icon}</span>
+          <strong>${esc(health.label)}</strong>
+          <small>${health.coverage}% de cobertura</small>
+        </div>
       </div>
 
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
-        ${cards.map(c => `
-          <div style="
-            background:rgba(255,255,255,.03);border:1px solid #1e2345;
-            border-radius:14px;padding:14px;position:relative;overflow:hidden;
-          ">
-            <div style="
-              position:absolute;top:0;left:0;right:0;height:2px;
-              background:${c.color};opacity:.6;border-radius:14px 14px 0 0;
-            "></div>
-            <div style="font-size:9px;color:#5a6888;font-weight:700;text-transform:uppercase;letter-spacing:.08em;margin-bottom:6px;">
-              ${c.label}
-            </div>
-            <div style="font-size:20px;font-weight:900;color:${c.color};font-family:'Orbitron',monospace;line-height:1;">
-              ${fmtCompact(c.value)}
-            </div>
-            ${c.sub ? `<div style="font-size:10px;color:#5a6888;margin-top:5px;font-weight:600;">${esc(c.sub)}</div>` : ''}
-          </div>
+      <div class="finance-command-grid">
+        ${cards.map((c) => `
+          <article class="finance-command-card" style="--accent:${c.color}">
+            <div class="finance-command-card__icon">${c.icon}</div>
+            <span>${esc(c.label)}</span>
+            <strong>${fmtCompact(c.value)}</strong>
+            <small>${esc(c.sub)}</small>
+          </article>
         `).join('')}
       </div>
 
-      <!-- Barra comparativa receita vs obrigações -->
-      <div style="display:grid;gap:6px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="font-size:10px;color:#5a6888;width:92px;text-align:right;">Receita</div>
-          <div style="flex:1;height:8px;background:#1e2345;border-radius:999px;overflow:hidden;">
-            <div style="height:100%;width:${revW}%;background:linear-gradient(90deg,#4fc3f7,#00e676);border-radius:999px;transition:width .8s ease;"></div>
-          </div>
-          <div style="font-size:10px;color:#4fc3f7;width:72px;">${fmtCompact(m.revenue)}</div>
+      <div class="finance-flow-board">
+        <div class="finance-flow-line">
+          <span>Receita</span>
+          <div><i style="width:${revW}%"></i></div>
+          <b>${fmtCompact(m.revenue)}</b>
         </div>
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="font-size:10px;color:#5a6888;width:92px;text-align:right;">Obrigações</div>
-          <div style="flex:1;height:8px;background:#1e2345;border-radius:999px;overflow:hidden;">
-            <div style="height:100%;width:${obligationsW}%;background:linear-gradient(90deg,#ff1744,#f97316,#ffd700);border-radius:999px;transition:width .8s ease;"></div>
-          </div>
-          <div style="font-size:10px;color:#f97316;width:72px;">${fmtCompact(totalObligations)}</div>
+        <div class="finance-flow-line is-obligation">
+          <span>Obrigações</span>
+          <div><i style="width:${obligationsW}%"></i></div>
+          <b>${fmtCompact(totalObligations)}</b>
         </div>
       </div>
-    </div>
+
+      <div class="finance-clarity-strip">
+        <span>🧾 Contas a pagar abertas não somem: entram em <b>Contas em aberto</b>.</span>
+        <span>✅ Só vira <b>Despesa paga</b> quando for baixada.</span>
+        <span>💈 Comissão aparece como obrigação do time.</span>
+      </div>
+    </section>
   `;
 }
+
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // BILLS
@@ -752,10 +735,50 @@ function renderBillRow(bill) {
 }
 
 function renderBillsSection() {
-  const pending = financeiroState.bills.filter(b => b.status !== 'cancelled');
-  if (!pending.length) return `<div class="finance-empty">Nenhuma conta a pagar cadastrada.</div>`;
-  return pending.map(renderBillRow).join('');
+  const cockpit = getBillCockpit();
+  const bills = financeiroState.bills || [];
+
+  const groups = [
+    ['Vencidas', cockpit.overdue, '#ff5c74', 'pedem ação agora'],
+    ['Vencem em breve', cockpit.dueSoon, '#f97316', 'próximos 3 dias'],
+    ['Em aberto', cockpit.open.filter(b => !isBillOverdue(b) && !isBillDueSoon(b)), '#4fc3f7', 'dentro do prazo'],
+    ['Pagas', cockpit.paid, '#00e676', 'já viraram despesa paga'],
+  ];
+
+  return `
+    <div class="bills-v2-cockpit">
+      <div class="bills-v2-head">
+        <div>
+          <div class="finance-kicker">CONTAS A PAGAR</div>
+          <h3>Compromissos separados do que já saiu do caixa</h3>
+          <p>Conta em aberto é previsão. Despesa paga é saída realizada.</p>
+        </div>
+        <div class="bills-v2-total">
+          <span>Em aberto</span>
+          <strong>${fmt(cockpit.openAmount)}</strong>
+        </div>
+      </div>
+      <div class="bills-v2-grid">
+        <div style="--accent:#ff5c74"><span>Vencidas</span><strong>${fmt(cockpit.overdueAmount)}</strong><small>${cockpit.overdue.length} conta(s)</small></div>
+        <div style="--accent:#f97316"><span>Próximas</span><strong>${fmt(cockpit.dueSoonAmount)}</strong><small>até 3 dias</small></div>
+        <div style="--accent:#00e676"><span>Pagas</span><strong>${fmt(cockpit.paidAmount)}</strong><small>${cockpit.paid.length} baixa(s)</small></div>
+        <div style="--accent:#4fc3f7"><span>Total cadastrado</span><strong>${bills.length}</strong><small>registros</small></div>
+      </div>
+    </div>
+
+    ${bills.length ? groups.map(([title, list, color, hint]) => list.length ? `
+      <section class="finance-v2-group">
+        <div class="finance-v2-group__head">
+          <h4 style="color:${color}">${esc(title)}</h4>
+          <span>${list.length} · ${esc(hint)}</span>
+        </div>
+        ${list.map(renderBillRow).join('')}
+      </section>
+    ` : '').join('') : `<div class="finance-empty">Nenhuma conta a pagar cadastrada.</div>`}
+  `;
 }
+
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // TRANSACTIONS
@@ -792,10 +815,37 @@ function renderTransactionRow(t) {
 }
 
 function renderTransactionsSection() {
-  const recent = [...financeiroState.transactions].slice(0, 25);
-  if (!recent.length) return `<div class="finance-empty">Nenhuma transação registrada.</div>`;
-  return recent.map(renderTransactionRow).join('');
+  const tx = getTransactionCockpit();
+  const recent = [...financeiroState.transactions].slice(0, 40);
+  const methodRows = Object.entries(tx.byMethod)
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .slice(0, 5);
+
+  return `
+    <div class="transactions-v2-cockpit">
+      <div>
+        <div class="finance-kicker">TRANSAÇÕES</div>
+        <h3>Extrato do mês sem neblina</h3>
+        <p>Entradas e saídas realizadas, já refletidas nas métricas do financeiro.</p>
+      </div>
+      <div class="transactions-v2-grid">
+        <div style="--accent:#00e676"><span>Entradas</span><strong>${fmt(tx.incomeAmount)}</strong><small>${tx.income.length} lançamento(s)</small></div>
+        <div style="--accent:#ff5c74"><span>Saídas</span><strong>${fmt(tx.expenseAmount)}</strong><small>${tx.expense.length} lançamento(s)</small></div>
+        <div style="--accent:#ffd700"><span>Saldo realizado</span><strong>${fmt(tx.incomeAmount - tx.expenseAmount)}</strong><small>antes das comissões</small></div>
+      </div>
+      ${methodRows.length ? `
+        <div class="transactions-v2-methods">
+          ${methodRows.map(([key, value]) => {
+            const meta = PAYMENT_METHODS[key] || { label: key, icon: '•', color: '#4fc3f7' };
+            return `<span style="--accent:${meta.color}">${meta.icon} ${esc(meta.label)} <b>${fmtCompact(value)}</b></span>`;
+          }).join('')}
+        </div>` : ''}
+    </div>
+    ${recent.length ? recent.map(renderTransactionRow).join('') : `<div class="finance-empty">Nenhuma transação registrada.</div>`}
+  `;
 }
+
+
 
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -2122,33 +2172,30 @@ function bindStaticEvents() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function renderTabBar() {
+  const cockpit = getBillCockpit();
+  const teamPending = Number(financeiroState.teamCommissions.summary?.totals?.pendingCents || 0);
+  const cashStatus = financeiroState.cash?.register?.status || 'none';
+
   const tabs = [
-    { id: 'caixa',       label: '💰 Caixa' },
-    { id: 'comissoes',   label: '💈 Comissões do Time' },
-    { id: 'contas',      label: '💸 Contas a Pagar' },
-    { id: 'transacoes',  label: '📊 Transações' },
+    { id: 'caixa', label: 'Caixa', icon: '▣', badge: cashStatus === 'open' ? 'Aberto' : cashStatus === 'closed' ? 'Fechado' : 'Hoje' },
+    { id: 'comissoes', label: 'Comissões do Time', icon: '✦', badge: teamPending > 0 ? fmtCents(teamPending) : '' },
+    { id: 'contas', label: 'Contas a Pagar', icon: '⌁', badge: cockpit.open.length ? String(cockpit.open.length) : '' },
+    { id: 'transacoes', label: 'Transações', icon: '↕', badge: financeiroState.transactions.length ? String(financeiroState.transactions.length) : '' },
   ];
+
   return `
-    <div style="
-      display:flex;gap:4px;padding:4px;margin-bottom:16px;
-      background:#0a0c1a;border:1px solid #1e2345;border-radius:14px;
-      overflow-x:auto;
-    ">
+    <nav class="finance-v2-tabs" aria-label="Navegação do financeiro">
       ${tabs.map(t => `
-        <button type="button" data-fin-tab="${t.id}"
-          style="
-            flex:1;min-width:max-content;padding:10px 16px;border-radius:10px;border:none;
-            font:inherit;font-size:12px;font-weight:700;cursor:pointer;
-            transition:all .2s;white-space:nowrap;
-            ${financeiroState.activeTab === t.id
-              ? 'background:linear-gradient(135deg,#00b4ff22,#6c3fff22);color:#e8f0fe;border:1px solid #6c3fff44;'
-              : 'background:transparent;color:#5a6888;'}
-          ">
-          ${t.label}
+        <button type="button" data-fin-tab="${t.id}" class="${financeiroState.activeTab === t.id ? 'is-active' : ''}">
+          <span>${t.icon}</span>
+          <b>${esc(t.label)}</b>
+          ${t.badge ? `<small>${esc(t.badge)}</small>` : ''}
         </button>
       `).join('')}
-    </div>`;
+    </nav>`;
 }
+
+
 
 function rerenderFinanceiro() {
   const root = document.getElementById('finance-root');
