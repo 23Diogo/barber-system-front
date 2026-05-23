@@ -243,7 +243,7 @@
 
   .planos-tabs {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 10px;
     margin: 0 0 14px;
   }
@@ -543,6 +543,179 @@
   .planos-club-empty strong {
     color: #e8f0fe;
   }
+  .planos-rules-card {
+    overflow: hidden;
+  }
+
+  .planos-rules-hero {
+    padding: 16px;
+    border: 1px solid rgba(79, 195, 247, .16);
+    border-radius: 18px;
+    background:
+      radial-gradient(circle at top left, rgba(0, 230, 118, .10), transparent 34%),
+      radial-gradient(circle at bottom right, rgba(79, 195, 247, .12), transparent 38%),
+      rgba(10, 12, 26, .78);
+    margin-bottom: 14px;
+  }
+
+  .planos-rules-hero h3 {
+    margin: 0;
+    color: #e8f0fe;
+    font-size: 19px;
+    line-height: 1.25;
+  }
+
+  .planos-rules-hero p {
+    margin: 8px 0 0;
+    color: #8ea0c2;
+    font-size: 12px;
+    line-height: 1.6;
+    max-width: 860px;
+  }
+
+  .planos-rules-stack {
+    display: grid;
+    gap: 14px;
+  }
+
+  .planos-rules-panel {
+    padding: 14px;
+    border: 1px solid #1e2345;
+    border-radius: 16px;
+    background: rgba(255,255,255,.02);
+    min-width: 0;
+  }
+
+  .planos-rules-panel-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    margin-bottom: 12px;
+  }
+
+  .planos-rules-panel-head h3 {
+    margin: 0;
+    color: #e8f0fe;
+    font-size: 16px;
+    line-height: 1.3;
+  }
+
+  .planos-rules-panel-head p {
+    margin: 6px 0 0;
+    color: #8ea0c2;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .planos-rules-split-preview {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    min-width: 250px;
+  }
+
+  .planos-rules-split-preview span {
+    padding: 10px;
+    border-radius: 14px;
+    border: 1px solid rgba(79, 195, 247, .16);
+    background: rgba(79, 195, 247, .05);
+    color: #8ea0c2;
+    font-size: 10px;
+    line-height: 1.45;
+  }
+
+  .planos-rules-split-preview strong {
+    display: block;
+    margin-top: 4px;
+    font-family: 'Orbitron', sans-serif;
+    color: #00e676;
+    font-size: 15px;
+  }
+
+  .planos-rules-form {
+    display: grid;
+    gap: 10px;
+  }
+
+  .planos-rules-check,
+  .planos-rules-mini-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    color: #c0cce8;
+    font-size: 11px;
+    line-height: 1.45;
+  }
+
+  .planos-rules-check {
+    min-height: 40px;
+    padding: 10px 12px;
+    border: 1px solid #1e2345;
+    border-radius: 12px;
+    background: rgba(255,255,255,.025);
+  }
+
+  .planos-rules-explain {
+    padding: 11px 12px;
+    border: 1px dashed rgba(79, 195, 247, .22);
+    border-radius: 12px;
+    background: rgba(79, 195, 247, .04);
+    color: #8ea0c2;
+    font-size: 11px;
+    line-height: 1.55;
+  }
+
+  .planos-rules-feedback {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border: 1px solid rgba(79, 195, 247, .20);
+    border-radius: 12px;
+    background: rgba(79, 195, 247, .06);
+    color: #4fc3f7;
+    font-size: 11px;
+    font-weight: 700;
+  }
+
+  .planos-rules-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .planos-rules-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 12px;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 14px;
+    background: rgba(10, 12, 26, .72);
+  }
+
+  .planos-rules-row-main {
+    min-width: 0;
+    flex: 1;
+  }
+
+  .planos-rules-row-controls {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 8px;
+    flex-wrap: wrap;
+    flex: 0 0 auto;
+  }
+
+  .planos-rules-number {
+    width: 110px;
+  }
+
+  .planos-rules-select {
+    width: 170px;
+  }
+
+
 }
 
 body.theme-light .page--planos,
@@ -583,12 +756,32 @@ html[data-theme="light"] .page--planos {
     background: linear-gradient(135deg, rgba(79, 195, 247, .15), rgba(156, 111, 255, .08));
   }
 
-  .planos-club-hero {
+  .planos-club-hero,
+  .planos-rules-hero {
     background:
       radial-gradient(circle at top left, rgba(79, 195, 247, .20), transparent 36%),
       radial-gradient(circle at bottom right, rgba(156, 111, 255, .14), transparent 40%),
       rgba(255,255,255,.72);
     border-color: rgba(79, 195, 247, .22);
+  }
+
+  .planos-rules-panel,
+  .planos-rules-row,
+  .planos-rules-check {
+    background: rgba(255,255,255,.72);
+    border-color: rgba(18, 29, 57, .11);
+  }
+
+  .planos-rules-hero h3,
+  .planos-rules-panel-head h3 {
+    color: #111827;
+  }
+
+  .planos-rules-hero p,
+  .planos-rules-panel-head p,
+  .planos-rules-check,
+  .planos-rules-mini-check {
+    color: #62708a;
   }
 }
 
@@ -599,6 +792,15 @@ html[data-theme="light"] .page--planos {
     .planos-club-grid,
     .planos-club-hero {
       grid-template-columns: 1fr;
+    }
+
+    .planos-rules-panel-head {
+      flex-direction: column;
+    }
+
+    .planos-rules-split-preview {
+      width: 100%;
+      min-width: 0;
     }
 
     .planos-club-selector {
@@ -617,7 +819,8 @@ html[data-theme="light"] .page--planos {
     .planos-row,
     .planos-invoice-row,
     .planos-club-entry-row,
-    .planos-club-consumption-row {
+    .planos-club-consumption-row,
+    .planos-rules-row {
       align-items: flex-start;
       flex-direction: column;
     }
@@ -625,7 +828,8 @@ html[data-theme="light"] .page--planos {
     .planos-row-side,
     .planos-invoice-side,
     .planos-club-entry-side,
-    .planos-club-consumption-side {
+    .planos-club-consumption-side,
+    .planos-rules-row-controls {
       align-items: flex-start;
       justify-items: start;
       width: 100%;
