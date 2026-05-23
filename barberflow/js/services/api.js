@@ -668,5 +668,5 @@ export async function getClientsPremiumDashboard() {
 }
 
 export async function getClientPremiumById(clientId) {
-  return apiFetch(`/api/clients/${clientId}/premium`);
+  return apiFetch(`/api/clients/premium/${clientId}`);
 }
