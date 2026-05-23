@@ -323,6 +323,18 @@ function mapPlanFromApi(plan) {
     includedBeards: Number(plan.included_beards || 0),
     signupFeeCents: Number(plan.signup_fee_cents || 0),
     graceDays: Number(plan.grace_days || 0),
+    planType: plan.plan_type || 'fixed_quantity',
+    creditMode: plan.credit_mode || 'service_quantity',
+    totalCredits: Number(plan.total_credits || 0),
+    scheduleRestrictionEnabled: Boolean(plan.schedule_restriction_enabled),
+    allowedWeekdays: normalizeAllowedWeekdays(plan.allowed_weekdays),
+    allowedTimeStart: plan.allowed_time_start || '',
+    allowedTimeEnd: plan.allowed_time_end || '',
+    allowRollover: Boolean(plan.allow_rollover),
+    rolloverDays: Number(plan.rollover_days || 0),
+    overusePolicy: plan.overuse_policy || 'block',
+    partialComboPolicy: plan.partial_combo_policy || 'block_partial',
+    planRules: plan.plan_rules || {},
     isActive: Boolean(plan.is_active),
     subscribersCount: 0,
     raw: plan,
@@ -418,6 +430,177 @@ function getInvoiceStatusMeta(status) {
   };
 
   return map[status] || map.pending;
+}
+
+
+const PLAN_TYPE_META = {
+  fixed_quantity: {
+    label: 'Quantidade fixa',
+    shortLabel: 'Quantidade fixa',
+    icon: '▦',
+    hint: 'Ex.: 4 cortes por mês. Acabou o saldo, bloqueia ou cobra avulso.',
+    creditMode: 'service_quantity',
+    summary: 'Cliente usa a quantidade contratada no ciclo. Ao acabar o saldo, o sistema protege a barbearia.'
+  },
+  closed_combo: {
+    label: 'Combo fechado',
+    shortLabel: 'Combo',
+    icon: '◈',
+    hint: 'Ex.: corte + barba juntos. Evita consumo parcial sem regra clara.',
+    creditMode: 'combo_unit',
+    summary: 'O cliente consome o pacote como uma unidade combinada, ideal para combos completos.'
+  },
+  flexible_credits: {
+    label: 'Flexível por créditos',
+    shortLabel: 'Créditos',
+    icon: '✦',
+    hint: 'Ex.: créditos que podem ser usados entre corte, barba e pezinho.',
+    creditMode: 'credit_balance',
+    summary: 'O cliente usa créditos dentro do ciclo, com liberdade controlada para escolher serviços.'
+  },
+  economic: {
+    label: 'Econômico por horários',
+    shortLabel: 'Econômico',
+    icon: '◷',
+    hint: 'Ex.: plano mais barato para dias e horários de menor movimento.',
+    creditMode: 'service_quantity',
+    summary: 'Plano pensado para preencher horários ociosos sem sacrificar a agenda premium.'
+  },
+};
+
+const WEEKDAY_OPTIONS = [
+  { value: 0, label: 'Dom' },
+  { value: 1, label: 'Seg' },
+  { value: 2, label: 'Ter' },
+  { value: 3, label: 'Qua' },
+  { value: 4, label: 'Qui' },
+  { value: 5, label: 'Sex' },
+  { value: 6, label: 'Sáb' },
+];
+
+function getPlanTypeMeta(planType) {
+  return PLAN_TYPE_META[planType] || PLAN_TYPE_META.fixed_quantity;
+}
+
+function normalizeAllowedWeekdays(value) {
+  if (Array.isArray(value)) {
+    const days = value.map(Number).filter((day) => Number.isInteger(day) && day >= 0 && day <= 6);
+    return days.length ? [...new Set(days)].sort((a, b) => a - b) : [0, 1, 2, 3, 4, 5, 6];
+  }
+
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      return normalizeAllowedWeekdays(JSON.parse(value));
+    } catch {
+      return [0, 1, 2, 3, 4, 5, 6];
+    }
+  }
+
+  return [0, 1, 2, 3, 4, 5, 6];
+}
+
+function formatWeekdays(days) {
+  const normalized = normalizeAllowedWeekdays(days);
+  if (normalized.length === 7) return 'Todos os dias';
+  return WEEKDAY_OPTIONS
+    .filter((item) => normalized.includes(item.value))
+    .map((item) => item.label)
+    .join(', ');
+}
+
+function getOverusePolicyLabel(value) {
+  const map = {
+    block: 'Bloquear ao acabar o saldo',
+    charge_extra: 'Permitir e cobrar como avulso',
+    manual_approval: 'Exigir liberação manual do dono',
+  };
+  return map[value] || map.block;
+}
+
+function getPartialComboPolicyLabel(value) {
+  const map = {
+    block_partial: 'Bloquear uso parcial do combo',
+    consume_full_combo: 'Consumir combo completo mesmo com uso parcial',
+    charge_partial_extra: 'Cobrar parcial como avulso',
+    manual_approval: 'Exigir liberação manual',
+  };
+  return map[value] || map.block_partial;
+}
+
+function renderWeekdayCheckboxes(days = []) {
+  const selected = normalizeAllowedWeekdays(days);
+  return WEEKDAY_OPTIONS.map((item) => `
+    <label class="planos-weekday-pill ${selected.includes(item.value) ? 'is-selected' : ''}">
+      <input type="checkbox" name="allowedWeekdays" value="${item.value}" ${selected.includes(item.value) ? 'checked' : ''} />
+      <span>${escapeHtml(item.label)}</span>
+    </label>
+  `).join('');
+}
+
+function buildPlanHumanSummary(data) {
+  const typeMeta = getPlanTypeMeta(data.planType);
+  const serviceBits = [];
+  if (Number(data.includedHaircuts || 0) > 0) serviceBits.push(`${Number(data.includedHaircuts)} corte(s)`);
+  if (Number(data.includedBeards || 0) > 0) serviceBits.push(`${Number(data.includedBeards)} barba(s)`);
+  if (Number(data.totalCredits || 0) > 0 && data.creditMode === 'credit_balance') serviceBits.push(`${formatNumber(data.totalCredits, 2)} crédito(s)`);
+
+  const schedule = data.scheduleRestrictionEnabled
+    ? `${formatWeekdays(data.allowedWeekdays)}${data.allowedTimeStart && data.allowedTimeEnd ? `, das ${data.allowedTimeStart} às ${data.allowedTimeEnd}` : ''}`
+    : 'qualquer dia disponível na agenda';
+
+  const rollover = data.allowRollover
+    ? `saldo pode acumular por ${Number(data.rolloverDays || 0)} dia(s)`
+    : 'saldo não acumula para o próximo ciclo';
+
+  return `Plano ${typeMeta.shortLabel.toLowerCase()} com ${serviceBits.length ? serviceBits.join(' + ') : 'benefícios configuráveis'}. Pode ser usado em ${schedule}. ${rollover}. Ao acabar o saldo: ${getOverusePolicyLabel(data.overusePolicy).toLowerCase()}.`;
+}
+
+function collectPlanWizardPreviewData() {
+  const form = document.getElementById('planos-form');
+  if (!form) return null;
+
+  const formData = new FormData(form);
+  return {
+    name: String(formData.get('name') || '').trim() || 'Novo plano',
+    planType: String(formData.get('planType') || 'fixed_quantity'),
+    creditMode: String(formData.get('creditMode') || getPlanTypeMeta(String(formData.get('planType') || 'fixed_quantity')).creditMode),
+    includedHaircuts: Number(formData.get('includedHaircuts') || 0),
+    includedBeards: Number(formData.get('includedBeards') || 0),
+    totalCredits: Number(formData.get('totalCredits') || 0),
+    scheduleRestrictionEnabled: String(formData.get('scheduleRestrictionEnabled') || 'false') === 'true',
+    allowedWeekdays: formData.getAll('allowedWeekdays').map(Number),
+    allowedTimeStart: String(formData.get('allowedTimeStart') || ''),
+    allowedTimeEnd: String(formData.get('allowedTimeEnd') || ''),
+    allowRollover: String(formData.get('allowRollover') || 'false') === 'true',
+    rolloverDays: Number(formData.get('rolloverDays') || 0),
+    overusePolicy: String(formData.get('overusePolicy') || 'block'),
+    partialComboPolicy: String(formData.get('partialComboPolicy') || 'block_partial'),
+  };
+}
+
+function updatePlanWizardSummary() {
+  const data = collectPlanWizardPreviewData();
+  if (!data) return;
+
+  const typeMeta = getPlanTypeMeta(data.planType);
+  const summaryEl = document.getElementById('planos-wizard-summary-text');
+  const typeEl = document.getElementById('planos-wizard-summary-type');
+  const scheduleEl = document.getElementById('planos-wizard-summary-schedule');
+  const overuseEl = document.getElementById('planos-wizard-summary-overuse');
+
+  if (summaryEl) summaryEl.textContent = buildPlanHumanSummary(data);
+  if (typeEl) typeEl.textContent = typeMeta.label;
+  if (scheduleEl) scheduleEl.textContent = data.scheduleRestrictionEnabled ? formatWeekdays(data.allowedWeekdays) : 'Todos os dias';
+  if (overuseEl) overuseEl.textContent = getOverusePolicyLabel(data.overusePolicy);
+
+  document.querySelectorAll('.planos-type-card').forEach((card) => {
+    card.classList.toggle('is-selected', card.dataset.planTypeOption === data.planType);
+  });
+
+  document.querySelectorAll('.planos-weekday-pill').forEach((pill) => {
+    const input = pill.querySelector('input');
+    pill.classList.toggle('is-selected', Boolean(input?.checked));
+  });
 }
 
 function getMetrics() {
@@ -569,12 +752,20 @@ function renderSubscriptionRow(subscription) {
 
 function renderPlanDetails(plan) {
   const statusClass = plan.isActive ? 'planos-badge planos-badge--success' : 'planos-badge planos-badge--muted';
+  const typeMeta = getPlanTypeMeta(plan.planType);
 
   return `
     <div class="planos-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">${escapeHtml(plan.name)}</div>
-        <div class="modal-sub" style="margin-top:4px;">Detalhes do plano</div>
+      <div class="planos-plan-detail-hero">
+        <div>
+          <div class="planos-club-eyebrow">Plano profissional</div>
+          <div class="modal-title" style="margin:0;">${escapeHtml(plan.name)}</div>
+          <div class="modal-sub" style="margin-top:4px;">${escapeHtml(typeMeta.summary)}</div>
+        </div>
+        <div class="planos-plan-type-chip">
+          <span>${escapeHtml(typeMeta.icon)}</span>
+          <strong>${escapeHtml(typeMeta.label)}</strong>
+        </div>
       </div>
 
       <div class="planos-modal-grid">
@@ -587,12 +778,12 @@ function renderPlanDetails(plan) {
           <div class="mini-val" style="font-size:15px;">${escapeHtml(plan.billingInterval)}</div>
         </div>
         <div class="mini-card">
-          <div class="mini-lbl">Cortes</div>
-          <div class="mini-val" style="color:#00e676">${escapeHtml(plan.includedHaircuts)}</div>
+          <div class="mini-lbl">Benefícios</div>
+          <div class="mini-val" style="font-size:15px;color:#00e676">${escapeHtml(`${plan.includedHaircuts} cortes · ${plan.includedBeards} barbas`)}</div>
         </div>
         <div class="mini-card">
-          <div class="mini-lbl">Barbas</div>
-          <div class="mini-val" style="color:#9c6fff">${escapeHtml(plan.includedBeards)}</div>
+          <div class="mini-lbl">Créditos totais</div>
+          <div class="mini-val" style="font-size:15px;color:#9c6fff">${escapeHtml(formatNumber(plan.totalCredits, 2))}</div>
         </div>
       </div>
 
@@ -601,13 +792,19 @@ function renderPlanDetails(plan) {
           <strong>Status:</strong> <span class="${statusClass}">${escapeHtml(plan.isActive ? 'Ativo' : 'Inativo')}</span>
         </div>
         <div class="planos-modal-info-row">
-          <strong>Taxa de adesão:</strong> ${escapeHtml(formatCurrencyFromCents(plan.signupFeeCents))}
+          <strong>Regra de agenda:</strong> ${escapeHtml(plan.scheduleRestrictionEnabled ? `${formatWeekdays(plan.allowedWeekdays)}${plan.allowedTimeStart && plan.allowedTimeEnd ? `, das ${plan.allowedTimeStart} às ${plan.allowedTimeEnd}` : ''}` : 'Sem restrição de dias ou horários')}
         </div>
         <div class="planos-modal-info-row">
-          <strong>Carência:</strong> ${escapeHtml(`${plan.graceDays} dias`)}
+          <strong>Uso acima do saldo:</strong> ${escapeHtml(getOverusePolicyLabel(plan.overusePolicy))}
         </div>
         <div class="planos-modal-info-row">
-          <strong>Assinantes:</strong> ${escapeHtml(String(plan.subscribersCount))}
+          <strong>Acúmulo de saldo:</strong> ${escapeHtml(plan.allowRollover ? `Sim, por ${plan.rolloverDays} dia(s)` : 'Não acumula')}
+        </div>
+        <div class="planos-modal-info-row">
+          <strong>Uso parcial de combo:</strong> ${escapeHtml(getPartialComboPolicyLabel(plan.partialComboPolicy))}
+        </div>
+        <div class="planos-modal-info-row">
+          <strong>Resumo operacional:</strong> ${escapeHtml(buildPlanHumanSummary(plan))}
         </div>
         <div class="planos-modal-info-row">
           <strong>Descrição:</strong> ${escapeHtml(plan.description)}
@@ -632,10 +829,21 @@ function renderPlanForm(mode, plan = null) {
     price: 0,
     priceCents: 0,
     billingInterval: 'Mensal',
-    includedHaircuts: 2,
+    includedHaircuts: 4,
     includedBeards: 0,
     signupFeeCents: 0,
     graceDays: 0,
+    planType: 'fixed_quantity',
+    creditMode: 'service_quantity',
+    totalCredits: 4,
+    scheduleRestrictionEnabled: false,
+    allowedWeekdays: [0, 1, 2, 3, 4, 5, 6],
+    allowedTimeStart: '',
+    allowedTimeEnd: '',
+    allowRollover: false,
+    rolloverDays: 0,
+    overusePolicy: 'block',
+    partialComboPolicy: 'block_partial',
     isActive: true,
   };
 
@@ -646,109 +854,236 @@ function renderPlanForm(mode, plan = null) {
         ? Number(safePlan.price)
         : Number(safePlan.priceCents || 0) / 100;
 
+  const safePlanType = safePlan.planType || 'fixed_quantity';
+  const safeCreditMode = safePlan.creditMode || getPlanTypeMeta(safePlanType).creditMode;
+  const safeAllowedWeekdays = normalizeAllowedWeekdays(safePlan.allowedWeekdays);
+  const initialSummary = buildPlanHumanSummary({
+    ...safePlan,
+    planType: safePlanType,
+    creditMode: safeCreditMode,
+    allowedWeekdays: safeAllowedWeekdays,
+  });
+
   return `
-    <div class="planos-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">${isEdit ? 'Editar plano' : 'Novo plano'}</div>
-        <div class="modal-sub" style="margin-top:4px;">
-          ${isEdit ? 'Atualize os dados do plano.' : 'Preencha os dados para criar um novo plano.'}
+    <div class="planos-modal-body planos-wizard-modal">
+      <div class="planos-wizard-hero">
+        <div>
+          <div class="planos-club-eyebrow">Construtor de plano</div>
+          <div class="modal-title" style="margin:0;">${isEdit ? 'Editar plano profissional' : 'Novo plano profissional'}</div>
+          <div class="modal-sub" style="margin-top:4px;">
+            Monte a oferta, limite o uso e proteja a margem da barbearia antes de vender recorrência.
+          </div>
         </div>
+        <div class="planos-wizard-safe-badge">🛡️ Regra clara evita prejuízo</div>
       </div>
 
-      <form id="planos-form" class="planos-form">
-        <div class="planos-form-grid">
+      <form id="planos-form" class="planos-form planos-wizard-form">
+        <section class="planos-wizard-section">
+          <div class="planos-wizard-section-head">
+            <span>1</span>
+            <div>
+              <strong>Escolha o tipo do plano</strong>
+              <small>O tipo define como o cliente consome o benefício.</small>
+            </div>
+          </div>
+
+          <div class="planos-type-grid">
+            ${Object.entries(PLAN_TYPE_META).map(([value, meta]) => `
+              <label class="planos-type-card ${safePlanType === value ? 'is-selected' : ''}" data-plan-type-option="${escapeHtml(value)}">
+                <input type="radio" name="planType" value="${escapeHtml(value)}" ${safePlanType === value ? 'checked' : ''} />
+                <span>${escapeHtml(meta.icon)}</span>
+                <strong>${escapeHtml(meta.label)}</strong>
+                <small>${escapeHtml(meta.hint)}</small>
+              </label>
+            `).join('')}
+          </div>
+        </section>
+
+        <section class="planos-wizard-section">
+          <div class="planos-wizard-section-head">
+            <span>2</span>
+            <div>
+              <strong>Oferta e benefícios</strong>
+              <small>Defina o que o cliente compra e quanto pode consumir no ciclo.</small>
+            </div>
+          </div>
+
+          <div class="planos-form-grid">
+            <div>
+              <div class="color-section-label">Nome</div>
+              <input class="modal-input" id="planos-plan-name" name="name" type="text" value="${escapeHtml(safePlan.name)}" placeholder="Ex.: Combo 4 cortes" maxlength="${PLAN_NAME_MAX_LENGTH}" />
+              <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
+                <span id="planos-plan-name-counter">0 / ${PLAN_NAME_MAX_LENGTH}</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="color-section-label">Preço (formato: 69,90)</div>
+              <input class="modal-input" id="planos-price" name="price" type="text" inputmode="decimal" value="${escapeHtml(formatMoneyInputValue(safePrice))}" placeholder="Ex.: 99,90" />
+              <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:10px;color:#5a6888;">
+                <span>Valor cobrado no ciclo</span>
+                <span>BRL</span>
+              </div>
+            </div>
+
+            <div>
+              <div class="color-section-label">Periodicidade</div>
+              <select class="modal-input" name="billingInterval">
+                <option value="Mensal" ${safePlan.billingInterval === 'Mensal' ? 'selected' : ''}>Mensal</option>
+                <option value="Anual" ${safePlan.billingInterval === 'Anual' ? 'selected' : ''}>Anual</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="color-section-label">Status</div>
+              <select class="modal-input" name="isActive">
+                <option value="true" ${safePlan.isActive ? 'selected' : ''}>Ativo</option>
+                <option value="false" ${!safePlan.isActive ? 'selected' : ''}>Inativo</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="color-section-label">Cortes incluídos</div>
+              <input class="modal-input" name="includedHaircuts" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedHaircuts)}" />
+            </div>
+
+            <div>
+              <div class="color-section-label">Barbas incluídas</div>
+              <input class="modal-input" name="includedBeards" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedBeards)}" />
+            </div>
+
+            <div>
+              <div class="color-section-label">Créditos totais</div>
+              <input class="modal-input" name="totalCredits" type="number" min="0" step="0.01" value="${escapeHtml(safePlan.totalCredits || (Number(safePlan.includedHaircuts || 0) + Number(safePlan.includedBeards || 0)))}" />
+              <div class="planos-field-help">Usado principalmente em planos flexíveis por créditos.</div>
+            </div>
+
+            <div>
+              <div class="color-section-label">Modo de consumo</div>
+              <select class="modal-input" name="creditMode">
+                <option value="service_quantity" ${safeCreditMode === 'service_quantity' ? 'selected' : ''}>Quantidade por serviço</option>
+                <option value="credit_balance" ${safeCreditMode === 'credit_balance' ? 'selected' : ''}>Saldo de créditos</option>
+                <option value="combo_unit" ${safeCreditMode === 'combo_unit' ? 'selected' : ''}>Unidade de combo</option>
+              </select>
+            </div>
+          </div>
+
           <div>
-            <div class="color-section-label">Nome</div>
-            <input
-              class="modal-input"
-              id="planos-plan-name"
-              name="name"
-              type="text"
-              value="${escapeHtml(safePlan.name)}"
-              placeholder="Nome do plano"
-              maxlength="${PLAN_NAME_MAX_LENGTH}"
-            />
+            <div class="color-section-label">Descrição</div>
+            <textarea class="modal-input planos-textarea" id="planos-plan-description" name="description" placeholder="Explique o plano de forma simples para o dono e para o cliente." maxlength="${PLAN_DESCRIPTION_MAX_LENGTH}">${escapeHtml(safePlan.description)}</textarea>
             <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
-              <span id="planos-plan-name-counter">0 / ${PLAN_NAME_MAX_LENGTH}</span>
+              <span id="planos-plan-description-counter">0 / ${PLAN_DESCRIPTION_MAX_LENGTH}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="planos-wizard-section">
+          <div class="planos-wizard-section-head">
+            <span>3</span>
+            <div>
+              <strong>Regras de uso</strong>
+              <small>Controle agenda, sobra de saldo e consumo acima do contratado.</small>
             </div>
           </div>
 
-          <div>
-            <div class="color-section-label">Preço (formato: 69,90)</div>
-            <input
-              class="modal-input"
-              id="planos-price"
-              name="price"
-              type="text"
-              inputmode="decimal"
-              value="${escapeHtml(formatMoneyInputValue(safePrice))}"
-              placeholder="Ex.: 69,90"
-            />
-            <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:10px;color:#5a6888;">
-              <span>Aceita apenas números e vírgula</span>
-              <span>numeric</span>
+          <div class="planos-form-grid">
+            <div>
+              <div class="color-section-label">Uso acima do saldo</div>
+              <select class="modal-input" name="overusePolicy">
+                <option value="block" ${safePlan.overusePolicy === 'block' ? 'selected' : ''}>Bloquear ao acabar o saldo</option>
+                <option value="charge_extra" ${safePlan.overusePolicy === 'charge_extra' ? 'selected' : ''}>Permitir e cobrar como avulso</option>
+                <option value="manual_approval" ${safePlan.overusePolicy === 'manual_approval' ? 'selected' : ''}>Exigir liberação manual</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="color-section-label">Uso parcial de combo</div>
+              <select class="modal-input" name="partialComboPolicy">
+                <option value="block_partial" ${safePlan.partialComboPolicy === 'block_partial' ? 'selected' : ''}>Bloquear uso parcial</option>
+                <option value="consume_full_combo" ${safePlan.partialComboPolicy === 'consume_full_combo' ? 'selected' : ''}>Consumir combo completo</option>
+                <option value="charge_partial_extra" ${safePlan.partialComboPolicy === 'charge_partial_extra' ? 'selected' : ''}>Cobrar parcial como avulso</option>
+                <option value="manual_approval" ${safePlan.partialComboPolicy === 'manual_approval' ? 'selected' : ''}>Exigir liberação manual</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="color-section-label">Acumular saldo não usado?</div>
+              <select class="modal-input" name="allowRollover">
+                <option value="false" ${!safePlan.allowRollover ? 'selected' : ''}>Não, expira no fim do ciclo</option>
+                <option value="true" ${safePlan.allowRollover ? 'selected' : ''}>Sim, acumular por alguns dias</option>
+              </select>
+            </div>
+
+            <div>
+              <div class="color-section-label">Dias para acumular</div>
+              <input class="modal-input" name="rolloverDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.rolloverDays)}" />
+            </div>
+
+            <div>
+              <div class="color-section-label">Taxa de adesão (centavos)</div>
+              <input class="modal-input" name="signupFeeCents" type="number" min="0" step="1" value="${escapeHtml(safePlan.signupFeeCents)}" />
+            </div>
+
+            <div>
+              <div class="color-section-label">Carência para uso/cobrança (dias)</div>
+              <input class="modal-input" name="graceDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.graceDays)}" />
             </div>
           </div>
 
-          <div>
-            <div class="color-section-label">Periodicidade</div>
-            <select class="modal-input" name="billingInterval">
-              <option value="Mensal" ${safePlan.billingInterval === 'Mensal' ? 'selected' : ''}>Mensal</option>
-              <option value="Anual" ${safePlan.billingInterval === 'Anual' ? 'selected' : ''}>Anual</option>
+          <div class="planos-rule-switch">
+            <div>
+              <strong>Restringir dias e horários?</strong>
+              <small>Ideal para planos econômicos que ocupam horários de menor movimento.</small>
+            </div>
+            <select class="modal-input" name="scheduleRestrictionEnabled">
+              <option value="false" ${!safePlan.scheduleRestrictionEnabled ? 'selected' : ''}>Não</option>
+              <option value="true" ${safePlan.scheduleRestrictionEnabled ? 'selected' : ''}>Sim</option>
             </select>
           </div>
 
-          <div>
-            <div class="color-section-label">Cortes incluídos</div>
-            <input class="modal-input" name="includedHaircuts" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedHaircuts)}" />
+          <div class="planos-schedule-box">
+            <div class="planos-weekdays-grid">
+              ${renderWeekdayCheckboxes(safeAllowedWeekdays)}
+            </div>
+            <div class="planos-form-grid">
+              <div>
+                <div class="color-section-label">Horário inicial</div>
+                <input class="modal-input" name="allowedTimeStart" type="time" value="${escapeHtml(safePlan.allowedTimeStart)}" />
+              </div>
+              <div>
+                <div class="color-section-label">Horário final</div>
+                <input class="modal-input" name="allowedTimeEnd" type="time" value="${escapeHtml(safePlan.allowedTimeEnd)}" />
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="planos-wizard-section planos-wizard-summary-box">
+          <div class="planos-wizard-section-head">
+            <span>4</span>
+            <div>
+              <strong>Resumo para o dono entender</strong>
+              <small>Esta é a regra operacional que o sistema vai aplicar.</small>
+            </div>
           </div>
 
-          <div>
-            <div class="color-section-label">Barbas incluídas</div>
-            <input class="modal-input" name="includedBeards" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedBeards)}" />
+          <div class="planos-summary-grid">
+            <div><small>Tipo</small><strong id="planos-wizard-summary-type">${escapeHtml(getPlanTypeMeta(safePlanType).label)}</strong></div>
+            <div><small>Agenda</small><strong id="planos-wizard-summary-schedule">${escapeHtml(safePlan.scheduleRestrictionEnabled ? formatWeekdays(safeAllowedWeekdays) : 'Todos os dias')}</strong></div>
+            <div><small>Excedente</small><strong id="planos-wizard-summary-overuse">${escapeHtml(getOverusePolicyLabel(safePlan.overusePolicy))}</strong></div>
           </div>
 
-          <div>
-            <div class="color-section-label">Taxa de adesão (centavos inteiros)</div>
-            <input class="modal-input" name="signupFeeCents" type="number" min="0" step="1" value="${escapeHtml(safePlan.signupFeeCents)}" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Carência (dias)</div>
-            <input class="modal-input" name="graceDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.graceDays)}" />
-          </div>
-
-          <div>
-            <div class="color-section-label">Status</div>
-            <select class="modal-input" name="isActive">
-              <option value="true" ${safePlan.isActive ? 'selected' : ''}>Ativo</option>
-              <option value="false" ${!safePlan.isActive ? 'selected' : ''}>Inativo</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <div class="color-section-label">Descrição</div>
-          <textarea
-            class="modal-input planos-textarea"
-            id="planos-plan-description"
-            name="description"
-            placeholder="Descrição do plano"
-            maxlength="${PLAN_DESCRIPTION_MAX_LENGTH}"
-          >${escapeHtml(safePlan.description)}</textarea>
-          <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
-            <span id="planos-plan-description-counter">0 / ${PLAN_DESCRIPTION_MAX_LENGTH}</span>
-          </div>
-        </div>
+          <div class="planos-human-summary" id="planos-wizard-summary-text">${escapeHtml(initialSummary)}</div>
+        </section>
 
         <div id="planos-form-feedback" class="planos-form-feedback"></div>
 
-        <div class="modal-buttons" style="margin-top:10px;">
+        <div class="modal-buttons planos-wizard-actions" style="margin-top:10px;">
           <button type="button" class="btn-cancel" id="${isEdit ? 'planos-form-back' : 'planos-form-cancel'}">
             ${isEdit ? 'Voltar' : 'Cancelar'}
           </button>
           <button type="submit" class="btn-save">
-            ${isEdit ? 'Salvar alterações' : 'Criar plano'}
+            ${isEdit ? 'Salvar plano profissional' : 'Criar plano profissional'}
           </button>
         </div>
       </form>
@@ -2069,6 +2404,8 @@ function closePlanosModal() {
 function collectPlanFormData() {
   const form = document.getElementById('planos-form');
   const formData = new FormData(form);
+  const planType = String(formData.get('planType') || 'fixed_quantity');
+  const defaultCreditMode = getPlanTypeMeta(planType).creditMode;
 
   return {
     name: String(formData.get('name') || '').trim(),
@@ -2079,6 +2416,17 @@ function collectPlanFormData() {
     includedBeards: Number(formData.get('includedBeards') || 0),
     signupFeeCents: Number(formData.get('signupFeeCents') || 0),
     graceDays: Number(formData.get('graceDays') || 0),
+    planType,
+    creditMode: String(formData.get('creditMode') || defaultCreditMode),
+    totalCredits: Number(formData.get('totalCredits') || 0),
+    scheduleRestrictionEnabled: String(formData.get('scheduleRestrictionEnabled') || 'false') === 'true',
+    allowedWeekdays: normalizeAllowedWeekdays(formData.getAll('allowedWeekdays').map(Number)),
+    allowedTimeStart: String(formData.get('allowedTimeStart') || '').trim() || null,
+    allowedTimeEnd: String(formData.get('allowedTimeEnd') || '').trim() || null,
+    allowRollover: String(formData.get('allowRollover') || 'false') === 'true',
+    rolloverDays: Number(formData.get('rolloverDays') || 0),
+    overusePolicy: String(formData.get('overusePolicy') || 'block'),
+    partialComboPolicy: String(formData.get('partialComboPolicy') || 'block_partial'),
     isActive: String(formData.get('isActive') || 'true') === 'true',
   };
 }
@@ -2129,6 +2477,33 @@ async function handlePlanFormSubmit(event) {
     return;
   }
 
+  if (!Number.isFinite(data.totalCredits) || data.totalCredits < 0) {
+    setPlanFormFeedback('Créditos totais deve ser maior ou igual a zero.', 'error');
+    return;
+  }
+
+  if (!isNonNegativeInteger(data.rolloverDays)) {
+    setPlanFormFeedback('Dias para acumular deve ser um número inteiro maior ou igual a zero.', 'error');
+    return;
+  }
+
+  if (data.scheduleRestrictionEnabled && !data.allowedWeekdays.length) {
+    setPlanFormFeedback('Selecione pelo menos um dia permitido para o plano.', 'error');
+    return;
+  }
+
+  if (
+    data.scheduleRestrictionEnabled &&
+    data.allowedTimeStart &&
+    data.allowedTimeEnd &&
+    data.allowedTimeEnd <= data.allowedTimeStart
+  ) {
+    setPlanFormFeedback('O horário final precisa ser maior que o horário inicial.', 'error');
+    return;
+  }
+
+  const humanSummary = buildPlanHumanSummary(data);
+
   const payload = {
     name: data.name,
     description: data.description,
@@ -2141,6 +2516,31 @@ async function handlePlanFormSubmit(event) {
     signup_fee_cents: data.signupFeeCents,
     grace_days: data.graceDays,
     is_active: data.isActive,
+    plan_type: data.planType,
+    credit_mode: data.creditMode,
+    total_credits: data.totalCredits,
+    schedule_restriction_enabled: data.scheduleRestrictionEnabled,
+    allowed_weekdays: data.allowedWeekdays,
+    allowed_time_start: data.scheduleRestrictionEnabled ? data.allowedTimeStart : null,
+    allowed_time_end: data.scheduleRestrictionEnabled ? data.allowedTimeEnd : null,
+    allow_rollover: data.allowRollover,
+    rollover_days: data.allowRollover ? data.rolloverDays : 0,
+    overuse_policy: data.overusePolicy,
+    partial_combo_policy: data.partialComboPolicy,
+    plan_rules: {
+      label: getPlanTypeMeta(data.planType).label,
+      summary: humanSummary,
+      schedule: data.scheduleRestrictionEnabled
+        ? {
+            allowed_weekdays: data.allowedWeekdays,
+            allowed_time_start: data.allowedTimeStart,
+            allowed_time_end: data.allowedTimeEnd,
+          }
+        : null,
+      overuse_policy_label: getOverusePolicyLabel(data.overusePolicy),
+      partial_combo_policy_label: getPartialComboPolicyLabel(data.partialComboPolicy),
+      updated_from_ui: true,
+    },
     service_entitlements: [],
   };
 
@@ -2534,6 +2934,29 @@ function bindPlanosModalEvents() {
 
   document.getElementById('planos-form-cancel')?.addEventListener('click', closePlanosModal);
   document.getElementById('planos-form')?.addEventListener('submit', handlePlanFormSubmit);
+
+  const planForm = document.getElementById('planos-form');
+  if (planForm) {
+    planForm.querySelectorAll('input, select, textarea').forEach((field) => {
+      field.addEventListener('input', updatePlanWizardSummary);
+      field.addEventListener('change', updatePlanWizardSummary);
+    });
+
+    planForm.querySelectorAll('.planos-type-card').forEach((card) => {
+      card.addEventListener('click', () => {
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio) {
+          radio.checked = true;
+          const meta = getPlanTypeMeta(radio.value);
+          const creditMode = planForm.querySelector('[name="creditMode"]');
+          if (creditMode && !planosState.activePlanId) creditMode.value = meta.creditMode;
+          updatePlanWizardSummary();
+        }
+      });
+    });
+
+    updatePlanWizardSummary();
+  }
 
   document.getElementById('planos-subscription-cancel')?.addEventListener('click', closePlanosModal);
   document.getElementById('planos-subscription-form')?.addEventListener('submit', handleSubscriptionFormSubmit);
