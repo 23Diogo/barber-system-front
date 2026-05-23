@@ -1,6 +1,7 @@
 import {
   formatDateForApi,
   getApiBaseUrl,
+  getAuthToken,
   getAppointmentsByDate,
   hasAuthToken,
   getClients,
@@ -41,11 +42,7 @@ const PAYMENT_METHODS = [
 // ─── API: finalizar atendimento ───────────────────────────────────────────────
 async function apiCompleteAppointment(appointmentId, { paymentMethod, finalPrice }) {
   const apiUrl = getApiBaseUrl();
-  const token =
-    localStorage.getItem('barberflow_token') ||
-    localStorage.getItem('bf_token') ||
-    localStorage.getItem('token') ||
-    '';
+  const token = getAuthToken();
 
   const response = await fetch(`${apiUrl}/api/appointments/${appointmentId}/complete`, {
     method: 'PATCH',
@@ -58,13 +55,11 @@ async function apiCompleteAppointment(appointmentId, { paymentMethod, finalPrice
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || 'Erro ao finalizar atendimento.');
+    throw new Error(err.error || err.message || 'Erro ao finalizar atendimento.');
   }
 
   return response.json();
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(value) {
   return String(value ?? '')
@@ -393,6 +388,185 @@ function getAppointmentUiContext(appointment) {
   };
 }
 
+function getAppointmentBillingContext(appointment, subscription = null) {
+  const billingMode = String(appointment?.billing_mode || '').toLowerCase();
+  const hasLinkedSubscription = Boolean(
+    appointment?.subscription_id ||
+    appointment?.subscription_cycle_id ||
+    appointment?.subscription_consumption_id ||
+    subscription
+  );
+
+  if (billingMode === 'subscription' || hasLinkedSubscription) {
+    return {
+      mode: 'subscription',
+      label: 'Plano',
+      icon: '✦',
+      tone: 'success',
+      description: 'Atendimento coberto por assinatura. Ao finalizar, o sistema consome o benefício e gera pontos de comissão.',
+      paymentMethod: 'subscription',
+      chargedAmount: 0,
+    };
+  }
+
+  if (billingMode === 'cortesia' || appointment?.payment_method === 'cortesia') {
+    return {
+      mode: 'cortesia',
+      label: 'Cortesia',
+      icon: '🎁',
+      tone: 'neutral',
+      description: 'Atendimento sem cobrança financeira.',
+      paymentMethod: 'cortesia',
+      chargedAmount: 0,
+    };
+  }
+
+  return {
+    mode: 'avulso',
+    label: 'Avulso',
+    icon: '💳',
+    tone: 'info',
+    description: 'Atendimento avulso. Ao finalizar, informe a forma de pagamento para alimentar financeiro e comissão.',
+    paymentMethod: '',
+    chargedAmount: getServicePrice(appointment),
+  };
+}
+
+function getBillingBadgeClass(tone) {
+  const map = {
+    success: 'agenda-badge--success',
+    warning: 'agenda-badge--warning',
+    danger: 'agenda-badge--danger',
+    neutral: 'agenda-badge--neutral',
+    info: 'agenda-badge--info',
+  };
+  return map[tone] || map.info;
+}
+
+function getAppointmentOperationalHint(appointment, ui) {
+  const billing = getAppointmentBillingContext(appointment, ui.subscription);
+
+  if (appointment.status === 'completed') {
+    return { tone: 'success', text: billing.mode === 'subscription'
+      ? 'Atendimento finalizado pelo plano. Benefício consumido e comissão preparada.'
+      : 'Atendimento finalizado. Receita e comissão avulsa já podem entrar no financeiro.' };
+  }
+
+  if (appointment.status === 'cancelled') {
+    return { tone: 'neutral', text: 'Atendimento cancelado. Se havia reserva de plano, o saldo deve ter sido liberado.' };
+  }
+
+  if (ui.requiresAttention) {
+    return { tone: ui.evaluation.messageVariant || 'warning', text: ui.evaluation.message };
+  }
+
+  if (billing.mode === 'subscription') {
+    return { tone: 'success', text: 'Este horário já está vinculado a um plano. Finalize como assinatura.' };
+  }
+
+  if (ui.evaluation.hasPlan && ui.evaluation.canConsumeForAppointment) {
+    return { tone: 'success', text: 'Cliente tem plano elegível. O sistema pode reservar/consumir benefício.' };
+  }
+
+  return { tone: 'info', text: 'Atendimento avulso. Finalize informando pagamento para atualizar o financeiro.' };
+}
+
+function getScheduleHealth(summary, counters) {
+  if (!summary.total) return { label: 'Sem operação', tone: 'neutral', text: 'Nenhum horário lançado para esta data.' };
+  if (counters.blocked > 0) return { label: 'Atenção necessária', tone: 'danger', text: `${counters.blocked} atendimento(s) exigem revisão de plano ou saldo.` };
+  if (summary.inProgress > 0) return { label: 'Barbearia em movimento', tone: 'info', text: `${summary.inProgress} atendimento(s) em andamento agora.` };
+  if (summary.upcoming > 0) return { label: 'Dia preparado', tone: 'success', text: `${summary.upcoming} atendimento(s) ainda por realizar.` };
+  if (summary.completed === summary.total) return { label: 'Dia fechado', tone: 'success', text: 'Todos os atendimentos do dia foram concluídos.' };
+  return { label: 'Operação estável', tone: 'success', text: 'Nenhum alerta crítico na agenda.' };
+}
+
+function renderAgendaOperationHero(summary, counters) {
+  const health = getScheduleHealth(summary, counters);
+  const projected = Math.max(summary.receivable, 0);
+  const openAmount = Math.max(summary.receivable - summary.received, 0);
+
+  return `
+    <div class="agenda-command-hero agenda-command-hero--${escapeHtml(health.tone)}">
+      <div class="agenda-command-main">
+        <div class="agenda-eyebrow">Torre de comando do dia</div>
+        <h2>${escapeHtml(formatAgendaHeader(agendaState.currentDate))}</h2>
+        <p>${escapeHtml(health.text)}</p>
+        <div class="agenda-command-status">
+          <span>${escapeHtml(health.label)}</span>
+          <small>${summary.total} atendimento(s) no radar</small>
+        </div>
+      </div>
+
+      <div class="agenda-command-grid">
+        <div class="agenda-command-card">
+          <small>Recebido</small>
+          <strong class="color-up">${escapeHtml(formatCurrency(summary.received))}</strong>
+          <span>finalizados</span>
+        </div>
+        <div class="agenda-command-card">
+          <small>A receber</small>
+          <strong>${escapeHtml(formatCurrency(openAmount))}</strong>
+          <span>agenda aberta</span>
+        </div>
+        <div class="agenda-command-card">
+          <small>Com plano</small>
+          <strong>${counters.withPlan}</strong>
+          <span>assinaturas</span>
+        </div>
+        <div class="agenda-command-card">
+          <small>Alertas</small>
+          <strong class="${counters.blocked ? 'color-dn' : 'color-up'}">${counters.blocked}</strong>
+          <span>revisar</span>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function getPlanBalanceSnapshot(subscription) {
+  const cycle = getLatestSubscriptionCycle(subscription);
+  if (!cycle) return null;
+
+  const includedHaircuts = Number(cycle.included_haircuts || 0);
+  const includedBeards = Number(cycle.included_beards || 0);
+  const remainingHaircuts = Number(cycle.remaining_haircuts || 0);
+  const remainingBeards = Number(cycle.remaining_beards || 0);
+
+  return {
+    includedHaircuts,
+    includedBeards,
+    remainingHaircuts,
+    remainingBeards,
+    usedHaircuts: Math.max(includedHaircuts - remainingHaircuts, 0),
+    usedBeards: Math.max(includedBeards - remainingBeards, 0),
+    totalIncluded: includedHaircuts + includedBeards,
+    totalRemaining: remainingHaircuts + remainingBeards,
+  };
+}
+
+function renderAgendaPlanMiniUsage(subscription) {
+  const balance = getPlanBalanceSnapshot(subscription);
+  if (!balance) return '';
+
+  const totalUsed = Math.max(balance.totalIncluded - balance.totalRemaining, 0);
+  const pct = balance.totalIncluded > 0 ? Math.min(100, Math.round((totalUsed / balance.totalIncluded) * 100)) : 0;
+
+  return `
+    <div class="agenda-mini-usage">
+      <div class="agenda-mini-usage-head">
+        <span>Uso do ciclo</span>
+        <strong>${pct}%</strong>
+      </div>
+      <div class="agenda-mini-progress"><span style="width:${pct}%"></span></div>
+      <div class="agenda-mini-usage-foot">
+        <span>Cortes: ${balance.remainingHaircuts}/${balance.includedHaircuts}</span>
+        <span>Barbas: ${balance.remainingBeards}/${balance.includedBeards}</span>
+      </div>
+    </div>
+  `;
+}
+
+
 function createSummary(appointments) {
   return appointments.reduce(
     (acc, appointment) => {
@@ -428,8 +602,12 @@ function getAgendaCounters(appointments) {
   );
 }
 
-function renderAppointmentBadges(ui) {
+function renderAppointmentBadges(ui, appointment = null) {
   const badges = [...ui.evaluation.badges];
+  if (appointment) {
+    const billing = getAppointmentBillingContext(appointment, ui.subscription);
+    badges.unshift({ label: `${billing.icon} ${billing.label}`, variant: billing.tone });
+  }
   if (ui.requiresAttention) badges.push({ label: 'Requer atenção', variant: ui.evaluation.messageVariant === 'danger' ? 'danger' : 'warning' });
   if (ui.hasConsumedInPlan) badges.push({ label: 'Consumido no plano', variant: 'neutral' });
   if (!badges.length) return '';
@@ -453,9 +631,14 @@ function renderAppointmentConsumedAlert(ui) {
 function renderAppointmentRow(appointment) {
   const meta = getStatusMeta(appointment.status);
   const ui = getAppointmentUiContext(appointment);
-  const serviceText = `${escapeHtml(getServiceName(appointment))} · ${escapeHtml(getBarberName(appointment))} · ${escapeHtml(formatCurrency(getServicePrice(appointment)))}`;
+  const billing = getAppointmentBillingContext(appointment, ui.subscription);
+  const hint = getAppointmentOperationalHint(appointment, ui);
+  const serviceText = `${escapeHtml(getServiceName(appointment))} · ${escapeHtml(getBarberName(appointment))}`;
+  const priceLabel = billing.mode === 'subscription' ? 'Plano' : formatCurrency(getServicePrice(appointment));
   const rowClasses = [
     'appt-row',
+    'agenda-premium-row',
+    `agenda-premium-row--${billing.mode}`,
     ui.evaluation.shouldHighlightRow ? `appt-row--plan-${ui.evaluation.messageVariant}` : '',
     ui.hasConsumedInPlan ? 'appt-row--consumed' : '',
   ].filter(Boolean).join(' ');
@@ -466,18 +649,36 @@ function renderAppointmentRow(appointment) {
       data-appointment-id="${escapeHtml(appointment.id)}"
       role="button"
       tabindex="0"
-      title="Ver detalhes do agendamento"
-      style="border-color:${meta.border};cursor:pointer;"
+      title="Abrir comanda inteligente"
+      style="border-color:${meta.border};"
     >
-      <div class="appt-time" style="color:${meta.text}">${escapeHtml(formatTime(appointment.scheduled_at))}</div>
-      <div class="appt-info">
-        <div class="appt-client">${escapeHtml(getClientName(appointment))}</div>
-        <div class="appt-svc">${serviceText}</div>
-        ${renderAppointmentBadges(ui)}
-        ${renderAppointmentPlanAlert(ui)}
+      <div class="agenda-time-stack">
+        <div class="appt-time" style="color:${meta.text}">${escapeHtml(formatTime(appointment.scheduled_at))}</div>
+        <small>${escapeHtml(formatTime(appointment.ends_at))}</small>
+      </div>
+
+      <div class="appt-info agenda-premium-info">
+        <div class="agenda-row-topline">
+          <div>
+            <div class="appt-client">${escapeHtml(getClientName(appointment))}</div>
+            <div class="appt-svc">${serviceText} · <strong>${escapeHtml(priceLabel)}</strong></div>
+          </div>
+          <div class="agenda-row-price">${escapeHtml(priceLabel)}</div>
+        </div>
+
+        ${renderAppointmentBadges(ui, appointment)}
+
+        <div class="agenda-row-intel agenda-row-intel--${escapeHtml(hint.tone)}">
+          ${escapeHtml(hint.text)}
+        </div>
+
         ${renderAppointmentConsumedAlert(ui)}
       </div>
-      <div class="status-pill" style="background:${meta.pillBg};color:${meta.text}">${meta.label}</div>
+
+      <div class="agenda-row-status-stack">
+        <div class="status-pill" style="background:${meta.pillBg};color:${meta.text}">${meta.label}</div>
+        <small>${escapeHtml(billing.label)}</small>
+      </div>
     </div>
   `;
 }
@@ -510,22 +711,31 @@ function renderBarberPerformance(summary) {
 }
 
 function renderSummaryPanel(summary, counters) {
+  const openAmount = Math.max(summary.receivable - summary.received, 0);
+  const health = getScheduleHealth(summary, counters);
+
   return `
-    <div class="card-header"><div class="card-title">Resumo do Dia</div></div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-      <div class="mini-card"><div class="mini-val" style="color:#00e676">${summary.completed}</div><div class="mini-lbl">Concluídos</div></div>
-      <div class="mini-card"><div class="mini-val" style="color:#4fc3f7">${summary.inProgress}</div><div class="mini-lbl">Em andamento</div></div>
-      <div class="mini-card"><div class="mini-val" style="color:#ffd700">${escapeHtml(formatCurrency(summary.received))}</div><div class="mini-lbl">Recebido</div></div>
-      <div class="mini-card"><div class="mini-val" style="color:#5a6888">${escapeHtml(formatCurrency(Math.max(summary.receivable - summary.received, 0)))}</div><div class="mini-lbl">A receber</div></div>
+    <div class="agenda-side-panel">
+      <div class="card-header"><div class="card-title">Pulso da operação</div></div>
+
+      <div class="agenda-health-card agenda-health-card--${escapeHtml(health.tone)}">
+        <span>${escapeHtml(health.label)}</span>
+        <strong>${summary.total}</strong>
+        <small>${escapeHtml(health.text)}</small>
+      </div>
+
+      <div class="agenda-side-grid">
+        <div class="mini-card"><div class="mini-val" style="color:#00e676">${summary.completed}</div><div class="mini-lbl">Concluídos</div></div>
+        <div class="mini-card"><div class="mini-val" style="color:#4fc3f7">${summary.inProgress}</div><div class="mini-lbl">Em andamento</div></div>
+        <div class="mini-card"><div class="mini-val" style="color:#ffd700">${escapeHtml(formatCurrency(summary.received))}</div><div class="mini-lbl">Recebido</div></div>
+        <div class="mini-card"><div class="mini-val" style="color:#c0cce8">${escapeHtml(formatCurrency(openAmount))}</div><div class="mini-lbl">A receber</div></div>
+        <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#4fc3f7">${counters.withPlan}</div><div class="mini-lbl">Com plano</div></div>
+        <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#ff6b81">${counters.blocked}</div><div class="mini-lbl">Alertas</div></div>
+      </div>
+
+      <div class="agenda-section-kicker">Ranking do dia</div>
+      ${renderBarberPerformance(summary)}
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px">
-      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#4fc3f7">${counters.withPlan}</div><div class="mini-lbl">Com plano</div></div>
-      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#ff6b81">${counters.blocked}</div><div class="mini-lbl">Bloqueados</div></div>
-      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#94a3b8">${counters.consumed}</div><div class="mini-lbl">Consumidos</div></div>
-      <div class="mini-card"><div class="mini-val" style="font-size:16px;color:#c0cce8">${counters.total}</div><div class="mini-lbl">Total do dia</div></div>
-    </div>
-    <div style="font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;margin-bottom:8px">Por barbeiro</div>
-    ${renderBarberPerformance(summary)}
   `;
 }
 
@@ -572,114 +782,79 @@ function getSourceLabel(source) {
 // ─── Painel de finalização (comanda) ─────────────────────────────────────────
 function renderFinalizationPanel(appointment) {
   const actions = getAvailableStatusActions(appointment.status);
-  // Só exibe se "completed" é uma transição válida a partir do status atual
   if (!actions.includes('completed')) return '';
 
+  const ui = getAppointmentUiContext(appointment);
+  const billing = getAppointmentBillingContext(appointment, ui.subscription);
+  const isSubscription = billing.mode === 'subscription';
   const basePrice = getServicePrice(appointment);
+  const defaultPaymentMethod = isSubscription ? 'subscription' : '';
 
-  const paymentOptions = PAYMENT_METHODS.map(
-    (m) => `<option value="${escapeHtml(m.value)}">${escapeHtml(m.label)}</option>`
+  const paymentOptions = [
+    ...(isSubscription ? [{ value: 'subscription', label: 'Plano / assinatura' }] : []),
+    ...PAYMENT_METHODS,
+  ].map(
+    (m) => `<option value="${escapeHtml(m.value)}" ${m.value === defaultPaymentMethod ? 'selected' : ''}>${escapeHtml(m.label)}</option>`
   ).join('');
 
   return `
-    <div
-      id="agenda-finalization-panel"
-      style="
-        padding:14px;
-        border:1px solid rgba(0,230,118,.25);
-        border-radius:12px;
-        background:rgba(0,230,118,.04);
-      "
-    >
-      <div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:#00e676;margin-bottom:12px;">
-        💳 Finalizar Atendimento
+    <div id="agenda-finalization-panel" class="agenda-finalization-panel agenda-finalization-panel--${escapeHtml(billing.mode)}">
+      <div class="agenda-finalization-head">
+        <div>
+          <div class="agenda-section-kicker">Finalizar atendimento</div>
+          <strong>${isSubscription ? 'Finalização por assinatura' : 'Recebimento avulso'}</strong>
+          <span>${escapeHtml(billing.description)}</span>
+        </div>
+        <div class="agenda-finalization-badge ${getBillingBadgeClass(billing.tone)}">${escapeHtml(billing.icon)} ${escapeHtml(billing.label)}</div>
       </div>
 
-      <div style="display:grid;gap:10px;">
-
-        <!-- Forma de pagamento -->
+      <div class="agenda-finalization-grid">
         <div>
-          <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5a6888;margin-bottom:6px;">
-            Forma de pagamento *
-          </div>
+          <div class="agenda-input-label">Forma de pagamento *</div>
           <select id="agenda-payment-method" class="modal-input" style="margin:0;">
             <option value="">Selecione a forma de pagamento</option>
             ${paymentOptions}
           </select>
         </div>
 
-        <!-- Desconto + Valor final -->
-        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
-          <div style="flex:1;min-width:120px;">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5a6888;margin-bottom:6px;">
-              Desconto (R$)
-            </div>
-            <input
-              id="agenda-discount-input"
-              type="number"
-              min="0"
-              max="${basePrice}"
-              step="0.01"
-              value="0"
-              class="modal-input"
-              style="margin:0;"
-              data-base-price="${basePrice}"
-              placeholder="0,00"
-            />
-          </div>
-          <div style="flex:1;min-width:120px;">
-            <div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#5a6888;margin-bottom:6px;">
-              Valor final
-            </div>
-            <div
-              id="agenda-final-price-display"
-              style="
-                font-size:20px;
-                font-weight:700;
-                color:#00e676;
-                padding:10px 12px;
-                background:#0a0c1a;
-                border:1px solid #1e2345;
-                border-radius:10px;
-                min-height:42px;
-                display:flex;
-                align-items:center;
-              "
-            >
-              ${escapeHtml(formatCurrency(basePrice))}
-            </div>
-          </div>
+        <div>
+          <div class="agenda-input-label">Desconto (R$)</div>
+          <input
+            id="agenda-discount-input"
+            type="number"
+            min="0"
+            max="${basePrice}"
+            step="0.01"
+            value="0"
+            class="modal-input"
+            style="margin:0;"
+            data-base-price="${basePrice}"
+            ${isSubscription ? 'disabled' : ''}
+            placeholder="0,00"
+          />
         </div>
 
-        <!-- Botão de finalizar -->
-        <button
-          type="button"
-          id="agenda-finalize-btn"
-          data-appointment-id="${escapeHtml(String(appointment.id))}"
-          data-base-price="${basePrice}"
-          style="
-            width:100%;
-            padding:13px 16px;
-            border-radius:10px;
-            border:none;
-            background:linear-gradient(135deg,#00e676,#00b4ff);
-            color:#000;
-            font-size:13px;
-            font-weight:800;
-            cursor:pointer;
-            transition:opacity .15s, transform .1s;
-            letter-spacing:.02em;
-          "
-        >
-          ✓ Confirmar e finalizar atendimento
-        </button>
-
+        <div>
+          <div class="agenda-input-label">${isSubscription ? 'Valor coberto' : 'Valor final'}</div>
+          <div id="agenda-final-price-display" class="agenda-final-price">
+            ${escapeHtml(formatCurrency(isSubscription ? 0 : basePrice))}
+          </div>
+        </div>
       </div>
+
+      <button
+        type="button"
+        id="agenda-finalize-btn"
+        data-appointment-id="${escapeHtml(String(appointment.id))}"
+        data-base-price="${isSubscription ? 0 : basePrice}"
+        class="agenda-finalize-btn"
+      >
+        ✓ Confirmar e finalizar ${isSubscription ? 'pelo plano' : 'atendimento'}
+      </button>
     </div>
   `;
 }
 
-// ─── Ações de status rápido (excluindo "completed" — tratado pelo painel acima) ─
 function renderStatusActions(appointment) {
   // "completed" é tratado pelo painel de finalização — removemos daqui para forçar
   // o preenchimento da forma de pagamento antes de concluir
@@ -770,10 +945,14 @@ function renderConsumptionButtons(evaluation, subscription, appointment) {
 }
 
 function renderSubscriptionPanel(subscription, appointment) {
+  const billing = getAppointmentBillingContext(appointment, subscription);
+
   if (!subscription) {
     return `
-      <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
-        <strong style="color:#c0cce8;">Plano do cliente:</strong> Nenhum plano ativo encontrado.
+      <div class="agenda-subscription-panel agenda-subscription-panel--empty">
+        <div class="agenda-section-kicker">Plano do cliente</div>
+        <strong>Nenhum plano ativo encontrado</strong>
+        <span>Este atendimento será tratado como avulso, salvo se houver cortesia ou ajuste manual.</span>
       </div>
     `;
   }
@@ -784,33 +963,36 @@ function renderSubscriptionPanel(subscription, appointment) {
   const evaluation = evaluateSubscriptionForAppointment(subscription, appointment);
 
   return `
-    <div style="display:grid;grid-template-columns:1fr;gap:8px;">
-      <div class="row-sub" style="padding:10px 12px;border:1px solid ${statusMeta.border};border-radius:10px;background:#0a0c1a;">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
-          <strong style="color:#c0cce8;">Plano do cliente:</strong>
-          <span class="status-pill" style="background:${statusMeta.bg};color:${statusMeta.color};border:1px solid ${statusMeta.border};">
-            ${statusMeta.label}
-          </span>
+    <div class="agenda-subscription-panel">
+      <div class="agenda-subscription-top">
+        <div>
+          <div class="agenda-section-kicker">Plano do cliente</div>
+          <strong>${escapeHtml(subscription?.plans?.name || 'Plano')}</strong>
+          <span>Próxima cobrança: ${escapeHtml(formatDateDisplay(subscription.next_billing_at || subscription.current_period_end))}</span>
         </div>
-        <div style="margin-top:8px;color:#c0cce8;">${escapeHtml(subscription?.plans?.name || 'Plano')}</div>
-        <div style="margin-top:6px;color:#5a6888;font-size:10px;line-height:1.5;">
-          Próxima cobrança: ${escapeHtml(formatDateDisplay(subscription.next_billing_at || subscription.current_period_end))}
-          · Última fatura: <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
-        </div>
+        <span class="status-pill" style="background:${statusMeta.bg};color:${statusMeta.color};border:1px solid ${statusMeta.border};">
+          ${statusMeta.label}
+        </span>
       </div>
 
-      <div class="agenda-badges" style="margin-top:0;">
-        ${renderAppointmentBadges(getAppointmentUiContext(appointment))}
-      </div>
+      ${renderAgendaPlanMiniUsage(subscription)}
 
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+      <div class="agenda-subscription-mini-grid">
         <div class="mini-card">
-          <div class="mini-lbl">Saldo de cortes</div>
+          <div class="mini-lbl">Saldo cortes</div>
           <div class="mini-val" style="font-size:16px;color:#00e676">${evaluation.remainingHaircuts}</div>
         </div>
         <div class="mini-card">
-          <div class="mini-lbl">Saldo de barbas</div>
+          <div class="mini-lbl">Saldo barbas</div>
           <div class="mini-val" style="font-size:16px;color:#9c6fff">${evaluation.remainingBeards}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Fatura</div>
+          <div class="mini-val" style="font-size:13px;color:${invoiceMeta.color}">${escapeHtml(invoiceMeta.label)}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Cobrança</div>
+          <div class="mini-val" style="font-size:13px;color:#c0cce8">${escapeHtml(formatDateDisplay(invoice?.due_at || subscription.next_billing_at || subscription.current_period_end))}</div>
         </div>
       </div>
 
@@ -824,81 +1006,63 @@ function renderSubscriptionPanel(subscription, appointment) {
   `;
 }
 
-// ─── Modal de detalhes (comanda) ──────────────────────────────────────────────
 function renderAppointmentDetails(appointment, subscription = null) {
   const meta = getStatusMeta(appointment.status);
+  const ui = getAppointmentUiContext(appointment);
+  const billing = getAppointmentBillingContext(appointment, subscription);
+  const hint = getAppointmentOperationalHint(appointment, { ...ui, subscription });
   const isFinalStatus = ['completed', 'cancelled', 'no_show'].includes(appointment.status);
 
   return `
-    <div style="display:grid;grid-template-columns:1fr;gap:10px;">
-
-      <!-- Cabeçalho: nome + status -->
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+    <div class="agenda-command-modal">
+      <div class="agenda-modal-hero agenda-modal-hero--${escapeHtml(billing.mode)}">
         <div>
-          <div class="modal-title" style="margin:0;">${escapeHtml(getClientName(appointment))}</div>
-          <div class="modal-sub" style="margin-top:4px;">Comanda do atendimento</div>
-        </div>
-        <div class="status-pill" style="background:${meta.pillBg};color:${meta.text};border:1px solid ${meta.border};">
-          ${meta.label}
-        </div>
-      </div>
-
-      <!-- Horário + Valor -->
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="mini-card">
-          <div class="mini-lbl">Horário</div>
-          <div class="mini-val" style="font-size:18px;">${escapeHtml(formatTime(appointment.scheduled_at))}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">${isFinalStatus && appointment.status === 'completed' ? 'Valor cobrado' : 'Valor do serviço'}</div>
-          <div class="mini-val" style="font-size:18px;color:#00e676;">${escapeHtml(formatCurrency(getServicePrice(appointment)))}</div>
-        </div>
-      </div>
-
-      <!-- Informações do atendimento -->
-      <div style="display:grid;grid-template-columns:1fr;gap:8px;">
-        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
-          <strong style="color:#c0cce8;">Serviço:</strong> ${escapeHtml(getServiceName(appointment))}
-        </div>
-        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
-          <strong style="color:#c0cce8;">Barbeiro:</strong> ${escapeHtml(getBarberName(appointment))}
-        </div>
-        <div class="row-sub" style="padding:10px 12px;border:1px solid #1e2345;border-radius:10px;background:#0a0c1a;">
-          <strong style="color:#c0cce8;">Origem:</strong> ${escapeHtml(getSourceLabel(appointment.source))}
-        </div>
-        ${appointment.payment_method ? `
-          <div class="row-sub" style="padding:10px 12px;border:1px solid rgba(0,230,118,.18);border-radius:10px;background:rgba(0,230,118,.04);">
-            <strong style="color:#00e676;">Pagamento:</strong> ${escapeHtml(
-              PAYMENT_METHODS.find(m => m.value === appointment.payment_method)?.label || appointment.payment_method
-            )}
+          <div class="agenda-eyebrow">Comanda inteligente</div>
+          <h3>${escapeHtml(getClientName(appointment))}</h3>
+          <p>${escapeHtml(hint.text)}</p>
+          <div class="agenda-badges" style="margin-top:12px;">
+            <span class="agenda-badge ${getBillingBadgeClass(billing.tone)}">${escapeHtml(billing.icon)} ${escapeHtml(billing.label)}</span>
+            <span class="agenda-badge agenda-badge--neutral">${escapeHtml(getSourceLabel(appointment.source))}</span>
           </div>
-        ` : ''}
+        </div>
+        <div class="agenda-modal-status">
+          <span class="status-pill" style="background:${meta.pillBg};color:${meta.text};border:1px solid ${meta.border};">${meta.label}</span>
+          <strong>${escapeHtml(formatTime(appointment.scheduled_at))}</strong>
+          <small>${escapeHtml(formatTime(appointment.ends_at))}</small>
+        </div>
       </div>
 
-      <!-- Plano do cliente -->
-      <div style="margin-top:4px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a6888;margin-bottom:8px;">
-          Plano do cliente
+      <div class="agenda-modal-grid">
+        <div class="mini-card">
+          <div class="mini-lbl">Serviço</div>
+          <div class="mini-val" style="font-size:14px;color:#e8f0fe">${escapeHtml(getServiceName(appointment))}</div>
         </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Barbeiro</div>
+          <div class="mini-val" style="font-size:14px;color:#e8f0fe">${escapeHtml(getBarberName(appointment))}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">${billing.mode === 'subscription' ? 'Coberto pelo plano' : 'Valor do serviço'}</div>
+          <div class="mini-val" style="font-size:18px;color:${billing.mode === 'subscription' ? '#00e676' : '#4fc3f7'}">${escapeHtml(billing.mode === 'subscription' ? 'R$ 0,00' : formatCurrency(getServicePrice(appointment)))}</div>
+        </div>
+        <div class="mini-card">
+          <div class="mini-lbl">Status operacional</div>
+          <div class="mini-val" style="font-size:13px;color:${meta.text}">${escapeHtml(meta.label)}</div>
+        </div>
+      </div>
+
+      <div>
         ${renderSubscriptionPanel(subscription, appointment)}
       </div>
 
-      <!-- Painel de finalização (só exibe quando o atendimento pode ser concluído) -->
-      ${!isFinalStatus ? `
-        <div style="margin-top:4px;">
-          ${renderFinalizationPanel(appointment)}
-        </div>
-      ` : ''}
+      ${!isFinalStatus ? renderFinalizationPanel(appointment) : ''}
 
-      <!-- Outras ações de status (não inclui "Feito" — tratado acima) -->
-      <div style="margin-top:4px;">
-        <div style="font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#5a6888;margin-bottom:8px;">
-          Outras ações
-        </div>
+      <div class="agenda-other-actions">
+        <div class="agenda-section-kicker">Outras ações</div>
         ${renderStatusActions(appointment)}
       </div>
 
-      <div id="agenda-details-feedback" style="min-height:18px;font-size:10px;color:#5a6888;"></div>
+      <div id="agenda-details-feedback" class="agenda-details-feedback"></div>
 
       <div class="modal-buttons" style="margin-top:6px;">
         <button type="button" class="btn-cancel" id="agenda-details-close">Fechar</button>
@@ -1260,19 +1424,28 @@ function applyAgendaFilters(appointments) {
 
 function renderAgendaToolbar(appointments, counters, filteredCount) {
   const barberOptions = getBarberFilterOptions(appointments);
+  const filters = [
+    { key: 'all', label: 'Todos', count: counters.total },
+    { key: 'withPlan', label: 'Planos', count: counters.withPlan },
+    { key: 'blocked', label: 'Alertas', count: counters.blocked },
+    { key: 'consumed', label: 'Consumidos', count: counters.consumed },
+  ];
+
   return `
-    <div class="agenda-toolbar">
+    <div class="agenda-toolbar agenda-toolbar-premium">
       <div class="agenda-focus-chips">
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'all'      ? 'is-active' : ''}" data-focus-filter="all">Todos <span>${counters.total}</span></button>
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'withPlan' ? 'is-active' : ''}" data-focus-filter="withPlan">Com plano <span>${counters.withPlan}</span></button>
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'blocked'  ? 'is-active' : ''}" data-focus-filter="blocked">Bloqueados <span>${counters.blocked}</span></button>
-        <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === 'consumed' ? 'is-active' : ''}" data-focus-filter="consumed">Consumidos <span>${counters.consumed}</span></button>
+        ${filters.map((item) => `
+          <button type="button" class="agenda-focus-chip ${agendaState.filters.focus === item.key ? 'is-active' : ''}" data-focus-filter="${escapeHtml(item.key)}">
+            ${escapeHtml(item.label)} <span>${item.count}</span>
+          </button>
+        `).join('')}
       </div>
-      <div class="agenda-filter-row">
+
+      <div class="agenda-filter-row agenda-filter-row-premium">
         <div class="agenda-filter-field">
           <label for="agenda-filter-status">Status</label>
           <select id="agenda-filter-status" class="agenda-filter-select">
-            <option value="all"         ${agendaState.filters.status === 'all'         ? 'selected' : ''}>Todos</option>
+            <option value="all"         ${agendaState.filters.status === 'all'         ? 'selected' : ''}>Todos os status</option>
             <option value="pending"     ${agendaState.filters.status === 'pending'     ? 'selected' : ''}>Agendado</option>
             <option value="confirmed"   ${agendaState.filters.status === 'confirmed'   ? 'selected' : ''}>Confirmado</option>
             <option value="in_progress" ${agendaState.filters.status === 'in_progress' ? 'selected' : ''}>Em andamento</option>
@@ -1281,16 +1454,18 @@ function renderAgendaToolbar(appointments, counters, filteredCount) {
             <option value="no_show"     ${agendaState.filters.status === 'no_show'     ? 'selected' : ''}>No-show</option>
           </select>
         </div>
+
         <div class="agenda-filter-field">
           <label for="agenda-filter-barber">Barbeiro</label>
           <select id="agenda-filter-barber" class="agenda-filter-select">
-            <option value="all">Todos</option>
+            <option value="all">Todos os barbeiros</option>
             ${barberOptions.map((b) => `<option value="${escapeHtml(b)}" ${agendaState.filters.barber === b ? 'selected' : ''}>${escapeHtml(b)}</option>`).join('')}
           </select>
         </div>
       </div>
+
       <div class="agenda-filter-result">
-        Exibindo <strong>${filteredCount}</strong> de <strong>${appointments.length}</strong> atendimentos.
+        Exibindo <strong>${filteredCount}</strong> de <strong>${appointments.length}</strong> atendimentos. Clique em um horário para abrir a comanda inteligente.
       </div>
     </div>
   `;
@@ -1340,8 +1515,16 @@ function renderAgendaData() {
   const appointments = Array.isArray(agendaState.currentAppointments) ? agendaState.currentAppointments : [];
 
   if (!appointments.length) {
-    listContainer.innerHTML    = renderEmptyState('Nenhum agendamento encontrado para a data selecionada.');
-    summaryContainer.innerHTML = renderEmptyState('Sem dados para resumir nesta data.');
+    listContainer.innerHTML = `
+      <div class="agenda-empty-premium">
+        <div class="agenda-empty-orb">◌</div>
+        <strong>Nenhum agendamento nesta data</strong>
+        <span>Abra um horário manualmente ou escolha outro dia para ver a operação.</span>
+        <button class="btn-primary-gradient" id="agenda-empty-new-action" type="button">+ Novo agendamento</button>
+      </div>
+    `;
+    summaryContainer.innerHTML = `<div class="card">${renderSummaryPanel(createSummary([]), getAgendaCounters([]))}</div>`;
+    document.getElementById('agenda-empty-new-action')?.addEventListener('click', handleOpenCreateModal);
     return;
   }
 
@@ -1352,20 +1535,27 @@ function renderAgendaData() {
   const filteredAppointments = applyAgendaFilters(appointments);
 
   listContainer.innerHTML = `
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(agendaState.currentDate))}</div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <button class="btn-primary-gradient" id="agenda-new-action"     type="button">+ Novo agendamento</button>
+    ${renderAgendaOperationHero(summary, counters)}
+
+    <div class="card agenda-list-card">
+      <div class="card-header agenda-list-header">
+        <div>
+          <div class="card-title" id="agenda-current-date-label">Agenda operacional</div>
+          <div class="row-sub" style="padding:4px 0 0;color:#5a6888;">Plano, pagamento, status e comanda no mesmo fluxo.</div>
+        </div>
+        <div class="agenda-header-actions">
+          <button class="btn-primary-gradient" id="agenda-new-action" type="button">+ Novo agendamento</button>
           <button class="btn-primary-gradient" id="agenda-refresh-action" type="button">Atualizar</button>
         </div>
       </div>
       ${renderAgendaToolbar(appointments, counters, filteredAppointments.length)}
-      ${filteredAppointments.length ? filteredAppointments.map(renderAppointmentRow).join('') : renderFilteredEmptyState()}
+      <div class="agenda-timeline">
+        ${filteredAppointments.length ? filteredAppointments.map(renderAppointmentRow).join('') : renderFilteredEmptyState()}
+      </div>
     </div>
   `;
 
-  summaryContainer.innerHTML = `<div class="card">${renderSummaryPanel(summary, counters)}</div>`;
+  summaryContainer.innerHTML = `<div class="card agenda-sticky-summary">${renderSummaryPanel(summary, counters)}</div>`;
   bindAgendaListInteractions();
 }
 
@@ -1413,59 +1603,83 @@ export function renderAgenda() {
   const today = agendaState.currentDate || formatDateForApi(new Date());
   return /* html */ `
 <section class="page-shell page--agenda">
-  <div class="grid-2">
+  <div class="agenda-page-head">
     <div>
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap;">
-        <div class="card-title" id="agenda-current-date-label">Agenda — ${escapeHtml(formatAgendaHeader(today))}</div>
-        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          <input
-            id="agenda-date-input"
-            type="date"
-            value="${today}"
-            style="background:#0a0c1a;border:1px solid #1e2345;border-radius:8px;padding:8px 10px;color:#e8f0fe;font:inherit;min-width:160px;"
-          />
-          <button id="agenda-create-cta"  type="button" class="btn-primary-gradient">+ Novo agendamento</button>
-          <button id="agenda-load-action" type="button" class="btn-primary-gradient">Carregar data</button>
-        </div>
-      </div>
-      <div id="agenda-list-container"></div>
+      <div class="agenda-eyebrow">Agenda V2 Premium</div>
+      <h1>Operação do dia</h1>
+      <p>Controle horários, planos, recebimentos e comissões no mesmo painel.</p>
     </div>
+
+    <div class="agenda-date-control">
+      <button id="agenda-prev-day-action" type="button" class="agenda-date-nav">‹</button>
+      <input id="agenda-date-input" type="date" value="${today}" />
+      <button id="agenda-next-day-action" type="button" class="agenda-date-nav">›</button>
+      <button id="agenda-today-action" type="button" class="agenda-date-soft">Hoje</button>
+      <button id="agenda-create-cta" type="button" class="btn-primary-gradient">+ Novo</button>
+      <button id="agenda-load-action" type="button" class="agenda-date-soft">Carregar</button>
+    </div>
+  </div>
+
+  <div class="agenda-premium-grid">
+    <div id="agenda-list-container"></div>
     <div id="agenda-summary-container"></div>
   </div>
 
-  <!-- Modal: criar agendamento -->
   <div id="agenda-create-modal" class="modal-overlay" style="display:none;">
-    <div class="modal" style="width:min(92vw, 520px);">
-      <div class="modal-title">Novo agendamento</div>
-      <div class="modal-sub">Preencha os dados para incluir um horário na agenda.</div>
-      <form id="agenda-create-form">
-        <div style="display:grid;grid-template-columns:1fr;gap:10px;">
-          <select id="agenda-create-client"  class="modal-input"><option value="">Selecione o cliente</option></select>
-          <select id="agenda-create-barber"  class="modal-input"><option value="">Selecione o barbeiro</option></select>
-          <select id="agenda-create-service" class="modal-input"><option value="">Selecione o serviço</option></select>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <input id="agenda-create-date" class="modal-input" type="date"  value="${today}" />
-            <input id="agenda-create-time" class="modal-input" type="time"  value="14:30" step="1800" />
-          </div>
-          <select id="agenda-create-source" class="modal-input">
-            <option value="dashboard">Dashboard</option>
-            <option value="whatsapp">WhatsApp</option>
-            <option value="walk_in">Walk-in</option>
-            <option value="link">Link</option>
-          </select>
+    <div class="modal agenda-create-premium-modal">
+      <div class="agenda-modal-hero">
+        <div>
+          <div class="agenda-eyebrow">Novo horário</div>
+          <h3>Criar agendamento</h3>
+          <p>Selecione cliente, barbeiro, serviço e horário. Se o cliente tiver plano, o backend reserva automaticamente o benefício.</p>
         </div>
-        <div id="agenda-create-feedback" style="min-height:20px;font-size:10px;color:#5a6888;margin:10px 0 4px;"></div>
+      </div>
+
+      <form id="agenda-create-form">
+        <div class="agenda-create-grid">
+          <div class="agenda-field-block agenda-field-block--full">
+            <label>Cliente</label>
+            <select id="agenda-create-client" class="modal-input"><option value="">Selecione o cliente</option></select>
+          </div>
+          <div class="agenda-field-block">
+            <label>Barbeiro</label>
+            <select id="agenda-create-barber" class="modal-input"><option value="">Selecione o barbeiro</option></select>
+          </div>
+          <div class="agenda-field-block">
+            <label>Serviço</label>
+            <select id="agenda-create-service" class="modal-input"><option value="">Selecione o serviço</option></select>
+          </div>
+          <div class="agenda-field-block">
+            <label>Data</label>
+            <input id="agenda-create-date" class="modal-input" type="date" value="${today}" />
+          </div>
+          <div class="agenda-field-block">
+            <label>Horário</label>
+            <input id="agenda-create-time" class="modal-input" type="time" value="14:30" step="1800" />
+          </div>
+          <div class="agenda-field-block agenda-field-block--full">
+            <label>Origem</label>
+            <select id="agenda-create-source" class="modal-input">
+              <option value="dashboard">Dashboard</option>
+              <option value="whatsapp">WhatsApp</option>
+              <option value="walk_in">Walk-in</option>
+              <option value="link">Link</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="agenda-create-feedback" class="agenda-details-feedback"></div>
+
         <div class="modal-buttons" style="margin-top:10px;">
           <button type="button" class="btn-cancel" id="agenda-create-cancel">Cancelar</button>
-          <button type="submit"                    class="btn-save"   id="agenda-create-submit">Salvar agendamento</button>
+          <button type="submit" class="btn-save" id="agenda-create-submit">Salvar agendamento</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- Modal: detalhes / comanda -->
   <div id="agenda-details-modal" class="modal-overlay" style="display:none;">
-    <div class="modal" style="width:min(92vw, 520px);max-height:90vh;overflow-y:auto;">
+    <div class="modal agenda-details-premium-modal">
       <div id="agenda-details-content"></div>
     </div>
   </div>
@@ -1488,8 +1702,29 @@ export function initAgendaPage() {
     loadAgendaForDate(selectedDate);
   };
 
+  const todayButton = document.getElementById('agenda-today-action');
+  const prevButton = document.getElementById('agenda-prev-day-action');
+  const nextButton = document.getElementById('agenda-next-day-action');
+
+  const moveDate = (days) => {
+    const base = dateInput?.value || formatDateForApi(new Date());
+    const [year, month, day] = base.split('-').map(Number);
+    const date = new Date(year, month - 1, day);
+    date.setDate(date.getDate() + days);
+    const nextDate = formatDateForApi(date);
+    if (dateInput) dateInput.value = nextDate;
+    loadAgendaForDate(nextDate);
+  };
+
   loadButton?.addEventListener('click', loadCurrentSelection);
   dateInput?.addEventListener('change', loadCurrentSelection);
+  todayButton?.addEventListener('click', () => {
+    const today = formatDateForApi(new Date());
+    if (dateInput) dateInput.value = today;
+    loadAgendaForDate(today);
+  });
+  prevButton?.addEventListener('click', () => moveDate(-1));
+  nextButton?.addEventListener('click', () => moveDate(1));
   createButton?.addEventListener('click', handleOpenCreateModal);
   createForm?.addEventListener('submit', handleCreateAppointment);
   createCancel?.addEventListener('click', closeCreateModal);
