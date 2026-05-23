@@ -1300,6 +1300,8 @@ function getRulesPresetMeta(preset) {
       barbershop: 50,
       team: 50,
       defaultMultiplier: 100,
+      icon: '⚖️',
+      action: 'Aplicar 50/50',
     },
     growth: {
       label: 'Time motivado',
@@ -1307,6 +1309,8 @@ function getRulesPresetMeta(preset) {
       barbershop: 40,
       team: 60,
       defaultMultiplier: 100,
+      icon: '🚀',
+      action: 'Aplicar 40/60',
     },
     margin: {
       label: 'Margem protegida',
@@ -1314,10 +1318,24 @@ function getRulesPresetMeta(preset) {
       barbershop: 60,
       team: 40,
       defaultMultiplier: 90,
+      icon: '🛡️',
+      action: 'Aplicar 60/40',
     },
   };
 
   return presets[preset] || presets.balanced;
+}
+
+function getActiveRulesPreset() {
+  const settings = getClubSettingsOrDefault();
+  const barbershop = Number(settings.barbershop_share_pct || 0);
+  const team = Number(settings.team_share_pct || 0);
+
+  if (Math.abs(barbershop - 40) < 0.01 && Math.abs(team - 60) < 0.01) return 'growth';
+  if (Math.abs(barbershop - 60) < 0.01 && Math.abs(team - 40) < 0.01) return 'margin';
+  if (Math.abs(barbershop - 50) < 0.01 && Math.abs(team - 50) < 0.01) return 'balanced';
+
+  return '';
 }
 
 function renderRulesFeedback() {
@@ -1326,6 +1344,35 @@ function renderRulesFeedback() {
   return `
     <div class="planos-rules-feedback">
       ${escapeHtml(planosState.rulesFeedback)}
+    </div>
+  `;
+}
+
+function renderRulesQuickNav() {
+  const items = [
+    { target: 'planos-rules-step-split', label: 'Divisão', hint: 'dinheiro' },
+    { target: 'planos-rules-step-services', label: 'Serviços', hint: 'pontos' },
+    { target: 'planos-rules-step-plans', label: 'Planos', hint: 'fatores' },
+  ];
+
+  return `
+    <div class="planos-rules-quicknav" aria-label="Navegação rápida das regras">
+      <div class="planos-rules-quicknav-title">
+        <span>Mapa da configuração</span>
+        <small>Altere apenas o que fizer sentido para sua operação.</small>
+      </div>
+      <div class="planos-rules-quicknav-actions">
+        ${items.map((item) => `
+          <button type="button" class="planos-rules-nav-chip" data-rules-jump="${escapeHtml(item.target)}">
+            <strong>${escapeHtml(item.label)}</strong>
+            <small>${escapeHtml(item.hint)}</small>
+          </button>
+        `).join('')}
+      </div>
+      <div class="planos-rules-security-pill" title="Fechamentos já encerrados não são recalculados automaticamente.">
+        <span>🔒</span>
+        <strong>Vale para os próximos fechamentos</strong>
+      </div>
     </div>
   `;
 }
@@ -1344,6 +1391,11 @@ function renderRulesCockpit() {
         <p>
           Esta tela controla como o dinheiro do Clube é dividido, quanto cada serviço vale e se algum plano deve gerar menos pontos.
         </p>
+        <div class="planos-rules-trust-row">
+          <span>🔒 Fechamentos já fechados ficam protegidos</span>
+          <span>📌 Mudanças valem para os próximos cálculos</span>
+          <span>🧾 Tudo fica auditável por atendimento</span>
+        </div>
       </div>
 
       <div class="planos-rules-cockpit-card">
@@ -1394,15 +1446,27 @@ function renderRulesGuide() {
 }
 
 function renderRulesPresetCards() {
+  const activePreset = getActiveRulesPreset();
+
   return `
     <div class="planos-rules-presets">
       ${['balanced', 'growth', 'margin'].map((preset) => {
         const meta = getRulesPresetMeta(preset);
+        const isActive = activePreset === preset;
         return `
-          <button type="button" class="planos-rules-preset" data-rules-preset="${escapeHtml(preset)}">
-            <span>${escapeHtml(meta.label)}</span>
+          <button
+            type="button"
+            class="planos-rules-preset ${isActive ? 'is-active' : ''}"
+            data-rules-preset="${escapeHtml(preset)}"
+            aria-label="${escapeHtml(meta.action)}"
+          >
+            <div class="planos-rules-preset-top">
+              <span>${escapeHtml(meta.icon)} ${escapeHtml(meta.label)}</span>
+              ${isActive ? '<em>Atual</em>' : '<em>Aplicar</em>'}
+            </div>
             <strong>${escapeHtml(`${meta.barbershop}% / ${meta.team}%`)}</strong>
             <small>${escapeHtml(meta.description)}</small>
+            <div class="planos-rules-preset-action">${escapeHtml(meta.action)} →</div>
           </button>
         `;
       }).join('')}
@@ -1414,7 +1478,7 @@ function renderClubRulesRevenueSplit() {
   const settings = getClubSettingsOrDefault();
 
   return `
-    <div class="planos-rules-panel planos-rules-panel--split">
+    <div class="planos-rules-panel planos-rules-panel--split" id="planos-rules-step-split">
       <div class="planos-rules-panel-head planos-rules-panel-head--premium">
         <div>
           <div class="planos-section-title">Etapa 1 · Divisão da receita</div>
@@ -1484,8 +1548,11 @@ function renderClubRulesRevenueSplit() {
         </div>
 
         <div class="planos-rules-action-row">
-          <span>Alterou algum percentual? Salve para aplicar nos próximos fechamentos.</span>
-          <button type="submit" class="btn-save planos-rules-save-btn">Salvar divisão</button>
+          <span>Alterou algum percentual? Salve para aplicar nos próximos fechamentos. Os fechamentos já encerrados continuam travados.</span>
+          <div class="planos-rules-action-buttons">
+            <button type="button" class="planos-rules-ghost-btn" id="planos-rules-reset-default">Restaurar 50/50</button>
+            <button type="submit" class="btn-save planos-rules-save-btn">Salvar divisão</button>
+          </div>
         </div>
       </form>
     </div>
@@ -1505,7 +1572,7 @@ function renderClubRulesServicePoints() {
   }
 
   return `
-    <div class="planos-rules-panel planos-rules-panel--services">
+    <div class="planos-rules-panel planos-rules-panel--services" id="planos-rules-step-services">
       <div class="planos-rules-panel-head">
         <div>
           <div class="planos-section-title">Etapa 2 · Pontos por serviço</div>
@@ -1576,7 +1643,7 @@ function renderClubRulesPlanRules() {
   const servicePoint = getPrimaryServicePoint();
 
   return `
-    <div class="planos-rules-panel planos-rules-panel--plans">
+    <div class="planos-rules-panel planos-rules-panel--plans" id="planos-rules-step-plans">
       <div class="planos-rules-panel-head">
         <div>
           <div class="planos-section-title">Etapa 3 · Peso de comissão por plano</div>
@@ -1670,6 +1737,7 @@ function renderClubRules() {
 
       ${renderRulesFeedback()}
       ${renderRulesCockpit()}
+      ${renderRulesQuickNav()}
       ${renderRulesGuide()}
 
       <div class="planos-rules-stack planos-rules-stack--premium">
@@ -2529,6 +2597,19 @@ function bindClubRulesEvents() {
     button.addEventListener('click', () => {
       applyRulesPreset(button.dataset.rulesPreset || 'balanced');
     });
+  });
+
+  document.querySelectorAll('[data-rules-jump]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const targetId = button.dataset.rulesJump;
+      const target = targetId ? document.getElementById(targetId) : null;
+      if (!target) return;
+      target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  });
+
+  document.getElementById('planos-rules-reset-default')?.addEventListener('click', () => {
+    applyRulesPreset('balanced');
   });
 
   document.getElementById('planos-rules-barbershop-share')?.addEventListener('input', syncRulesRevenuePreview);
