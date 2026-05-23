@@ -3,7 +3,6 @@ import {
   hasAuthToken,
   apiFetch,
   getClientsPremium,
-  getClientPremiumById,
   createClient,
   updateClient,
 } from '../services/api.js';
@@ -821,7 +820,7 @@ async function openClientModal(clientId) {
   renderClientModal();
 
   try {
-    clientesState.detailClient = await getClientPremiumById(clientId);
+    clientesState.detailClient = await apiFetch(`/api/clients/premium/${clientId}`);
   } catch (error) {
     const fallbackClient = (clientesState.items || []).find(item => String(item.id) === String(clientId));
 
