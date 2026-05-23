@@ -9,7 +9,17 @@ const financeiroState = {
   transactions: [],
   commissions:  [],
   cash:         { register: null, movements: [], summary: null },
-  activeTab:    'caixa',   // caixa | contas | transacoes
+  teamCommissions: {
+    summary: null,
+    sources: [],
+    adjustments: [],
+    payments: [],
+    periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
+    periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
+    selectedBarberId: null,
+    isLoading: false,
+  },
+  activeTab:    'caixa',   // caixa | contas | transacoes | comissoes
   isLoading:    false,
   isLoaded:     false,
   modalMode:    'closed',
@@ -80,6 +90,104 @@ const setFeedback = (id, msg, variant = 'neutral') => {
                  : variant === 'success' ? '#00e676'
                  : '#5a6888';
 };
+
+const fmtCents = (v) => fmt(Number(v || 0) / 100);
+
+const centsToAmount = (v) => Number(v || 0) / 100;
+
+const getMonthRangeFromInput = (value) => {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^(\d{4})-(\d{2})$/);
+  const now = new Date();
+
+  const year = match ? Number(match[1]) : now.getFullYear();
+  const monthIndex = match ? Number(match[2]) - 1 : now.getMonth();
+
+  const start = new Date(year, monthIndex, 1);
+  const end = new Date(year, monthIndex + 1, 0);
+
+  return {
+    periodStart: start.toISOString().split('T')[0],
+    periodEnd: end.toISOString().split('T')[0],
+    monthValue: `${year}-${String(monthIndex + 1).padStart(2, '0')}`,
+  };
+};
+
+const getMonthValueFromPeriod = (periodStart) => {
+  if (!periodStart) return getMonthRangeFromInput().monthValue;
+  return String(periodStart).slice(0, 7);
+};
+
+async function safeApiFetch(url, fallback) {
+  try {
+    return await apiFetch(url);
+  } catch (error) {
+    console.warn('Falha ao carregar recurso opcional:', url, error);
+    return fallback;
+  }
+}
+
+const TEAM_SOURCE_META = {
+  service: {
+    label: 'Serviços avulsos',
+    short: 'Serviços',
+    icon: '✂️',
+    color: '#4fc3f7',
+    bg: 'rgba(79,195,247,.10)',
+  },
+  product: {
+    label: 'Produtos',
+    short: 'Produtos',
+    icon: '🧴',
+    color: '#9c6fff',
+    bg: 'rgba(156,111,255,.10)',
+  },
+  club: {
+    label: 'Comissões do Clube',
+    short: 'Clube',
+    icon: '💎',
+    color: '#ffd700',
+    bg: 'rgba(255,215,0,.10)',
+  },
+  bonus: {
+    label: 'Bonificação',
+    short: 'Bônus',
+    icon: '🎁',
+    color: '#00e676',
+    bg: 'rgba(0,230,118,.10)',
+  },
+  vale: {
+    label: 'Vale / adiantamento',
+    short: 'Vale',
+    icon: '🧾',
+    color: '#f97316',
+    bg: 'rgba(249,115,22,.10)',
+  },
+  discount: {
+    label: 'Desconto',
+    short: 'Desconto',
+    icon: '−',
+    color: '#ff5c74',
+    bg: 'rgba(255,92,116,.10)',
+  },
+  manual_adjustment: {
+    label: 'Ajuste manual',
+    short: 'Ajuste',
+    icon: '⚙️',
+    color: '#c0cce8',
+    bg: 'rgba(192,204,232,.10)',
+  },
+  correction: {
+    label: 'Correção',
+    short: 'Correção',
+    icon: '🛠️',
+    color: '#4fc3f7',
+    bg: 'rgba(79,195,247,.10)',
+  },
+};
+
+const getTeamSourceMeta = (type) => TEAM_SOURCE_META[type] || TEAM_SOURCE_META.manual_adjustment;
+
 
 // ══════════════════════════════════════════════════════════════════════════════
 // SVG CHARTS
@@ -611,6 +719,465 @@ function renderTransactionsSection() {
   return recent.map(renderTransactionRow).join('');
 }
 
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMISSÕES DO TIME — PREMIUM
+// ══════════════════════════════════════════════════════════════════════════════
+
+function getTeamCommissionSummaryItems() {
+  return financeiroState.teamCommissions.summary?.items || [];
+}
+
+function getTeamCommissionTotals() {
+  return financeiroState.teamCommissions.summary?.totals || {};
+}
+
+function getTeamCommissionPeriod() {
+  const tc = financeiroState.teamCommissions;
+  return {
+    periodStart: tc.periodStart,
+    periodEnd: tc.periodEnd,
+    monthValue: getMonthValueFromPeriod(tc.periodStart),
+  };
+}
+
+function buildTeamQuery(extra = {}) {
+  const { periodStart, periodEnd } = getTeamCommissionPeriod();
+  const params = new URLSearchParams({
+    periodStart,
+    periodEnd,
+    ...extra,
+  });
+
+  return params.toString();
+}
+
+function renderTeamCommissionHero() {
+  const totals = getTeamCommissionTotals();
+  const items = getTeamCommissionSummaryItems();
+  const period = getTeamCommissionPeriod();
+
+  const pending = Number(totals.pendingCents || 0);
+  const generated = Number(totals.totalGeneratedCents || 0);
+  const paid = Number(totals.paidCents || 0);
+
+  const paidPct = generated > 0 ? Math.min(100, Math.round((paid / generated) * 100)) : 0;
+
+  return `
+    <div class="team-commissions-hero">
+      <div class="team-commissions-hero__glow"></div>
+
+      <div class="team-commissions-hero__top">
+        <div>
+          <div class="team-kicker">COMISSÕES DO TIME</div>
+          <h2 class="team-title">Folha inteligente dos barbeiros</h2>
+          <p class="team-subtitle">
+            Serviços avulsos, Clube, bonificações, vales e baixas em uma visão única, sem conta escondida.
+          </p>
+        </div>
+
+        <div class="team-period-card">
+          <label for="team-commissions-month">Competência</label>
+          <input type="month" id="team-commissions-month" value="${esc(period.monthValue)}">
+          <button type="button" id="team-commissions-load-month">Atualizar</button>
+        </div>
+      </div>
+
+      <div class="team-hero-grid">
+        <div class="team-hero-main">
+          <div class="team-metric-label">Total pendente a pagar</div>
+          <div class="team-metric-value ${pending > 0 ? 'is-warning' : 'is-ok'}">${fmtCents(pending)}</div>
+          <div class="team-metric-caption">
+            ${items.length
+              ? `${items.length} profissional(is) com comissão na competência`
+              : 'Nenhuma comissão encontrada nesta competência'}
+          </div>
+
+          <div class="team-payment-progress">
+            <div class="team-payment-progress__bar">
+              <span style="width:${paidPct}%"></span>
+            </div>
+            <div class="team-payment-progress__text">
+              ${paidPct}% baixado · ${fmtCents(paid)} pago de ${fmtCents(generated)}
+            </div>
+          </div>
+        </div>
+
+        <div class="team-hero-side">
+          ${[
+            ['Gerado', totals.totalGeneratedCents, '#4fc3f7', 'Tudo que virou comissão'],
+            ['Pago', totals.paidCents, '#00e676', 'Baixas registradas'],
+            ['Clube', totals.clubCommissionCents, '#ffd700', 'Assinaturas e pontos'],
+            ['Vales', totals.discountCents, '#ff5c74', 'Descontos/adiantamentos'],
+          ].map(([label, value, color, hint]) => `
+            <div class="team-mini-metric">
+              <span>${esc(label)}</span>
+              <strong style="color:${color}">${fmtCents(value)}</strong>
+              <small>${esc(hint)}</small>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+
+      <div class="team-legend-strip">
+        <span>Fluxo do fechamento:</span>
+        <b>serviços</b>
+        <i>+</i>
+        <b>Clube</b>
+        <i>+</i>
+        <b>bônus</b>
+        <i>−</i>
+        <b>vales</b>
+        <i>=</i>
+        <b>total a pagar</b>
+      </div>
+    </div>
+  `;
+}
+
+function renderTeamCommissionBreakdown() {
+  const totals = getTeamCommissionTotals();
+  const max = Math.max(
+    Number(totals.serviceCommissionCents || 0),
+    Number(totals.productCommissionCents || 0),
+    Number(totals.clubCommissionCents || 0),
+    Number(totals.bonusCents || 0),
+    Number(totals.discountCents || 0),
+    1
+  );
+
+  const rows = [
+    ['service', totals.serviceCommissionCents || 0],
+    ['product', totals.productCommissionCents || 0],
+    ['club', totals.clubCommissionCents || 0],
+    ['bonus', totals.bonusCents || 0],
+    ['vale', totals.discountCents || 0],
+  ];
+
+  return `
+    <div class="team-breakdown-card">
+      <div class="team-card-head">
+        <div>
+          <div class="team-kicker">ORIGENS</div>
+          <h3>De onde veio a comissão?</h3>
+        </div>
+      </div>
+
+      <div class="team-breakdown-list">
+        ${rows.map(([type, value]) => {
+          const meta = getTeamSourceMeta(type);
+          const width = Math.max(4, Math.round((Number(value || 0) / max) * 100));
+          return `
+            <div class="team-breakdown-row">
+              <div class="team-breakdown-icon" style="background:${meta.bg};color:${meta.color};border-color:${meta.color}33">${meta.icon}</div>
+              <div class="team-breakdown-body">
+                <div class="team-breakdown-label">
+                  <span>${esc(meta.label)}</span>
+                  <strong>${fmtCents(value)}</strong>
+                </div>
+                <div class="team-breakdown-bar"><span style="width:${width}%;background:${meta.color}"></span></div>
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderTeamCommissionBarberCard(row) {
+  const paymentStatus = String(row.payment_status || 'pending');
+  const statusLabel = paymentStatus === 'paid' ? 'Pago'
+    : paymentStatus === 'partial' ? 'Parcial'
+    : 'Pendente';
+
+  const statusClass = paymentStatus === 'paid' ? 'is-paid'
+    : paymentStatus === 'partial' ? 'is-partial'
+    : 'is-pending';
+
+  const pending = Number(row.pending_cents || 0);
+
+  return `
+    <article class="team-barber-card" data-barber-id="${esc(row.barber_id)}">
+      <div class="team-barber-card__header">
+        <div class="team-avatar">${esc(String(row.barber_name || 'B').slice(0, 1).toUpperCase())}</div>
+        <div class="team-barber-info">
+          <h3>${esc(row.barber_name || 'Profissional')}</h3>
+          <p>${esc(row.barber_email || 'Sem e-mail')}</p>
+        </div>
+        <div class="team-status-pill ${statusClass}">${statusLabel}</div>
+      </div>
+
+      <div class="team-barber-total">
+        <span>Total pendente</span>
+        <strong>${fmtCents(row.pending_cents)}</strong>
+      </div>
+
+      <div class="team-barber-grid">
+        <div><span>Serviços</span><strong>${fmtCents(row.service_commission_cents)}</strong></div>
+        <div><span>Produtos</span><strong>${fmtCents(row.product_commission_cents)}</strong></div>
+        <div><span>Clube</span><strong>${fmtCents(row.club_commission_cents)}</strong></div>
+        <div><span>Bônus</span><strong>${fmtCents(row.bonus_cents)}</strong></div>
+        <div><span>Vales</span><strong class="danger">−${fmtCents(row.discount_cents)}</strong></div>
+        <div><span>Pago</span><strong class="success">${fmtCents(row.paid_cents)}</strong></div>
+      </div>
+
+      <div class="team-barber-actions">
+        <button type="button" data-team-action="details" data-barber-id="${esc(row.barber_id)}">Ver detalhes</button>
+        <button type="button" data-team-action="bonus" data-barber-id="${esc(row.barber_id)}">Bonificação</button>
+        <button type="button" data-team-action="vale" data-barber-id="${esc(row.barber_id)}">Vale</button>
+        <button type="button" data-team-action="pay" data-barber-id="${esc(row.barber_id)}" ${pending <= 0 ? 'disabled' : ''}>
+          Baixar comissão
+        </button>
+      </div>
+    </article>
+  `;
+}
+
+function renderTeamCommissionList() {
+  const items = getTeamCommissionSummaryItems();
+
+  if (!items.length) {
+    return `
+      <div class="team-empty-state">
+        <div>🧾</div>
+        <h3>Nenhuma comissão nesta competência</h3>
+        <p>Quando serviços, Clube, bonificações ou vales entrarem no período, o resumo do time aparecerá aqui.</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="team-list-head">
+      <div>
+        <div class="team-kicker">PROFISSIONAIS</div>
+        <h3>Quanto pagar para cada barbeiro</h3>
+      </div>
+      <span>${items.length} registro(s)</span>
+    </div>
+
+    <div class="team-barber-grid-list">
+      ${items.map(renderTeamCommissionBarberCard).join('')}
+    </div>
+  `;
+}
+
+function renderTeamCommissionSourcesCompact() {
+  const sources = financeiroState.teamCommissions.sources || [];
+
+  if (!sources.length) {
+    return `
+      <div class="team-sources-card">
+        <div class="team-card-head">
+          <div>
+            <div class="team-kicker">RASTREIO</div>
+            <h3>Últimas origens</h3>
+          </div>
+        </div>
+        <div class="team-empty-line">Sem detalhes para o período.</div>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="team-sources-card">
+      <div class="team-card-head">
+        <div>
+          <div class="team-kicker">RASTREIO</div>
+          <h3>Últimas origens</h3>
+        </div>
+        <small>${sources.length} item(ns)</small>
+      </div>
+
+      <div class="team-source-list">
+        ${sources.slice(0, 8).map((source) => {
+          const meta = getTeamSourceMeta(source.source_type);
+          const isNegative = Number(source.commission_cents || 0) < 0;
+          return `
+            <div class="team-source-row">
+              <div class="team-source-icon" style="background:${meta.bg};color:${meta.color};border-color:${meta.color}33">${meta.icon}</div>
+              <div class="team-source-main">
+                <strong>${esc(source.description || meta.label)}</strong>
+                <span>${esc(meta.short)} · ${esc(fmtDate(source.source_date))}</span>
+              </div>
+              <div class="team-source-value ${isNegative ? 'danger' : ''}">
+                ${isNegative ? '−' : ''}${fmtCents(Math.abs(Number(source.commission_cents || 0)))}
+              </div>
+            </div>
+          `;
+        }).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderTeamCommissionsSection() {
+  const tc = financeiroState.teamCommissions;
+
+  if (tc.isLoading) {
+    return `
+      <div class="team-loading">
+        <div>⟳</div>
+        <span>Carregando comissões do time...</span>
+      </div>
+    `;
+  }
+
+  return `
+    ${renderTeamCommissionHero()}
+
+    <div class="team-commission-layout">
+      <div class="team-commission-main">
+        ${renderTeamCommissionList()}
+      </div>
+      <aside class="team-commission-side">
+        ${renderTeamCommissionBreakdown()}
+        ${renderTeamCommissionSourcesCompact()}
+      </aside>
+    </div>
+  `;
+}
+
+function getTeamRowByBarberId(barberId) {
+  return getTeamCommissionSummaryItems().find((row) => row.barber_id === barberId) || null;
+}
+
+function getTeamSourcesByBarberId(barberId) {
+  return (financeiroState.teamCommissions.sources || []).filter((source) => source.barber_id === barberId);
+}
+
+function renderTeamCommissionDetails(row) {
+  const sources = getTeamSourcesByBarberId(row.barber_id);
+
+  return `
+    <div class="finance-modal-body team-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;">${esc(row.barber_name || 'Profissional')}</div>
+        <div class="modal-sub" style="margin-top:4px;">Extrato de comissão da competência</div>
+      </div>
+
+      <div class="team-modal-summary">
+        <div><span>Total gerado</span><strong>${fmtCents(row.total_generated_cents)}</strong></div>
+        <div><span>Pago</span><strong>${fmtCents(row.paid_cents)}</strong></div>
+        <div><span>Pendente</span><strong>${fmtCents(row.pending_cents)}</strong></div>
+      </div>
+
+      <div class="team-modal-source-list">
+        ${sources.length ? sources.map((source) => {
+          const meta = getTeamSourceMeta(source.source_type);
+          const isNegative = Number(source.commission_cents || 0) < 0;
+          return `
+            <div class="team-modal-source">
+              <div class="team-source-icon" style="background:${meta.bg};color:${meta.color};border-color:${meta.color}33">${meta.icon}</div>
+              <div>
+                <strong>${esc(source.description || meta.label)}</strong>
+                <span>${esc(meta.label)} · ${esc(fmtDate(source.source_date))} · status ${esc(source.status || '—')}</span>
+              </div>
+              <b class="${isNegative ? 'danger' : ''}">${isNegative ? '−' : ''}${fmtCents(Math.abs(Number(source.commission_cents || 0)))}</b>
+            </div>
+          `;
+        }).join('') : `<div class="team-empty-line">Nenhuma origem encontrada.</div>`}
+      </div>
+
+      <div class="modal-buttons" style="margin-top:10px;">
+        <button type="button" class="btn-cancel" id="finance-form-cancel">Fechar</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderTeamAdjustmentForm(kind, barberId) {
+  const row = getTeamRowByBarberId(barberId);
+  const period = getTeamCommissionPeriod();
+
+  const isVale = kind === 'vale';
+  const title = isVale ? 'Adicionar vale / desconto' : 'Adicionar bonificação';
+  const type = isVale ? 'vale' : 'bonus';
+  const direction = isVale ? 'subtract' : 'add';
+  const color = isVale ? '#f97316' : '#00e676';
+
+  return `
+    <div class="finance-modal-body team-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;color:${color};">${esc(title)}</div>
+        <div class="modal-sub" style="margin-top:4px;">
+          ${esc(row?.barber_name || 'Profissional')} · ${esc(fmtDate(period.periodStart))} a ${esc(fmtDate(period.periodEnd))}
+        </div>
+      </div>
+
+      <form id="team-adjustment-form" class="finance-form" data-type="${type}" data-direction="${direction}" data-barber-id="${esc(barberId)}">
+        <div>
+          <div class="color-section-label">Valor (R$)</div>
+          <input class="modal-input" name="amount" type="number" min="0.01" step="0.01" placeholder="0,00">
+        </div>
+        <div>
+          <div class="color-section-label">Motivo</div>
+          <textarea class="modal-input" name="reason" rows="3" placeholder="${isVale ? 'Ex: Vale solicitado pelo barbeiro' : 'Ex: Bônus por meta batida'}"></textarea>
+        </div>
+
+        <div id="team-adjustment-feedback" class="finance-form-feedback"></div>
+
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" style="background:${color};color:#07111f;font-weight:900;">
+            Confirmar
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
+function renderTeamPaymentForm(barberId) {
+  const row = getTeamRowByBarberId(barberId);
+  const period = getTeamCommissionPeriod();
+  const pending = centsToAmount(row?.pending_cents || 0);
+
+  return `
+    <div class="finance-modal-body team-modal-body">
+      <div>
+        <div class="modal-title" style="margin:0;color:#00e676;">Baixar comissão</div>
+        <div class="modal-sub" style="margin-top:4px;">
+          ${esc(row?.barber_name || 'Profissional')} · pendente ${fmt(pending)}
+        </div>
+      </div>
+
+      <form id="team-payment-form" class="finance-form" data-barber-id="${esc(barberId)}">
+        <div>
+          <div class="color-section-label">Valor pago (R$)</div>
+          <input class="modal-input" name="amount" type="number" min="0.01" step="0.01" value="${pending.toFixed(2)}">
+        </div>
+        <div>
+          <div class="color-section-label">Forma de pagamento</div>
+          <select class="modal-input" name="payment_method">
+            <option value="pix">Pix</option>
+            <option value="dinheiro">Dinheiro</option>
+            <option value="transferencia">Transferência</option>
+            <option value="outro">Outro</option>
+          </select>
+        </div>
+        <div>
+          <div class="color-section-label">Observações</div>
+          <textarea class="modal-input" name="notes" rows="3" placeholder="Opcional"></textarea>
+        </div>
+
+        <div class="team-payment-warning">
+          Essa baixa fica registrada no histórico. O cálculo de origem continua auditável.
+        </div>
+
+        <div id="team-payment-feedback" class="finance-form-feedback"></div>
+
+        <div class="modal-buttons" style="margin-top:10px;">
+          <button type="button" class="btn-cancel" id="finance-form-cancel">Cancelar</button>
+          <button type="submit" class="btn-save" style="background:#00e676;color:#07111f;font-weight:900;">
+            Baixar comissão
+          </button>
+        </div>
+      </form>
+    </div>
+  `;
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // MODALS
 // ══════════════════════════════════════════════════════════════════════════════
@@ -904,6 +1471,17 @@ function renderFinanceModal() {
   else if (mode === 'createTransaction') content.innerHTML = renderTransactionForm();
   else if (mode === 'openCash')          content.innerHTML = renderOpenCashForm();
   else if (mode === 'closeCash')         content.innerHTML = renderCloseCashForm();
+  else if (mode === 'viewTeamCommission') {
+    const row = getTeamRowByBarberId(financeiroState.activeEntryId);
+    if (!row) { closeFinanceModal(); return; }
+    content.innerHTML = renderTeamCommissionDetails(row);
+  }
+  else if (mode === 'teamBonus' || mode === 'teamVale') {
+    content.innerHTML = renderTeamAdjustmentForm(mode === 'teamVale' ? 'vale' : 'bonus', financeiroState.activeEntryId);
+  }
+  else if (mode === 'teamPayment') {
+    content.innerHTML = renderTeamPaymentForm(financeiroState.activeEntryId);
+  }
   else if (['withdrawal','reinforcement','income','expense'].includes(mode))
     content.innerHTML = renderMovementForm(mode);
 
@@ -925,11 +1503,15 @@ async function loadFinanceiroData() {
     const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
     const end   = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().split('T')[0];
 
-    const [bills, transactions, commissions, cashData] = await Promise.all([
+    const teamQuery = buildTeamQuery();
+
+    const [bills, transactions, commissions, cashData, teamSummary, teamSources] = await Promise.all([
       apiFetch('/api/financial/bills'),
       apiFetch(`/api/financial/transactions?start=${start}&end=${end}`),
       apiFetch('/api/financial/commissions'),
       apiFetch(`/api/financial/cash?date=${financeiroState.cashDate}`),
+      safeApiFetch(`/api/team-commissions/summary?${teamQuery}`, { items: [], totals: {} }),
+      safeApiFetch(`/api/team-commissions/sources?${teamQuery}`, { items: [] }),
     ]);
 
     financeiroState.bills         = Array.isArray(bills)        ? bills        : [];
@@ -938,6 +1520,8 @@ async function loadFinanceiroData() {
     financeiroState.cash          = cashData && typeof cashData === 'object'
       ? { register: cashData.register || null, movements: cashData.movements || [], summary: cashData.summary || null }
       : { register: null, movements: [], summary: null };
+    financeiroState.teamCommissions.summary = teamSummary || { items: [], totals: {} };
+    financeiroState.teamCommissions.sources = Array.isArray(teamSources?.items) ? teamSources.items : [];
     financeiroState.isLoaded = true;
   } catch (error) {
     console.error('Erro ao carregar financeiro:', error);
@@ -961,6 +1545,138 @@ async function loadCashForDate(date) {
   if (cashContainer) cashContainer.innerHTML = renderCashHero();
   bindCashEvents();
 }
+
+async function loadTeamCommissionsData({ rerender = false } = {}) {
+  const tc = financeiroState.teamCommissions;
+  const query = buildTeamQuery();
+
+  if (rerender) {
+    tc.isLoading = true;
+    const root = document.getElementById('finance-root');
+    if (root && financeiroState.activeTab === 'comissoes') rerenderFinanceiro();
+  }
+
+  try {
+    const [summary, sources, adjustments, payments] = await Promise.all([
+      apiFetch(`/api/team-commissions/summary?${query}`),
+      apiFetch(`/api/team-commissions/sources?${query}`),
+      safeApiFetch(`/api/team-commissions/adjustments?${query}`, { items: [] }),
+      safeApiFetch(`/api/team-commissions/payments?${query}`, { items: [] }),
+    ]);
+
+    tc.summary = summary || { items: [], totals: {} };
+    tc.sources = Array.isArray(sources?.items) ? sources.items : [];
+    tc.adjustments = Array.isArray(adjustments?.items) ? adjustments.items : [];
+    tc.payments = Array.isArray(payments?.items) ? payments.items : [];
+  } catch (error) {
+    console.error('Erro ao carregar comissões do time:', error);
+    tc.summary = { items: [], totals: {} };
+    tc.sources = [];
+  } finally {
+    tc.isLoading = false;
+    if (rerender && financeiroState.activeTab === 'comissoes') rerenderFinanceiro();
+  }
+}
+
+async function handleTeamPeriodChange() {
+  const input = document.getElementById('team-commissions-month');
+  const range = getMonthRangeFromInput(input?.value);
+
+  financeiroState.teamCommissions.periodStart = range.periodStart;
+  financeiroState.teamCommissions.periodEnd = range.periodEnd;
+
+  await loadTeamCommissionsData({ rerender: true });
+}
+
+async function handleCreateTeamAdjustment(event) {
+  event.preventDefault();
+
+  const form = document.getElementById('team-adjustment-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+  const period = getTeamCommissionPeriod();
+
+  const amount = Number(formData.get('amount') || 0);
+  const reason = String(formData.get('reason') || '').trim();
+  const barberId = form.dataset.barberId;
+  const adjustmentType = form.dataset.type;
+  const direction = form.dataset.direction;
+
+  if (!amount || amount <= 0) {
+    setFeedback('team-adjustment-feedback', 'Informe um valor válido.', 'error');
+    return;
+  }
+
+  if (!reason) {
+    setFeedback('team-adjustment-feedback', 'Informe o motivo.', 'error');
+    return;
+  }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('team-adjustment-feedback', 'Registrando ajuste...', 'neutral');
+
+    await apiFetch('/api/team-commissions/adjustments', {
+      method: 'POST',
+      body: JSON.stringify({
+        barberId,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        adjustmentType,
+        direction,
+        amount,
+        reason,
+      }),
+    });
+
+    closeFinanceModal();
+    await loadTeamCommissionsData({ rerender: true });
+  } catch (error) {
+    setFeedback('team-adjustment-feedback', error instanceof Error ? error.message : 'Erro ao registrar ajuste.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function handleCreateTeamPayment(event) {
+  event.preventDefault();
+
+  const form = document.getElementById('team-payment-form');
+  const formData = new FormData(form);
+  const btn = form.querySelector('button[type="submit"]');
+  const period = getTeamCommissionPeriod();
+
+  const amount = Number(formData.get('amount') || 0);
+  const barberId = form.dataset.barberId;
+
+  if (!amount || amount <= 0) {
+    setFeedback('team-payment-feedback', 'Informe um valor válido.', 'error');
+    return;
+  }
+
+  try {
+    if (btn) btn.disabled = true;
+    setFeedback('team-payment-feedback', 'Baixando comissão...', 'neutral');
+
+    await apiFetch('/api/team-commissions/payments', {
+      method: 'POST',
+      body: JSON.stringify({
+        barberId,
+        periodStart: period.periodStart,
+        periodEnd: period.periodEnd,
+        amount,
+        paymentMethod: String(formData.get('payment_method') || 'pix'),
+        notes: String(formData.get('notes') || '').trim() || null,
+      }),
+    });
+
+    closeFinanceModal();
+    await loadTeamCommissionsData({ rerender: true });
+  } catch (error) {
+    setFeedback('team-payment-feedback', error instanceof Error ? error.message : 'Erro ao baixar comissão.', 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
 
 async function handleCreateBill(event) {
   event.preventDefault();
@@ -1144,6 +1860,8 @@ function bindModalEvents() {
   document.getElementById('cash-open-form')?.addEventListener('submit', handleOpenCash);
   document.getElementById('cash-close-form')?.addEventListener('submit', handleCloseCash);
   document.getElementById('cash-movement-form')?.addEventListener('submit', handleAddMovement);
+  document.getElementById('team-adjustment-form')?.addEventListener('submit', handleCreateTeamAdjustment);
+  document.getElementById('team-payment-form')?.addEventListener('submit', handleCreateTeamPayment);
 
   // Calcula diferença em tempo real no modal de fechar caixa
   const closingInput = document.querySelector('#cash-close-form [name="closing_balance"]');
@@ -1195,6 +1913,25 @@ function bindCashEvents() {
   });
 }
 
+
+function bindTeamCommissionEvents() {
+  document.getElementById('team-commissions-load-month')?.addEventListener('click', handleTeamPeriodChange);
+  document.getElementById('team-commissions-month')?.addEventListener('change', handleTeamPeriodChange);
+
+  document.querySelectorAll('[data-team-action]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.teamAction;
+      const barberId = btn.dataset.barberId;
+      if (!barberId) return;
+
+      if (action === 'details') openModal('viewTeamCommission', 'teamCommissions', barberId);
+      if (action === 'bonus')   openModal('teamBonus', 'teamCommissions', barberId);
+      if (action === 'vale')    openModal('teamVale', 'teamCommissions', barberId);
+      if (action === 'pay')     openModal('teamPayment', 'teamCommissions', barberId);
+    });
+  });
+}
+
 function bindStaticEvents() {
   document.getElementById('finance-new-bill-btn')?.addEventListener('click',        () => openModal('createBill'));
   document.getElementById('finance-new-transaction-btn')?.addEventListener('click', () => openModal('createTransaction'));
@@ -1211,6 +1948,7 @@ function bindStaticEvents() {
 function renderTabBar() {
   const tabs = [
     { id: 'caixa',       label: '💰 Caixa' },
+    { id: 'comissoes',   label: '💈 Comissões do Time' },
     { id: 'contas',      label: '💸 Contas a Pagar' },
     { id: 'transacoes',  label: '📊 Transações' },
   ];
@@ -1261,6 +1999,9 @@ function rerenderFinanceiro() {
         ${renderCashHero()}
       </div>`;
   }
+  else if (tab === 'comissoes') {
+    content = renderTeamCommissionsSection();
+  }
   else if (tab === 'contas') {
     content = `
       ${renderMetricsBar()}
@@ -1292,6 +2033,7 @@ function rerenderFinanceiro() {
   bindStaticEvents();
   bindRowEvents();
   if (tab === 'caixa') bindCashEvents();
+  if (tab === 'comissoes') bindTeamCommissionEvents();
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1377,8 +2119,603 @@ export function renderFinanceiro() {
     .finance-modal-body { display: grid; gap: 12px; }
     .finance-form       { display: grid; gap: 12px; }
 
+
+    /* ── Comissões do Time premium ────────────────────────────────────────── */
+    .team-commissions-hero {
+      position: relative;
+      overflow: hidden;
+      border: 1px solid #1e2345;
+      border-radius: 24px;
+      padding: 24px;
+      margin-bottom: 16px;
+      background:
+        radial-gradient(circle at 12% 20%, rgba(255, 215, 0, .11), transparent 28%),
+        radial-gradient(circle at 88% 12%, rgba(79, 195, 247, .14), transparent 34%),
+        linear-gradient(135deg, #08091a 0%, #0d1030 54%, #091827 100%);
+      box-shadow: 0 24px 90px rgba(0, 0, 0, .24);
+    }
+    .team-commissions-hero__glow {
+      position: absolute;
+      inset: auto -120px -160px auto;
+      width: 300px;
+      height: 300px;
+      border-radius: 999px;
+      background: radial-gradient(circle, rgba(255, 215, 0, .18), transparent 70%);
+      pointer-events: none;
+    }
+    .team-commissions-hero__top,
+    .team-hero-grid,
+    .team-commission-layout,
+    .team-card-head,
+    .team-list-head,
+    .team-barber-card__header,
+    .team-barber-actions,
+    .team-source-row,
+    .team-modal-source {
+      display: flex;
+    }
+    .team-commissions-hero__top {
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 16px;
+      position: relative;
+      z-index: 1;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .team-kicker {
+      font-size: 10px;
+      font-weight: 900;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: #5a6888;
+      margin-bottom: 6px;
+    }
+    .team-title {
+      margin: 0;
+      color: #e8f0fe;
+      font-size: clamp(22px, 3vw, 34px);
+      line-height: 1;
+      letter-spacing: -.04em;
+    }
+    .team-subtitle {
+      max-width: 680px;
+      margin: 10px 0 0;
+      color: #8ea1c7;
+      font-size: 13px;
+      line-height: 1.55;
+    }
+    .team-period-card {
+      display: grid;
+      gap: 7px;
+      min-width: 230px;
+      padding: 12px;
+      border: 1px solid rgba(79,195,247,.20);
+      border-radius: 16px;
+      background: rgba(7, 9, 25, .72);
+      backdrop-filter: blur(10px);
+    }
+    .team-period-card label {
+      color: #5a6888;
+      font-size: 9px;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .12em;
+    }
+    .team-period-card input,
+    .team-period-card button {
+      min-height: 34px;
+      border-radius: 10px;
+      border: 1px solid #1e2345;
+      background: #0a0c1a;
+      color: #e8f0fe;
+      font: inherit;
+      font-size: 12px;
+      padding: 0 10px;
+    }
+    .team-period-card button {
+      cursor: pointer;
+      font-weight: 900;
+      background: linear-gradient(135deg, rgba(79,195,247,.16), rgba(108,63,255,.16));
+      border-color: rgba(79,195,247,.25);
+    }
+    .team-hero-grid {
+      position: relative;
+      z-index: 1;
+      gap: 16px;
+      align-items: stretch;
+    }
+    .team-hero-main {
+      flex: 1.1;
+      min-width: 260px;
+      padding: 20px;
+      border-radius: 20px;
+      border: 1px solid rgba(255, 215, 0, .17);
+      background: rgba(255,255,255,.035);
+    }
+    .team-metric-label {
+      color: #8ea1c7;
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .1em;
+      margin-bottom: 8px;
+    }
+    .team-metric-value {
+      font-family: 'Orbitron', monospace;
+      font-size: clamp(30px, 5vw, 48px);
+      line-height: 1;
+      font-weight: 900;
+    }
+    .team-metric-value.is-warning { color: #ffd700; }
+    .team-metric-value.is-ok { color: #00e676; }
+    .team-metric-caption {
+      margin-top: 8px;
+      color: #5a6888;
+      font-size: 12px;
+    }
+    .team-payment-progress {
+      margin-top: 18px;
+      display: grid;
+      gap: 8px;
+    }
+    .team-payment-progress__bar {
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      background: #1e2345;
+    }
+    .team-payment-progress__bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+      background: linear-gradient(90deg, #00e676, #4fc3f7);
+    }
+    .team-payment-progress__text {
+      color: #8ea1c7;
+      font-size: 11px;
+    }
+    .team-hero-side {
+      flex: .9;
+      min-width: 260px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .team-mini-metric {
+      padding: 14px;
+      border-radius: 16px;
+      border: 1px solid #1e2345;
+      background: rgba(255,255,255,.03);
+    }
+    .team-mini-metric span,
+    .team-mini-metric small {
+      display: block;
+      color: #5a6888;
+      font-size: 10px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+    }
+    .team-mini-metric strong {
+      display: block;
+      margin: 6px 0 4px;
+      font-family: 'Orbitron', monospace;
+      font-size: 18px;
+      line-height: 1;
+    }
+    .team-mini-metric small {
+      text-transform: none;
+      letter-spacing: 0;
+      font-weight: 600;
+    }
+    .team-legend-strip {
+      position: relative;
+      z-index: 1;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 9px;
+      align-items: center;
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-radius: 14px;
+      border: 1px solid rgba(79,195,247,.13);
+      background: rgba(10, 12, 26, .70);
+      color: #8ea1c7;
+      font-size: 11px;
+    }
+    .team-legend-strip b { color: #e8f0fe; }
+    .team-legend-strip i { color: #ffd700; font-style: normal; }
+    .team-commission-layout {
+      align-items: flex-start;
+      gap: 16px;
+    }
+    .team-commission-main {
+      flex: 1;
+      min-width: 0;
+    }
+    .team-commission-side {
+      width: min(360px, 100%);
+      display: grid;
+      gap: 14px;
+      flex-shrink: 0;
+    }
+    .team-list-head,
+    .team-card-head {
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .team-list-head h3,
+    .team-card-head h3 {
+      margin: 0;
+      color: #e8f0fe;
+      font-size: 17px;
+    }
+    .team-list-head span,
+    .team-card-head small {
+      color: #5a6888;
+      font-size: 11px;
+      font-weight: 700;
+    }
+    .team-barber-grid-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 12px;
+    }
+    .team-barber-card,
+    .team-breakdown-card,
+    .team-sources-card,
+    .team-empty-state {
+      border: 1px solid #1e2345;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255,255,255,.035), rgba(255,255,255,.018));
+      padding: 16px;
+    }
+    .team-barber-card {
+      position: relative;
+      overflow: hidden;
+      transition: transform .16s ease, border-color .16s ease, background .16s ease;
+    }
+    .team-barber-card:hover {
+      transform: translateY(-2px);
+      border-color: rgba(79,195,247,.24);
+      background: linear-gradient(180deg, rgba(79,195,247,.06), rgba(255,255,255,.018));
+    }
+    .team-barber-card__header {
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .team-avatar {
+      width: 44px;
+      height: 44px;
+      border-radius: 14px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, rgba(255,215,0,.18), rgba(79,195,247,.18));
+      border: 1px solid rgba(255,215,0,.26);
+      color: #ffd700;
+      font-weight: 900;
+      font-size: 18px;
+    }
+    .team-barber-info { min-width: 0; flex: 1; }
+    .team-barber-info h3 {
+      margin: 0;
+      color: #e8f0fe;
+      font-size: 15px;
+    }
+    .team-barber-info p {
+      margin: 4px 0 0;
+      color: #5a6888;
+      font-size: 11px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .team-status-pill {
+      padding: 5px 10px;
+      border-radius: 999px;
+      font-size: 10px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+    .team-status-pill.is-pending {
+      background: rgba(255,215,0,.10);
+      color: #ffd700;
+      border: 1px solid rgba(255,215,0,.20);
+    }
+    .team-status-pill.is-partial {
+      background: rgba(79,195,247,.10);
+      color: #4fc3f7;
+      border: 1px solid rgba(79,195,247,.20);
+    }
+    .team-status-pill.is-paid {
+      background: rgba(0,230,118,.10);
+      color: #00e676;
+      border: 1px solid rgba(0,230,118,.20);
+    }
+    .team-barber-total {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 14px;
+      border-radius: 16px;
+      background: #0a0c1a;
+      border: 1px solid #1e2345;
+      margin-bottom: 12px;
+    }
+    .team-barber-total span {
+      color: #8ea1c7;
+      font-size: 11px;
+      font-weight: 800;
+    }
+    .team-barber-total strong {
+      color: #ffd700;
+      font-family: 'Orbitron', monospace;
+      font-size: 22px;
+      line-height: 1;
+    }
+    .team-barber-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 14px;
+    }
+    .team-barber-grid div {
+      padding: 10px;
+      border-radius: 12px;
+      background: rgba(255,255,255,.025);
+      border: 1px solid #1a2040;
+    }
+    .team-barber-grid span {
+      display: block;
+      color: #5a6888;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 4px;
+    }
+    .team-barber-grid strong {
+      color: #c0cce8;
+      font-family: 'Orbitron', monospace;
+      font-size: 13px;
+    }
+    .team-barber-grid strong.danger { color: #ff5c74; }
+    .team-barber-grid strong.success { color: #00e676; }
+    .team-barber-actions {
+      gap: 7px;
+      flex-wrap: wrap;
+    }
+    .team-barber-actions button {
+      flex: 1;
+      min-width: max-content;
+      border: 1px solid #1e2345;
+      background: rgba(255,255,255,.03);
+      color: #c0cce8;
+      border-radius: 10px;
+      padding: 8px 10px;
+      font: inherit;
+      font-size: 11px;
+      font-weight: 800;
+      cursor: pointer;
+    }
+    .team-barber-actions button:hover {
+      border-color: rgba(79,195,247,.25);
+      color: #e8f0fe;
+      background: rgba(79,195,247,.06);
+    }
+    .team-barber-actions button:disabled {
+      opacity: .45;
+      cursor: not-allowed;
+    }
+    .team-breakdown-list {
+      display: grid;
+      gap: 10px;
+    }
+    .team-breakdown-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .team-breakdown-icon,
+    .team-source-icon {
+      width: 34px;
+      height: 34px;
+      border-radius: 11px;
+      display: grid;
+      place-items: center;
+      border: 1px solid transparent;
+      flex-shrink: 0;
+    }
+    .team-breakdown-body { flex: 1; min-width: 0; }
+    .team-breakdown-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 11px;
+      color: #c0cce8;
+      margin-bottom: 5px;
+    }
+    .team-breakdown-label strong {
+      font-family: 'Orbitron', monospace;
+      color: #e8f0fe;
+      white-space: nowrap;
+    }
+    .team-breakdown-bar {
+      height: 7px;
+      border-radius: 999px;
+      background: #1e2345;
+      overflow: hidden;
+    }
+    .team-breakdown-bar span {
+      display: block;
+      height: 100%;
+      border-radius: inherit;
+    }
+    .team-source-list,
+    .team-modal-source-list {
+      display: grid;
+      gap: 8px;
+    }
+    .team-source-row {
+      align-items: center;
+      gap: 10px;
+      padding: 10px;
+      border: 1px solid #1a2040;
+      border-radius: 14px;
+      background: rgba(255,255,255,.02);
+    }
+    .team-source-main {
+      flex: 1;
+      min-width: 0;
+    }
+    .team-source-main strong,
+    .team-modal-source strong {
+      display: block;
+      color: #e8f0fe;
+      font-size: 12px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .team-source-main span,
+    .team-modal-source span {
+      display: block;
+      color: #5a6888;
+      font-size: 10px;
+      margin-top: 3px;
+    }
+    .team-source-value,
+    .team-modal-source b {
+      font-family: 'Orbitron', monospace;
+      font-size: 12px;
+      color: #00e676;
+      white-space: nowrap;
+    }
+    .team-source-value.danger,
+    .team-modal-source b.danger {
+      color: #ff5c74;
+    }
+    .team-empty-state {
+      text-align: center;
+      padding: 34px 18px;
+      color: #5a6888;
+    }
+    .team-empty-state div {
+      font-size: 34px;
+      margin-bottom: 10px;
+    }
+    .team-empty-state h3 {
+      margin: 0 0 6px;
+      color: #e8f0fe;
+    }
+    .team-empty-state p {
+      margin: 0 auto;
+      max-width: 420px;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .team-empty-line {
+      padding: 16px;
+      border: 1px dashed #1e2345;
+      border-radius: 14px;
+      color: #5a6888;
+      font-size: 12px;
+      text-align: center;
+    }
+    .team-loading {
+      min-height: 220px;
+      display: grid;
+      place-items: center;
+      color: #5a6888;
+      font-size: 12px;
+    }
+    .team-loading div {
+      font-size: 34px;
+      animation: spin 1s linear infinite;
+      margin-bottom: 8px;
+    }
+    .team-modal-summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+    }
+    .team-modal-summary div {
+      padding: 12px;
+      border: 1px solid #1e2345;
+      border-radius: 14px;
+      background: #0a0c1a;
+    }
+    .team-modal-summary span {
+      display: block;
+      color: #5a6888;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      margin-bottom: 5px;
+    }
+    .team-modal-summary strong {
+      color: #e8f0fe;
+      font-family: 'Orbitron', monospace;
+      font-size: 14px;
+    }
+    .team-modal-source {
+      align-items: center;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid #1a2040;
+      border-radius: 14px;
+      background: rgba(255,255,255,.025);
+    }
+    .team-modal-source > div:nth-child(2) {
+      flex: 1;
+      min-width: 0;
+    }
+    .team-payment-warning {
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid rgba(255,215,0,.20);
+      background: rgba(255,215,0,.08);
+      color: #ffd700;
+      font-size: 11px;
+      line-height: 1.45;
+    }
+
+    @media (max-width: 900px) {
+      .team-commission-layout,
+      .team-hero-grid {
+        flex-direction: column;
+      }
+      .team-commission-side {
+        width: 100%;
+      }
+      .team-period-card {
+        width: 100%;
+      }
+    }
+
     @media (max-width: 600px) {
       .cash-hero { padding: 16px !important; }
+      .team-commissions-hero {
+        padding: 16px;
+        border-radius: 18px;
+      }
+      .team-hero-side,
+      .team-barber-grid,
+      .team-modal-summary {
+        grid-template-columns: 1fr;
+      }
+      .team-title {
+        font-size: 24px;
+      }
+      .team-barber-actions button {
+        flex-basis: 48%;
+      }
     }
   </style>
 
