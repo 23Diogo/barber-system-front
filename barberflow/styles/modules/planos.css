@@ -1998,3 +1998,255 @@ html[data-theme="light"] .page--planos .planos-rules-ghost-btn {
     }
   }
 }
+
+
+/* ─────────────────────────────────────────────────────────────
+   Planos profissionais V2: modal stepper centralizado
+────────────────────────────────────────────────────────────── */
+.page--planos #planos-details-modal.modal-overlay.open {
+  align-items: center;
+  justify-content: center;
+  padding: 22px;
+  overflow: auto;
+}
+
+.page--planos #planos-details-modal .modal {
+  width: min(96vw, 980px) !important;
+  max-height: calc(100dvh - 44px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.page--planos #planos-details-content {
+  min-height: 0;
+}
+
+.page--planos .planos-wizard-modal--stepper {
+  max-height: calc(100dvh - 72px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.page--planos .planos-wizard-hero--compact {
+  flex: 0 0 auto;
+}
+
+.page--planos .planos-wizard-hero--compact h3 {
+  margin: 0;
+  color: #e8f0fe;
+  font-size: 20px;
+  line-height: 1.22;
+}
+
+.page--planos .planos-wizard-hero--compact p {
+  margin: 8px 0 0;
+  color: #8ea0c2;
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.page--planos .planos-wizard-stepper-form {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.page--planos .planos-wizard-topbar {
+  display: grid;
+  grid-template-columns: minmax(190px, .72fr) minmax(0, 1.28fr);
+  gap: 14px;
+  align-items: center;
+  flex: 0 0 auto;
+  padding: 12px;
+  border: 1px solid rgba(79, 195, 247, .13);
+  border-radius: 16px;
+  background: rgba(255, 255, 255, .025);
+}
+
+.page--planos .planos-wizard-topbar strong {
+  display: block;
+  color: #e8f0fe;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.page--planos .planos-wizard-topbar small {
+  display: block;
+  margin-top: 4px;
+  color: #5a6888;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.page--planos .planos-wizard-progress-nav {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.page--planos .planos-wizard-progress-chip {
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 999px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,.025);
+  color: #8ea0c2;
+  font-size: 10px;
+  font-weight: 900;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease, color .18s ease;
+}
+
+.page--planos .planos-wizard-progress-chip span {
+  width: 19px;
+  height: 19px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(79,195,247,.09);
+  border: 1px solid rgba(79,195,247,.18);
+  color: #4fc3f7;
+  font-size: 9px;
+}
+
+.page--planos .planos-wizard-progress-chip:hover,
+.page--planos .planos-wizard-progress-chip.is-active {
+  transform: translateY(-1px);
+  border-color: rgba(79,195,247,.36);
+  background: linear-gradient(135deg, rgba(79,195,247,.11), rgba(156,111,255,.06));
+  color: #e8f0fe;
+}
+
+.page--planos .planos-wizard-progress-chip.is-done span {
+  background: rgba(0,230,118,.10);
+  border-color: rgba(0,230,118,.22);
+  color: #00e676;
+}
+
+.page--planos .planos-wizard-step-viewport {
+  min-height: 0;
+  max-height: min(58vh, 560px);
+  overflow: auto;
+  padding-right: 4px;
+  scrollbar-width: thin;
+}
+
+.page--planos .planos-wizard-step-viewport::-webkit-scrollbar {
+  width: 8px;
+}
+
+.page--planos .planos-wizard-step-viewport::-webkit-scrollbar-thumb {
+  background: rgba(79,195,247,.28);
+  border-radius: 999px;
+}
+
+.page--planos .planos-wizard-step[hidden] {
+  display: none !important;
+}
+
+.page--planos .planos-wizard-step.is-active {
+  min-height: 360px;
+  display: grid;
+  align-content: start;
+  gap: 12px;
+}
+
+.page--planos .planos-type-grid--stepper {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.page--planos .planos-step-insight {
+  padding: 13px 14px;
+  border-radius: 14px;
+  border: 1px dashed rgba(79,195,247,.24);
+  background: rgba(79,195,247,.045);
+  color: #8ea0c2;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.page--planos .planos-step-insight strong {
+  color: #e8f0fe;
+}
+
+.page--planos .planos-step-insight--success {
+  border-color: rgba(0,230,118,.24);
+  background: rgba(0,230,118,.055);
+}
+
+.page--planos .planos-wizard-actions--stepper {
+  flex: 0 0 auto;
+  margin-top: 0 !important;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255,255,255,.07);
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.page--planos .planos-wizard-actions--stepper [hidden] {
+  display: none !important;
+}
+
+.page--planos .planos-wizard-prev-btn {
+  min-width: 140px;
+}
+
+.page--planos .planos-wizard-next-btn,
+.page--planos .planos-wizard-finish-btn {
+  min-width: 180px;
+}
+
+@media (max-width: 980px) {
+  .page--planos .planos-wizard-topbar {
+    grid-template-columns: 1fr;
+  }
+
+  .page--planos .planos-wizard-progress-nav,
+  .page--planos .planos-type-grid--stepper {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 680px) {
+  .page--planos #planos-details-modal.modal-overlay.open {
+    align-items: stretch;
+    padding: 10px;
+  }
+
+  .page--planos #planos-details-modal .modal {
+    width: 100% !important;
+    max-height: calc(100dvh - 20px);
+  }
+
+  .page--planos .planos-wizard-modal--stepper {
+    max-height: calc(100dvh - 36px);
+  }
+
+  .page--planos .planos-wizard-step-viewport {
+    max-height: calc(100dvh - 360px);
+  }
+
+  .page--planos .planos-wizard-progress-nav,
+  .page--planos .planos-type-grid--stepper {
+    grid-template-columns: 1fr;
+  }
+
+  .page--planos .planos-wizard-actions--stepper {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .page--planos .planos-wizard-actions--stepper .btn-save,
+  .page--planos .planos-wizard-actions--stepper .btn-cancel {
+    width: 100%;
+  }
+}
