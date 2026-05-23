@@ -17,6 +17,7 @@ const financeiroState = {
     periodStart: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     periodEnd: new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0],
     selectedBarberId: null,
+    suggestedPeriod: null,
     isLoading: false,
   },
   activeTab:    'caixa',   // caixa | contas | transacoes | comissoes
@@ -116,6 +117,34 @@ const getMonthRangeFromInput = (value) => {
 const getMonthValueFromPeriod = (periodStart) => {
   if (!periodStart) return getMonthRangeFromInput().monthValue;
   return String(periodStart).slice(0, 7);
+};
+
+const getMonthLabelFromPeriod = (periodStart) => {
+  const raw = String(periodStart || '').slice(0, 7);
+  const match = raw.match(/^(\d{4})-(\d{2})$/);
+  if (!match) return 'competência anterior';
+
+  const year = Number(match[1]);
+  const monthIndex = Number(match[2]) - 1;
+  const label = new Date(year, monthIndex, 1)
+    .toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+};
+
+const hasTeamCommissionData = (summary) => {
+  const totals = summary?.totals || {};
+  const items = Array.isArray(summary?.items) ? summary.items : [];
+  return items.length > 0 || Number(totals.totalGeneratedCents || 0) > 0 || Number(totals.pendingCents || 0) > 0;
+};
+
+const getPreviousMonthRange = (periodStart, offset = 1) => {
+  const monthValue = getMonthValueFromPeriod(periodStart);
+  const [yearRaw, monthRaw] = monthValue.split('-');
+  const baseYear = Number(yearRaw) || new Date().getFullYear();
+  const baseMonthIndex = (Number(monthRaw) || (new Date().getMonth() + 1)) - 1;
+  const date = new Date(baseYear, baseMonthIndex - offset, 1);
+  return getMonthRangeFromInput(`${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`);
 };
 
 async function safeApiFetch(url, fallback) {
@@ -558,36 +587,84 @@ function renderMovementsList() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 function getMetrics() {
-  const revenue    = financeiroState.transactions.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
-  const expenses   = financeiroState.transactions.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
-  const commissions = financeiroState.commissions.reduce((s, c) => s + Number(c.commission_amount || 0), 0);
-  const profit  = revenue - expenses - commissions;
-  const margin  = revenue > 0 ? Math.round((profit / revenue) * 100) : 0;
-  return { revenue, expenses, profit, commissions, margin };
+  const revenue = financeiroState.transactions
+    .filter(t => t.type === 'income')
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+  const paidExpenses = financeiroState.transactions
+    .filter(t => t.type === 'expense')
+    .reduce((s, t) => s + Number(t.amount || 0), 0);
+
+  const openBills = financeiroState.bills
+    .filter(b => !['paid', 'cancelled'].includes(String(b.status || '').toLowerCase()));
+
+  const openBillsAmount = openBills
+    .reduce((s, b) => s + Number(b.amount || 0), 0);
+
+  const overdueBillsAmount = openBills
+    .filter(b => b.due_date && new Date(`${b.due_date}T23:59:59`) < new Date())
+    .reduce((s, b) => s + Number(b.amount || 0), 0);
+
+  const legacyCommissions = financeiroState.commissions
+    .reduce((s, c) => s + Number(c.commission_amount || 0), 0);
+
+  const teamCommissionGenerated = centsToAmount(
+    financeiroState.teamCommissions.summary?.totals?.totalGeneratedCents || 0
+  );
+
+  const commissions = Math.max(legacyCommissions, teamCommissionGenerated);
+  const realizedProfit = revenue - paidExpenses - commissions;
+  const projectedProfit = revenue - paidExpenses - openBillsAmount - commissions;
+  const margin = revenue > 0 ? Math.round((realizedProfit / revenue) * 100) : 0;
+
+  return {
+    revenue,
+    expenses: paidExpenses,
+    openBillsAmount,
+    overdueBillsAmount,
+    openBillsCount: openBills.length,
+    profit: realizedProfit,
+    projectedProfit,
+    commissions,
+    margin,
+  };
 }
 
 function renderMetricsBar() {
   const m = getMetrics();
 
   const cards = [
-    { label: 'Receita do mês',  value: m.revenue,     color: '#4fc3f7', sub: null },
-    { label: 'Despesas',        value: m.expenses,    color: '#ff1744', sub: null },
-    { label: 'Lucro líquido',   value: m.profit,      color: '#00e676', sub: `Margem ${m.margin}%` },
-    { label: 'Comissões',       value: m.commissions, color: '#ffd700', sub: null },
+    { label: 'Receita realizada',  value: m.revenue,          color: '#4fc3f7', sub: 'Entradas registradas' },
+    { label: 'Despesas pagas',     value: m.expenses,         color: '#ff1744', sub: 'Já saiu do caixa' },
+    { label: 'Contas em aberto',   value: m.openBillsAmount,  color: '#f97316', sub: `${m.openBillsCount} pendente(s)` },
+    { label: 'Resultado previsto', value: m.projectedProfit,  color: m.projectedProfit >= 0 ? '#00e676' : '#ff5c74', sub: `Realizado ${fmtCompact(m.profit)}` },
+    { label: 'Comissões',          value: m.commissions,      color: '#ffd700', sub: 'Time e Clube' },
   ];
 
-  // Mini bar chart de receita vs despesa
-  const maxM = Math.max(m.revenue, m.expenses, 1);
-  const revW  = Math.round((m.revenue  / maxM) * 100);
-  const expW  = Math.round((m.expenses / maxM) * 100);
+  // Mini bar chart de receita vs obrigações
+  const totalObligations = m.expenses + m.openBillsAmount + m.commissions;
+  const maxM = Math.max(m.revenue, totalObligations, 1);
+  const revW = Math.round((m.revenue / maxM) * 100);
+  const obligationsW = Math.round((totalObligations / maxM) * 100);
 
   return `
     <div style="
       background:linear-gradient(135deg,#08091a,#0d1030);
       border:1px solid #1e2345;border-radius:20px;padding:20px;margin-bottom:16px;
     ">
-      <div style="font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:#3a4568;margin-bottom:16px;">
-        VISÃO DO MÊS — ${new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:16px;">
+        <div>
+          <div style="font-size:10px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;color:#3a4568;margin-bottom:6px;">
+            VISÃO FINANCEIRA — ${new Date().toLocaleDateString('pt-BR',{month:'long',year:'numeric'}).toUpperCase()}
+          </div>
+          <div style="font-size:11px;color:#5a6888;line-height:1.45;">
+            Despesas pagas entram quando viram transação. Contas em aberto aparecem como previsão para não esconder o compromisso financeiro.
+          </div>
+        </div>
+        ${m.overdueBillsAmount > 0 ? `
+          <div style="padding:8px 12px;border-radius:999px;background:rgba(255,23,68,.1);border:1px solid rgba(255,23,68,.24);color:#ff5c74;font-size:11px;font-weight:800;">
+            ${fmt(m.overdueBillsAmount)} vencido(s)
+          </div>` : ''}
       </div>
 
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:16px;">
@@ -606,26 +683,26 @@ function renderMetricsBar() {
             <div style="font-size:20px;font-weight:900;color:${c.color};font-family:'Orbitron',monospace;line-height:1;">
               ${fmtCompact(c.value)}
             </div>
-            ${c.sub ? `<div style="font-size:10px;color:${c.color};margin-top:4px;font-weight:600;">${esc(c.sub)}</div>` : ''}
+            ${c.sub ? `<div style="font-size:10px;color:#5a6888;margin-top:5px;font-weight:600;">${esc(c.sub)}</div>` : ''}
           </div>
         `).join('')}
       </div>
 
-      <!-- Barra comparativa receita vs despesa -->
+      <!-- Barra comparativa receita vs obrigações -->
       <div style="display:grid;gap:6px;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div style="font-size:10px;color:#5a6888;width:60px;text-align:right;">Receita</div>
+          <div style="font-size:10px;color:#5a6888;width:92px;text-align:right;">Receita</div>
           <div style="flex:1;height:8px;background:#1e2345;border-radius:999px;overflow:hidden;">
             <div style="height:100%;width:${revW}%;background:linear-gradient(90deg,#4fc3f7,#00e676);border-radius:999px;transition:width .8s ease;"></div>
           </div>
-          <div style="font-size:10px;color:#4fc3f7;width:60px;">${fmtCompact(m.revenue)}</div>
+          <div style="font-size:10px;color:#4fc3f7;width:72px;">${fmtCompact(m.revenue)}</div>
         </div>
         <div style="display:flex;align-items:center;gap:8px;">
-          <div style="font-size:10px;color:#5a6888;width:60px;text-align:right;">Despesas</div>
+          <div style="font-size:10px;color:#5a6888;width:92px;text-align:right;">Obrigações</div>
           <div style="flex:1;height:8px;background:#1e2345;border-radius:999px;overflow:hidden;">
-            <div style="height:100%;width:${expW}%;background:linear-gradient(90deg,#ff1744,#f97316);border-radius:999px;transition:width .8s ease;"></div>
+            <div style="height:100%;width:${obligationsW}%;background:linear-gradient(90deg,#ff1744,#f97316,#ffd700);border-radius:999px;transition:width .8s ease;"></div>
           </div>
-          <div style="font-size:10px;color:#ff1744;width:60px;">${fmtCompact(m.expenses)}</div>
+          <div style="font-size:10px;color:#f97316;width:72px;">${fmtCompact(totalObligations)}</div>
         </div>
       </div>
     </div>
@@ -934,6 +1011,49 @@ function renderTeamCommissionBarberCard(row) {
   `;
 }
 
+function renderTeamPeriodSuggestion() {
+  const suggestion = financeiroState.teamCommissions.suggestedPeriod;
+  if (!suggestion) return '';
+
+  return `
+    <div class="team-smart-suggestion">
+      <div>
+        <span>Competência encontrada</span>
+        <strong>${esc(getMonthLabelFromPeriod(suggestion.periodStart))}</strong>
+        <small>${esc(suggestion.itemsCount || 0)} profissional(is) · ${fmtCents(suggestion.pendingCents || suggestion.totalGeneratedCents || 0)} pendente</small>
+      </div>
+      <button type="button"
+        data-team-jump-period="${esc(suggestion.monthValue)}"
+        data-period-start="${esc(suggestion.periodStart)}"
+        data-period-end="${esc(suggestion.periodEnd)}">
+        Ver ${esc(getMonthLabelFromPeriod(suggestion.periodStart))}
+      </button>
+    </div>
+  `;
+}
+
+function renderTeamCommissionSmartBanner() {
+  const items = getTeamCommissionSummaryItems();
+  const suggestion = financeiroState.teamCommissions.suggestedPeriod;
+  if (items.length || !suggestion) return '';
+
+  return `
+    <div class="team-smart-banner">
+      <div class="team-smart-banner__icon">🧭</div>
+      <div class="team-smart-banner__body">
+        <strong>Este mês ainda não tem comissão, mas encontrei o último fechamento com valores.</strong>
+        <span>Você pode abrir ${esc(getMonthLabelFromPeriod(suggestion.periodStart))} para conferir barbeiros, origens e pendências.</span>
+      </div>
+      <button type="button"
+        data-team-jump-period="${esc(suggestion.monthValue)}"
+        data-period-start="${esc(suggestion.periodStart)}"
+        data-period-end="${esc(suggestion.periodEnd)}">
+        Abrir período encontrado
+      </button>
+    </div>
+  `;
+}
+
 function renderTeamCommissionList() {
   const items = getTeamCommissionSummaryItems();
 
@@ -943,6 +1063,7 @@ function renderTeamCommissionList() {
         <div>🧾</div>
         <h3>Nenhuma comissão nesta competência</h3>
         <p>Quando serviços, Clube, bonificações ou vales entrarem no período, o resumo do time aparecerá aqui.</p>
+        ${renderTeamPeriodSuggestion()}
       </div>
     `;
   }
@@ -1025,6 +1146,7 @@ function renderTeamCommissionsSection() {
 
   return `
     ${renderTeamCommissionHero()}
+    ${renderTeamCommissionSmartBanner()}
 
     <div class="team-commission-layout">
       <div class="team-commission-main">
@@ -1522,6 +1644,9 @@ async function loadFinanceiroData() {
       : { register: null, movements: [], summary: null };
     financeiroState.teamCommissions.summary = teamSummary || { items: [], totals: {} };
     financeiroState.teamCommissions.sources = Array.isArray(teamSources?.items) ? teamSources.items : [];
+    financeiroState.teamCommissions.suggestedPeriod = hasTeamCommissionData(financeiroState.teamCommissions.summary)
+      ? null
+      : await findLatestTeamCommissionPeriod();
     financeiroState.isLoaded = true;
   } catch (error) {
     console.error('Erro ao carregar financeiro:', error);
@@ -1546,6 +1671,32 @@ async function loadCashForDate(date) {
   bindCashEvents();
 }
 
+async function findLatestTeamCommissionPeriod(maxMonthsBack = 12) {
+  const tc = financeiroState.teamCommissions;
+
+  for (let offset = 1; offset <= maxMonthsBack; offset += 1) {
+    const range = getPreviousMonthRange(tc.periodStart, offset);
+    const query = new URLSearchParams({
+      periodStart: range.periodStart,
+      periodEnd: range.periodEnd,
+    }).toString();
+
+    const summary = await safeApiFetch(`/api/team-commissions/summary?${query}`, null);
+    if (hasTeamCommissionData(summary)) {
+      const totals = summary?.totals || {};
+      const items = Array.isArray(summary?.items) ? summary.items : [];
+      return {
+        ...range,
+        itemsCount: items.length,
+        totalGeneratedCents: Number(totals.totalGeneratedCents || 0),
+        pendingCents: Number(totals.pendingCents || 0),
+      };
+    }
+  }
+
+  return null;
+}
+
 async function loadTeamCommissionsData({ rerender = false } = {}) {
   const tc = financeiroState.teamCommissions;
   const query = buildTeamQuery();
@@ -1568,6 +1719,7 @@ async function loadTeamCommissionsData({ rerender = false } = {}) {
     tc.sources = Array.isArray(sources?.items) ? sources.items : [];
     tc.adjustments = Array.isArray(adjustments?.items) ? adjustments.items : [];
     tc.payments = Array.isArray(payments?.items) ? payments.items : [];
+    tc.suggestedPeriod = hasTeamCommissionData(tc.summary) ? null : await findLatestTeamCommissionPeriod();
   } catch (error) {
     console.error('Erro ao carregar comissões do time:', error);
     tc.summary = { items: [], totals: {} };
@@ -1584,6 +1736,21 @@ async function handleTeamPeriodChange() {
 
   financeiroState.teamCommissions.periodStart = range.periodStart;
   financeiroState.teamCommissions.periodEnd = range.periodEnd;
+  financeiroState.teamCommissions.suggestedPeriod = null;
+
+  await loadTeamCommissionsData({ rerender: true });
+}
+
+async function handleTeamJumpToSuggestedPeriod(event) {
+  const btn = event.currentTarget;
+  const periodStart = btn.dataset.periodStart;
+  const periodEnd = btn.dataset.periodEnd;
+
+  if (!periodStart || !periodEnd) return;
+
+  financeiroState.teamCommissions.periodStart = periodStart;
+  financeiroState.teamCommissions.periodEnd = periodEnd;
+  financeiroState.teamCommissions.suggestedPeriod = null;
 
   await loadTeamCommissionsData({ rerender: true });
 }
@@ -1890,6 +2057,10 @@ function bindTabEvents() {
   document.querySelectorAll('[data-fin-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
       financeiroState.activeTab = btn.dataset.finTab;
+      if (financeiroState.activeTab === 'comissoes') {
+        loadTeamCommissionsData({ rerender: true });
+        return;
+      }
       rerenderFinanceiro();
     });
   });
@@ -1917,6 +2088,10 @@ function bindCashEvents() {
 function bindTeamCommissionEvents() {
   document.getElementById('team-commissions-load-month')?.addEventListener('click', handleTeamPeriodChange);
   document.getElementById('team-commissions-month')?.addEventListener('change', handleTeamPeriodChange);
+
+  document.querySelectorAll('[data-team-jump-period]').forEach((btn) => {
+    btn.addEventListener('click', handleTeamJumpToSuggestedPeriod);
+  });
 
   document.querySelectorAll('[data-team-action]').forEach((btn) => {
     btn.addEventListener('click', () => {
