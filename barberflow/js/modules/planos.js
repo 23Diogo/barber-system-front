@@ -1264,6 +1264,62 @@ function getClubSettingsOrDefault() {
   };
 }
 
+function getPrimaryServicePoint() {
+  const active = planosState.clubServicePoints.find((item) => item.is_active) || planosState.clubServicePoints[0] || null;
+
+  return {
+    name: active?.service_name || 'Corte simples',
+    points: Number(active?.points ?? 1),
+  };
+}
+
+function getPrimaryPlanRule() {
+  const active = planosState.clubPlanRules.find((item) => item.is_active) || planosState.clubPlanRules[0] || null;
+
+  return {
+    name: active?.plan_name || 'Plano padrão',
+    multiplier: Number(active?.point_multiplier_pct ?? getClubSettingsOrDefault().default_plan_point_multiplier_pct ?? 100),
+    model: active?.commission_model || 'points_pool',
+  };
+}
+
+function getRulesGeneratedPoints() {
+  const servicePoint = getPrimaryServicePoint();
+  const planRule = getPrimaryPlanRule();
+
+  if (planRule.model === 'none') return 0;
+
+  return Number((servicePoint.points * (planRule.multiplier / 100)).toFixed(2));
+}
+
+function getRulesPresetMeta(preset) {
+  const presets = {
+    balanced: {
+      label: 'Equilíbrio clássico',
+      description: '50% barbearia e 50% time. Bom ponto de partida para clubes recorrentes.',
+      barbershop: 50,
+      team: 50,
+      defaultMultiplier: 100,
+    },
+    growth: {
+      label: 'Time motivado',
+      description: '40% barbearia e 60% time. Bom para incentivar adesão dos barbeiros ao Clube.',
+      barbershop: 40,
+      team: 60,
+      defaultMultiplier: 100,
+    },
+    margin: {
+      label: 'Margem protegida',
+      description: '60% barbearia e 40% time. Bom para planos econômicos ou mensalidades agressivas.',
+      barbershop: 60,
+      team: 40,
+      defaultMultiplier: 90,
+    },
+  };
+
+  return presets[preset] || presets.balanced;
+}
+
 function renderRulesFeedback() {
   if (!planosState.rulesFeedback) return '';
 
@@ -1274,57 +1330,162 @@ function renderRulesFeedback() {
   `;
 }
 
+function renderRulesCockpit() {
+  const settings = getClubSettingsOrDefault();
+  const servicePoint = getPrimaryServicePoint();
+  const planRule = getPrimaryPlanRule();
+  const generatedPoints = getRulesGeneratedPoints();
+
+  return `
+    <div class="planos-rules-cockpit">
+      <div class="planos-rules-cockpit-main">
+        <div class="planos-club-eyebrow">Central inteligente de regras</div>
+        <h3>Configure uma vez. O BarberFlow protege o caixa e explica a comissão.</h3>
+        <p>
+          Esta tela controla como o dinheiro do Clube é dividido, quanto cada serviço vale e se algum plano deve gerar menos pontos.
+        </p>
+      </div>
+
+      <div class="planos-rules-cockpit-card">
+        <span>Regra atual</span>
+        <strong>${escapeHtml(formatPercent(settings.barbershop_share_pct))} barbearia · ${escapeHtml(formatPercent(settings.team_share_pct))} time</strong>
+        <small>${escapeHtml(servicePoint.name)} = ${escapeHtml(formatNumber(servicePoint.points, 2))} pt · ${escapeHtml(planRule.name)} = ${escapeHtml(formatNumber(planRule.multiplier, 2))}%</small>
+      </div>
+
+      <div class="planos-rules-cockpit-card planos-rules-cockpit-card--result">
+        <span>Exemplo prático</span>
+        <strong>${escapeHtml(formatNumber(generatedPoints, 2))} ponto(s)</strong>
+        <small>${escapeHtml(servicePoint.name)} × fator do plano</small>
+      </div>
+    </div>
+  `;
+}
+
+function renderRulesGuide() {
+  const settings = getClubSettingsOrDefault();
+  const servicePoint = getPrimaryServicePoint();
+  const planRule = getPrimaryPlanRule();
+  const generatedPoints = getRulesGeneratedPoints();
+
+  return `
+    <div class="planos-rules-guide">
+      <div class="planos-rules-guide-card">
+        <span>1</span>
+        <small>Dinheiro</small>
+        <strong>R$ 100 vira ${escapeHtml(formatCurrencyFromReais(settings.team_share_pct))} para o time</strong>
+      </div>
+      <div class="planos-rules-guide-card">
+        <span>2</span>
+        <small>Serviço</small>
+        <strong>${escapeHtml(servicePoint.name)} vale ${escapeHtml(formatNumber(servicePoint.points, 2))} pt</strong>
+      </div>
+      <div class="planos-rules-guide-card">
+        <span>3</span>
+        <small>Plano</small>
+        <strong>${escapeHtml(planRule.name)} aplica ${escapeHtml(formatNumber(planRule.multiplier, 2))}%</strong>
+      </div>
+      <div class="planos-rules-guide-card planos-rules-guide-card--glow">
+        <span>✓</span>
+        <small>Resultado</small>
+        <strong>Atendimento gera ${escapeHtml(formatNumber(generatedPoints, 2))} pt</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderRulesPresetCards() {
+  return `
+    <div class="planos-rules-presets">
+      ${['balanced', 'growth', 'margin'].map((preset) => {
+        const meta = getRulesPresetMeta(preset);
+        return `
+          <button type="button" class="planos-rules-preset" data-rules-preset="${escapeHtml(preset)}">
+            <span>${escapeHtml(meta.label)}</span>
+            <strong>${escapeHtml(`${meta.barbershop}% / ${meta.team}%`)}</strong>
+            <small>${escapeHtml(meta.description)}</small>
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function renderClubRulesRevenueSplit() {
   const settings = getClubSettingsOrDefault();
 
   return `
-    <div class="planos-rules-panel">
-      <div class="planos-rules-panel-head">
+    <div class="planos-rules-panel planos-rules-panel--split">
+      <div class="planos-rules-panel-head planos-rules-panel-head--premium">
         <div>
-          <div class="planos-section-title">Divisão da receita</div>
-          <h3>De cada R$ 100, quanto fica para cada lado?</h3>
-          <p>Essa regra define o pool mensal usado no fechamento das comissões do Clube.</p>
+          <div class="planos-section-title">Etapa 1 · Divisão da receita</div>
+          <h3>De cada R$ 100 recebidos no Clube, quem fica com quanto?</h3>
+          <p>Essa é a regra-mãe. Ela define quanto fica para a barbearia e quanto vira o pool de comissão do time.</p>
         </div>
-        <div class="planos-rules-split-preview">
-          <span>Barbearia<br><strong>${escapeHtml(formatCurrencyFromReais(Number(settings.barbershop_share_pct || 0)))}</strong></span>
-          <span>Time<br><strong>${escapeHtml(formatCurrencyFromReais(Number(settings.team_share_pct || 0)))}</strong></span>
+
+        <div class="planos-rules-money-flow" aria-label="Prévia da divisão de R$ 100">
+          <div>
+            <small>Entrada</small>
+            <strong>R$ 100,00</strong>
+          </div>
+          <div>
+            <small>Barbearia</small>
+            <strong id="planos-rules-barbershop-result">${escapeHtml(formatCurrencyFromReais(Number(settings.barbershop_share_pct || 0)))}</strong>
+          </div>
+          <div>
+            <small>Time</small>
+            <strong id="planos-rules-team-result">${escapeHtml(formatCurrencyFromReais(Number(settings.team_share_pct || 0)))}</strong>
+          </div>
         </div>
       </div>
 
+      ${renderRulesPresetCards()}
+
       <form id="planos-rules-settings-form" class="planos-rules-form">
-        <div class="planos-form-grid">
-          <div>
+        <div class="planos-rules-form-grid">
+          <div class="planos-rules-input-shell">
             <div class="color-section-label">Parte da barbearia (%)</div>
-            <input class="modal-input" name="barbershopSharePct" type="number" min="0" max="100" step="0.01" value="${escapeHtml(settings.barbershop_share_pct)}" />
+            <input id="planos-rules-barbershop-share" class="modal-input" name="barbershopSharePct" type="number" min="0" max="100" step="0.01" value="${escapeHtml(settings.barbershop_share_pct)}" />
+            <small>Fica no caixa da barbearia.</small>
           </div>
 
-          <div>
+          <div class="planos-rules-input-shell">
             <div class="color-section-label">Parte do time (%)</div>
-            <input class="modal-input" name="teamSharePct" type="number" min="0" max="100" step="0.01" value="${escapeHtml(settings.team_share_pct)}" />
+            <input id="planos-rules-team-share" class="modal-input" name="teamSharePct" type="number" min="0" max="100" step="0.01" value="${escapeHtml(settings.team_share_pct)}" />
+            <small>Será dividido entre barbeiros por pontos.</small>
           </div>
 
-          <div>
+          <div class="planos-rules-input-shell">
             <div class="color-section-label">Fator padrão de novos planos (%)</div>
-            <input class="modal-input" name="defaultPlanMultiplierPct" type="number" min="0" step="0.01" value="${escapeHtml(settings.default_plan_point_multiplier_pct)}" />
+            <input id="planos-rules-default-multiplier" class="modal-input" name="defaultPlanMultiplierPct" type="number" min="0" step="0.01" value="${escapeHtml(settings.default_plan_point_multiplier_pct)}" />
+            <small>Usado como sugestão quando um novo plano for criado.</small>
           </div>
 
-          <label class="planos-rules-check">
-            <input type="checkbox" name="deductGatewayFees" ${settings.deduct_gateway_fees ? 'checked' : ''} />
-            <span>Descontar taxas do gateway antes do rateio</span>
-          </label>
+          <div class="planos-rules-switches">
+            <label class="planos-rules-check planos-rules-check--switch">
+              <input type="checkbox" name="deductGatewayFees" ${settings.deduct_gateway_fees ? 'checked' : ''} />
+              <span>
+                <strong>Descontar taxas antes do rateio</strong>
+                <small>Mais fiel ao lucro real do Clube.</small>
+              </span>
+            </label>
 
-          <label class="planos-rules-check">
-            <input type="checkbox" name="allowManualAdjustments" ${settings.allow_manual_adjustments ? 'checked' : ''} />
-            <span>Permitir ajustes manuais no fechamento</span>
-          </label>
+            <label class="planos-rules-check planos-rules-check--switch">
+              <input type="checkbox" name="allowManualAdjustments" ${settings.allow_manual_adjustments ? 'checked' : ''} />
+              <span>
+                <strong>Permitir ajustes manuais no fechamento</strong>
+                <small>Útil para bônus, correções e combinados internos.</small>
+              </span>
+            </label>
+          </div>
         </div>
 
-        <div class="planos-rules-explain">
-          Exemplo: se entrarem R$ 10.000 no Clube e a regra for 50% / 50%, R$ 5.000 ficam para a barbearia e R$ 5.000 viram o valor a ser dividido entre os barbeiros por pontos.
+        <div class="planos-rules-explain planos-rules-explain--story">
+          <strong>Como o dono deve ler isso:</strong> se entrarem R$ 10.000 e a regra for 50% / 50%, R$ 5.000 ficam para a barbearia e R$ 5.000 viram o valor que será dividido entre os barbeiros conforme os pontos realizados.
         </div>
 
-        <div class="modal-buttons" style="margin-top:12px;">
-          <button type="submit" class="btn-save">Salvar divisão</button>
+        <div class="planos-rules-action-row">
+          <span>Alterou algum percentual? Salve para aplicar nos próximos fechamentos.</span>
+          <button type="submit" class="btn-save planos-rules-save-btn">Salvar divisão</button>
         </div>
       </form>
     </div>
@@ -1335,7 +1496,7 @@ function renderClubRulesServicePoints() {
   if (!planosState.clubServicePoints.length) {
     return `
       <div class="planos-rules-panel">
-        <div class="planos-section-title">Pontos por serviço</div>
+        <div class="planos-section-title">Etapa 2 · Pontos por serviço</div>
         <div class="planos-modal-info-row">
           Nenhum serviço encontrado para parametrizar pontos.
         </div>
@@ -1344,38 +1505,57 @@ function renderClubRulesServicePoints() {
   }
 
   return `
-    <div class="planos-rules-panel">
+    <div class="planos-rules-panel planos-rules-panel--services">
       <div class="planos-rules-panel-head">
         <div>
-          <div class="planos-section-title">Pontos por serviço</div>
+          <div class="planos-section-title">Etapa 2 · Pontos por serviço</div>
           <h3>Quanto cada serviço vale para o barbeiro?</h3>
-          <p>O ponto nasce aqui. Um corte pode valer 1,00 ponto, uma barba 0,70 e um serviço maior pode valer mais.</p>
+          <p>Serviços mais demorados ou mais valiosos podem gerar mais pontos. Só atendimento finalizado entra no cálculo.</p>
+        </div>
+        <div class="planos-rules-mini-legend">
+          <span>30 min ≈ 1 ponto</span>
+          <span>45 min ≈ 1,5 ponto</span>
+          <span>60 min ≈ 2 pontos</span>
         </div>
       </div>
 
-      <div class="planos-rules-list">
-        ${planosState.clubServicePoints.map((item) => `
-          <div class="planos-rules-row" data-service-rule-row="${escapeHtml(item.id)}">
-            <div class="planos-rules-row-main">
-              <div class="planos-row-title">${escapeHtml(item.service_name || 'Serviço')}</div>
-              <div class="planos-row-sub">
-                ${escapeHtml(item.service_duration_min ? `${item.service_duration_min} min` : 'Duração não informada')}
-                · ${escapeHtml(item.calculation_hint || 'Pontos definidos manualmente')}
+      <div class="planos-rules-list planos-rules-list--services">
+        ${planosState.clubServicePoints.map((item) => {
+          const points = Number(item.points || 0);
+          return `
+            <div class="planos-rules-row planos-rules-row--service" data-service-rule-row="${escapeHtml(item.id)}">
+              <div class="planos-rules-row-main">
+                <div class="planos-rules-service-name">
+                  <span class="planos-rules-service-dot"></span>
+                  <div>
+                    <div class="planos-row-title">${escapeHtml(item.service_name || 'Serviço')}</div>
+                    <div class="planos-row-sub">
+                      ${escapeHtml(item.service_duration_min ? `${item.service_duration_min} min` : 'Duração não informada')}
+                      · ${escapeHtml(item.calculation_hint || 'Pontos definidos manualmente')}
+                    </div>
+                  </div>
+                </div>
+                <div class="planos-rules-formula-line">
+                  Hoje este serviço gera <strong>${escapeHtml(formatNumber(points, 2))} ponto(s)</strong> antes do fator do plano.
+                </div>
+              </div>
+
+              <div class="planos-rules-row-controls planos-rules-row-controls--premium">
+                <label class="planos-rules-field-mini">
+                  <small>Pontos</small>
+                  <input class="modal-input planos-rules-number" data-service-points-input="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(item.points)}" />
+                </label>
+                <label class="planos-rules-mini-check">
+                  <input type="checkbox" data-service-active-input="${escapeHtml(item.id)}" ${item.is_active ? 'checked' : ''} />
+                  <span>Ativo</span>
+                </label>
+                <button type="button" class="planos-action-btn planos-rule-service-save" data-service-point-id="${escapeHtml(item.id)}">
+                  Salvar
+                </button>
               </div>
             </div>
-
-            <div class="planos-rules-row-controls">
-              <input class="modal-input planos-rules-number" data-service-points-input="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(item.points)}" />
-              <label class="planos-rules-mini-check">
-                <input type="checkbox" data-service-active-input="${escapeHtml(item.id)}" ${item.is_active ? 'checked' : ''} />
-                <span>Ativo</span>
-              </label>
-              <button type="button" class="planos-action-btn planos-rule-service-save" data-service-point-id="${escapeHtml(item.id)}">
-                Salvar
-              </button>
-            </div>
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
     </div>
   `;
@@ -1385,7 +1565,7 @@ function renderClubRulesPlanRules() {
   if (!planosState.clubPlanRules.length) {
     return `
       <div class="planos-rules-panel">
-        <div class="planos-section-title">Fator por plano</div>
+        <div class="planos-section-title">Etapa 3 · Peso de comissão por plano</div>
         <div class="planos-modal-info-row">
           Nenhum plano encontrado para parametrizar fator.
         </div>
@@ -1393,47 +1573,69 @@ function renderClubRulesPlanRules() {
     `;
   }
 
+  const servicePoint = getPrimaryServicePoint();
+
   return `
-    <div class="planos-rules-panel">
+    <div class="planos-rules-panel planos-rules-panel--plans">
       <div class="planos-rules-panel-head">
         <div>
-          <div class="planos-section-title">Fator por plano</div>
-          <h3>Planos baratos podem gerar menos pontos.</h3>
-          <p>Use 100% para plano normal, 80% para plano econômico, 70% para promocional e 0% para cortesia.</p>
+          <div class="planos-section-title">Etapa 3 · Peso de comissão por plano</div>
+          <h3>Defina se cada plano gera pontuação cheia, reduzida ou nenhuma comissão.</h3>
+          <p>Use 100% para plano normal, 80% para econômico, 70% para promocional e 0% para cortesia. Isso protege a margem sem esconder a regra do barbeiro.</p>
+        </div>
+        <div class="planos-rules-factor-strip">
+          <span><strong>100%</strong> normal</span>
+          <span><strong>80%</strong> econômico</span>
+          <span><strong>70%</strong> promocional</span>
+          <span><strong>0%</strong> cortesia</span>
         </div>
       </div>
 
-      <div class="planos-rules-list">
-        ${planosState.clubPlanRules.map((item) => `
-          <div class="planos-rules-row" data-plan-rule-row="${escapeHtml(item.id)}">
-            <div class="planos-rules-row-main">
-              <div class="planos-row-title">${escapeHtml(item.plan_name || 'Plano')}</div>
-              <div class="planos-row-sub">
-                ${escapeHtml(item.commission_model === 'none' ? 'Sem comissão por pontos' : 'Rateio por pontos')}
-                · ${escapeHtml(item.notes || 'Ajuste o fator conforme a estratégia do plano')}
+      <div class="planos-rules-list planos-rules-list--plans">
+        ${planosState.clubPlanRules.map((item) => {
+          const multiplier = Number(item.point_multiplier_pct || 0);
+          const generated = item.commission_model === 'none' ? 0 : Number((servicePoint.points * (multiplier / 100)).toFixed(2));
+
+          return `
+            <div class="planos-rules-row planos-rules-row--plan" data-plan-rule-row="${escapeHtml(item.id)}">
+              <div class="planos-rules-row-main">
+                <div class="planos-row-title">${escapeHtml(item.plan_name || 'Plano')}</div>
+                <div class="planos-row-sub">
+                  ${escapeHtml(item.commission_model === 'none' ? 'Sem comissão por pontos' : 'Rateio por pontos')}
+                  · ${escapeHtml(item.notes || 'Ajuste o fator conforme a estratégia do plano')}
+                </div>
+                <div class="planos-rules-formula-line">
+                  Exemplo com ${escapeHtml(servicePoint.name)}: ${escapeHtml(formatNumber(servicePoint.points, 2))} pt × ${escapeHtml(formatNumber(multiplier, 2))}% = <strong>${escapeHtml(formatNumber(generated, 2))} pt</strong>
+                </div>
+              </div>
+
+              <div class="planos-rules-row-controls planos-rules-row-controls--premium">
+                <label class="planos-rules-field-mini planos-rules-field-mini--wide">
+                  <small>Modelo</small>
+                  <select class="modal-input planos-rules-select" data-plan-model-input="${escapeHtml(item.id)}">
+                    <option value="points_pool" ${item.commission_model === 'points_pool' ? 'selected' : ''}>Rateio por pontos</option>
+                    <option value="none" ${item.commission_model === 'none' ? 'selected' : ''}>Sem comissão</option>
+                  </select>
+                </label>
+                <label class="planos-rules-field-mini">
+                  <small>Fator %</small>
+                  <input class="modal-input planos-rules-number" data-plan-multiplier-input="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(item.point_multiplier_pct)}" />
+                </label>
+                <label class="planos-rules-mini-check">
+                  <input type="checkbox" data-plan-active-input="${escapeHtml(item.id)}" ${item.is_active ? 'checked' : ''} />
+                  <span>Ativo</span>
+                </label>
+                <button type="button" class="planos-action-btn planos-rule-plan-save" data-plan-rule-id="${escapeHtml(item.id)}">
+                  Salvar
+                </button>
               </div>
             </div>
-
-            <div class="planos-rules-row-controls">
-              <select class="modal-input planos-rules-select" data-plan-model-input="${escapeHtml(item.id)}">
-                <option value="points_pool" ${item.commission_model === 'points_pool' ? 'selected' : ''}>Rateio por pontos</option>
-                <option value="none" ${item.commission_model === 'none' ? 'selected' : ''}>Sem comissão</option>
-              </select>
-              <input class="modal-input planos-rules-number" data-plan-multiplier-input="${escapeHtml(item.id)}" type="number" min="0" step="0.01" value="${escapeHtml(item.point_multiplier_pct)}" />
-              <label class="planos-rules-mini-check">
-                <input type="checkbox" data-plan-active-input="${escapeHtml(item.id)}" ${item.is_active ? 'checked' : ''} />
-                <span>Ativo</span>
-              </label>
-              <button type="button" class="planos-action-btn planos-rule-plan-save" data-plan-rule-id="${escapeHtml(item.id)}">
-                Salvar
-              </button>
-            </div>
-          </div>
-        `).join('')}
+          `;
+        }).join('')}
       </div>
 
-      <div class="planos-rules-explain">
-        Fórmula do atendimento: pontos do serviço × fator do plano. Exemplo: Corte simples 1,00 ponto em plano econômico 80% gera 0,80 ponto.
+      <div class="planos-rules-explain planos-rules-explain--story">
+        <strong>Fórmula transparente:</strong> pontos do serviço × fator do plano. Exemplo: corte simples 1,00 ponto em plano econômico 80% gera 0,80 ponto para o barbeiro.
       </div>
     </div>
   `;
@@ -1457,8 +1659,8 @@ function renderClubRules() {
   }
 
   return `
-    <div class="card planos-club-card planos-rules-card">
-      <div class="card-header planos-club-header">
+    <div class="card planos-club-card planos-rules-card planos-rules-card--ux200">
+      <div class="card-header planos-club-header planos-rules-header-premium">
         <div>
           <div class="card-title">Regras do Clube</div>
           <div class="row-sub" style="margin-top:4px;">Parametrize a divisão da receita, os pontos por serviço e o fator por plano.</div>
@@ -1467,22 +1669,43 @@ function renderClubRules() {
       </div>
 
       ${renderRulesFeedback()}
+      ${renderRulesCockpit()}
+      ${renderRulesGuide()}
 
-      <div class="planos-rules-hero">
-        <div>
-          <div class="planos-club-eyebrow">Configuração profissional</div>
-          <h3>O dono define as regras uma vez. O sistema calcula sem adivinhação.</h3>
-          <p>Essas configurações controlam como os atendimentos de assinantes viram pontos e como o dinheiro do Clube é dividido no fechamento.</p>
-        </div>
-      </div>
-
-      <div class="planos-rules-stack">
+      <div class="planos-rules-stack planos-rules-stack--premium">
         ${renderClubRulesRevenueSplit()}
         ${renderClubRulesServicePoints()}
         ${renderClubRulesPlanRules()}
       </div>
     </div>
   `;
+}
+
+function applyRulesPreset(preset) {
+  const meta = getRulesPresetMeta(preset);
+  const barbershopInput = document.getElementById('planos-rules-barbershop-share');
+  const teamInput = document.getElementById('planos-rules-team-share');
+  const defaultMultiplierInput = document.getElementById('planos-rules-default-multiplier');
+
+  if (barbershopInput) barbershopInput.value = String(meta.barbershop);
+  if (teamInput) teamInput.value = String(meta.team);
+  if (defaultMultiplierInput) defaultMultiplierInput.value = String(meta.defaultMultiplier);
+
+  syncRulesRevenuePreview();
+  setRulesFeedback(`${meta.label} aplicado na tela. Clique em Salvar divisão para gravar.`, 'neutral');
+}
+
+function syncRulesRevenuePreview() {
+  const barbershopInput = document.getElementById('planos-rules-barbershop-share');
+  const teamInput = document.getElementById('planos-rules-team-share');
+  const barbershopResult = document.getElementById('planos-rules-barbershop-result');
+  const teamResult = document.getElementById('planos-rules-team-result');
+
+  const barbershop = Number(barbershopInput?.value || 0);
+  const team = Number(teamInput?.value || 0);
+
+  if (barbershopResult) barbershopResult.textContent = formatCurrencyFromReais(barbershop);
+  if (teamResult) teamResult.textContent = formatCurrencyFromReais(team);
 }
 
 
@@ -2301,6 +2524,15 @@ function bindClubRulesEvents() {
   });
 
   document.getElementById('planos-rules-settings-form')?.addEventListener('submit', handleRulesSettingsSubmit);
+
+  document.querySelectorAll('[data-rules-preset]').forEach((button) => {
+    button.addEventListener('click', () => {
+      applyRulesPreset(button.dataset.rulesPreset || 'balanced');
+    });
+  });
+
+  document.getElementById('planos-rules-barbershop-share')?.addEventListener('input', syncRulesRevenuePreview);
+  document.getElementById('planos-rules-team-share')?.addEventListener('input', syncRulesRevenuePreview);
 
   document.querySelectorAll('.planos-rule-service-save').forEach((button) => {
     button.addEventListener('click', () => {
