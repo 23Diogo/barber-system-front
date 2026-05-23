@@ -660,13 +660,13 @@ window.BarberFlowApi = {
 ========================= */
 
 export async function getClientsPremium(filters = {}) {
-  return apiFetch(`/api/clients/premium${buildQueryString(filters)}`);
+  return apiFetch(`/api/clients/insights/list${buildQueryString(filters)}`);
 }
 
 export async function getClientsPremiumDashboard() {
-  return apiFetch('/api/clients/premium/dashboard');
+  return apiFetch('/api/clients/insights/dashboard');
 }
 
 export async function getClientPremiumById(clientId) {
-  return apiFetch(`/api/clients/premium/${clientId}`);
+  return apiFetch(`/api/clients/insights/${clientId}`);
 }
