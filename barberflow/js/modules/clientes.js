@@ -875,6 +875,145 @@ function rerenderClientes() {
   bindClientCardsEvents();
 }
 
+
+function normalizeLegacyClientToPremium(client) {
+  const lastVisit = client.last_visit_at || null;
+  const inactiveDays = lastVisit ? Math.max(0, Math.floor((Date.now() - new Date(lastVisit).getTime()) / 86400000)) : null;
+  const isLost = inactiveDays !== null && inactiveDays >= 45;
+  const isVip = Boolean(client.is_vip) || Number(client.total_spent || 0) >= 500 || Number(client.total_visits || 0) >= 8;
+  const campaignCandidate = Boolean(client.whatsapp_opt_in !== false && (client.whatsapp || client.phone) && (isLost || !client.active_subscription));
+
+  const alerts = [];
+  if (isLost) {
+    alerts.push({
+      code: 'lost_client',
+      tone: 'warning',
+      title: 'Cliente sumido',
+      message: `Sem retorno há ${inactiveDays} dia(s). Boa oportunidade para reativação.`,
+    });
+  }
+  if (campaignCandidate) {
+    alerts.push({
+      code: 'campaign_candidate',
+      tone: 'purple',
+      title: 'Bom para campanha',
+      message: 'Cliente elegível para ação de WhatsApp ou oferta de retorno.',
+    });
+  }
+
+  return {
+    id: client.id,
+    name: client.name,
+    phone: client.phone,
+    whatsapp: client.whatsapp,
+    email: client.email,
+    birthdate: client.birthdate,
+    photo_url: client.photo_url,
+    notes: client.notes,
+    is_active: client.is_active,
+    is_vip: client.is_vip,
+    whatsapp_opt_in: client.whatsapp_opt_in,
+    loyalty_points: Number(client.loyalty_points || 0),
+    preferred_barber_id: client.preferred_barber_id,
+    preferred_barber_name: null,
+    last_visit_at: lastVisit,
+    last_service_name: null,
+    total_visits: Number(client.total_visits || 0),
+    total_spent: Number(client.total_spent || 0),
+    avg_days_between_visits: client.avg_days_between_visits,
+    active_subscription: null,
+    intelligence: {
+      lastVisitAt: lastVisit,
+      inactiveDays,
+      totalVisits: Number(client.total_visits || 0),
+      totalSpent: Number(client.total_spent || 0),
+      hasPlan: false,
+      isVip,
+      isLost,
+      isBirthdayMonth: false,
+      highUsage: false,
+      paysNoUse: false,
+      billingRisk: false,
+      campaignCandidate,
+      alerts,
+      primaryAlert: alerts[0] || null,
+    },
+    appointments_count: 0,
+    reviews_count: 0,
+    rating_avg: null,
+    created_at: client.created_at,
+    updated_at: client.updated_at,
+  };
+}
+
+function buildClientDashboardFromItems(items = []) {
+  const total = items.length;
+  const totalSpent = items.reduce((sum, item) => sum + Number(item.total_spent || 0), 0);
+
+  return {
+    total,
+    active: items.filter(item => item.is_active !== false).length,
+    inactive: items.filter(item => item.is_active === false || item.intelligence?.isLost).length,
+    withPlan: items.filter(item => item.active_subscription).length,
+    withoutPlan: items.filter(item => !item.active_subscription).length,
+    birthdays: items.filter(item => item.intelligence?.isBirthdayMonth).length,
+    lost: items.filter(item => item.intelligence?.isLost).length,
+    vip: items.filter(item => item.intelligence?.isVip).length,
+    highUsage: items.filter(item => item.intelligence?.highUsage).length,
+    paysNoUse: items.filter(item => item.intelligence?.paysNoUse).length,
+    billingRisk: items.filter(item => item.intelligence?.billingRisk).length,
+    campaign: items.filter(item => item.intelligence?.campaignCandidate).length,
+    totalSpent,
+    avgTicket: total > 0 ? totalSpent / total : 0,
+  };
+}
+
+function filterClientsLocally(items = []) {
+  const q = String(clientesState.searchTerm || '').trim().toLowerCase();
+  const filter = clientesState.activeFilter;
+
+  return items.filter(client => {
+    if (q) {
+      const haystack = [
+        client.name,
+        client.phone,
+        client.whatsapp,
+        client.email,
+        client.active_subscription?.plan_name,
+        client.preferred_barber_name,
+        client.intelligence?.primaryAlert?.title,
+      ].join(' ').toLowerCase();
+
+      if (!haystack.includes(q)) return false;
+    }
+
+    if (filter === 'active' && client.is_active === false) return false;
+    if (filter === 'inactive' && client.is_active !== false && !client.intelligence?.isLost) return false;
+    if (filter === 'with_plan' && !client.active_subscription) return false;
+    if (filter === 'without_plan' && client.active_subscription) return false;
+    if (filter === 'birthday' && !client.intelligence?.isBirthdayMonth) return false;
+    if (filter === 'lost' && !client.intelligence?.isLost) return false;
+    if (filter === 'vip' && !client.intelligence?.isVip) return false;
+    if (filter === 'high_usage' && !client.intelligence?.highUsage) return false;
+    if (filter === 'pays_no_use' && !client.intelligence?.paysNoUse) return false;
+    if (filter === 'billing_risk' && !client.intelligence?.billingRisk) return false;
+    if (filter === 'campaign' && !client.intelligence?.campaignCandidate) return false;
+
+    return true;
+  });
+}
+
+async function loadLegacyClientsFallback() {
+  const legacy = await apiFetch('/api/clients?includeInactive=true');
+  const normalized = Array.isArray(legacy) ? legacy.map(normalizeLegacyClientToPremium) : [];
+
+  return {
+    dashboard: buildClientDashboardFromItems(normalized),
+    items: filterClientsLocally(normalized),
+  };
+}
+
+
 async function loadClientsData() {
   const list = document.getElementById('clients-premium-list-wrap');
 
@@ -897,17 +1036,41 @@ async function loadClientsData() {
       filter: clientesState.activeFilter,
     });
 
-    clientesState.dashboard = payload?.dashboard || null;
-    clientesState.items = Array.isArray(payload?.items) ? payload.items : [];
+    let dashboard = payload?.dashboard || null;
+    let items = Array.isArray(payload?.items) ? payload.items : [];
+
+    // Rede de segurança: se o endpoint premium ainda não estiver publicado corretamente
+    // ou vier zerado por relacionamento do Supabase, usa a rota clássica /api/clients.
+    if (!items.length && Number(dashboard?.total || 0) === 0) {
+      try {
+        const fallback = await loadLegacyClientsFallback();
+        if (fallback.items.length || Number(fallback.dashboard?.total || 0) > 0) {
+          dashboard = fallback.dashboard;
+          items = fallback.items;
+        }
+      } catch {
+        // mantém retorno premium original
+      }
+    }
+
+    clientesState.dashboard = dashboard;
+    clientesState.items = items;
     clientesState.isLoaded = true;
   } catch (error) {
-    if (list) {
-      list.innerHTML = `
-        <div class="card clients-premium-empty-card">
-          <strong>Erro ao carregar clientes</strong>
-          <span>${escapeHtml(error instanceof Error ? error.message : 'Tente novamente.')}</span>
-        </div>
-      `;
+    try {
+      const fallback = await loadLegacyClientsFallback();
+      clientesState.dashboard = fallback.dashboard;
+      clientesState.items = fallback.items;
+      clientesState.isLoaded = true;
+    } catch {
+      if (list) {
+        list.innerHTML = `
+          <div class="card clients-premium-empty-card">
+            <strong>Erro ao carregar clientes</strong>
+            <span>${escapeHtml(error instanceof Error ? error.message : 'Tente novamente.')}</span>
+          </div>
+        `;
+      }
     }
   } finally {
     clientesState.isLoading = false;
