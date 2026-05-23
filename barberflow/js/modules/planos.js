@@ -603,6 +603,94 @@ function updatePlanWizardSummary() {
   });
 }
 
+
+const PLAN_WIZARD_STEPS = [
+  { id: 'tipo', label: 'Tipo', title: 'Tipo do plano' },
+  { id: 'oferta', label: 'Oferta', title: 'Oferta e benefícios' },
+  { id: 'uso', label: 'Uso', title: 'Regras de uso' },
+  { id: 'resumo', label: 'Resumo', title: 'Resumo final' },
+];
+
+function getPlanWizardCurrentStep() {
+  const form = document.getElementById('planos-form');
+  const value = Number(form?.dataset.currentStep || 0);
+  return Number.isFinite(value) ? Math.max(0, Math.min(PLAN_WIZARD_STEPS.length - 1, value)) : 0;
+}
+
+function validatePlanWizardStep(step) {
+  if (step !== 1) return true;
+
+  const data = collectPlanFormData();
+  const parsedPrice = parseMoneyInput(data.priceInput);
+
+  if (!data.name) {
+    setPlanFormFeedback('Informe o nome do plano antes de continuar.', 'error');
+    return false;
+  }
+
+  if (!parsedPrice) {
+    setPlanFormFeedback('Informe o preço no formato 69,90 antes de continuar.', 'error');
+    return false;
+  }
+
+  setPlanFormFeedback('');
+  return true;
+}
+
+function setPlanWizardStep(nextStep) {
+  const form = document.getElementById('planos-form');
+  if (!form) return;
+
+  const step = Math.max(0, Math.min(PLAN_WIZARD_STEPS.length - 1, Number(nextStep || 0)));
+  form.dataset.currentStep = String(step);
+
+  form.querySelectorAll('[data-planos-wizard-step]').forEach((panel) => {
+    const panelStep = Number(panel.getAttribute('data-planos-wizard-step'));
+    const isActive = panelStep === step;
+    panel.toggleAttribute('hidden', !isActive);
+    panel.classList.toggle('is-active', isActive);
+  });
+
+  form.querySelectorAll('[data-planos-wizard-go]').forEach((button) => {
+    const buttonStep = Number(button.getAttribute('data-planos-wizard-go'));
+    button.classList.toggle('is-active', buttonStep === step);
+    button.classList.toggle('is-done', buttonStep < step);
+    button.setAttribute('aria-selected', buttonStep === step ? 'true' : 'false');
+  });
+
+  const previousButton = form.querySelector('[data-planos-wizard-prev]');
+  const nextButton = form.querySelector('[data-planos-wizard-next]');
+  const finishButton = form.querySelector('[data-planos-wizard-finish]');
+
+  if (previousButton) previousButton.toggleAttribute('hidden', step === 0);
+  if (nextButton) nextButton.toggleAttribute('hidden', step === PLAN_WIZARD_STEPS.length - 1);
+  if (finishButton) finishButton.toggleAttribute('hidden', step !== PLAN_WIZARD_STEPS.length - 1);
+
+  const counter = form.querySelector('[data-planos-wizard-counter]');
+  if (counter) counter.textContent = `Etapa ${step + 1} de ${PLAN_WIZARD_STEPS.length}`;
+
+  updatePlanWizardSummary();
+}
+
+function handlePlanWizardNext() {
+  const current = getPlanWizardCurrentStep();
+  if (!validatePlanWizardStep(current)) return;
+  setPlanWizardStep(current + 1);
+}
+
+function handlePlanWizardPrev() {
+  setPlanWizardStep(getPlanWizardCurrentStep() - 1);
+}
+
+function handlePlanWizardGo(targetStep) {
+  const current = getPlanWizardCurrentStep();
+  const target = Number(targetStep);
+  if (!Number.isFinite(target)) return;
+
+  if (target > current && !validatePlanWizardStep(current)) return;
+  setPlanWizardStep(target);
+}
+
 function getMetrics() {
   const activePlans = planosState.plans.filter((item) => item.isActive).length;
   const activeSubscriptions = planosState.subscriptions.filter((item) => item.status === 'active').length;
@@ -858,232 +946,281 @@ function renderPlanForm(mode, plan = null) {
   const safeCreditMode = safePlan.creditMode || getPlanTypeMeta(safePlanType).creditMode;
   const safeAllowedWeekdays = normalizeAllowedWeekdays(safePlan.allowedWeekdays);
   const initialSummary = buildPlanHumanSummary({
-    ...safePlan,
     planType: safePlanType,
     creditMode: safeCreditMode,
+    includedHaircuts: safePlan.includedHaircuts,
+    includedBeards: safePlan.includedBeards,
+    totalCredits: safePlan.totalCredits || (Number(safePlan.includedHaircuts || 0) + Number(safePlan.includedBeards || 0)),
+    scheduleRestrictionEnabled: safePlan.scheduleRestrictionEnabled,
     allowedWeekdays: safeAllowedWeekdays,
+    allowedTimeStart: safePlan.allowedTimeStart,
+    allowedTimeEnd: safePlan.allowedTimeEnd,
+    allowRollover: safePlan.allowRollover,
+    rolloverDays: safePlan.rolloverDays,
+    overusePolicy: safePlan.overusePolicy,
   });
 
+  const finishLabel = isEdit ? 'Salvar plano' : 'Criar plano';
+  const cancelLabel = isEdit ? 'Voltar aos detalhes' : 'Cancelar';
+
   return `
-    <div class="planos-modal-body planos-wizard-modal">
-      <div class="planos-wizard-hero">
+    <div class="planos-modal-body planos-wizard-modal planos-wizard-modal--stepper">
+      <div class="planos-wizard-hero planos-wizard-hero--compact">
         <div>
-          <div class="planos-club-eyebrow">Construtor de plano</div>
-          <div class="modal-title" style="margin:0;">${isEdit ? 'Editar plano profissional' : 'Novo plano profissional'}</div>
-          <div class="modal-sub" style="margin-top:4px;">
-            Monte a oferta, limite o uso e proteja a margem da barbearia antes de vender recorrência.
-          </div>
+          <div class="planos-club-eyebrow">Construtor de plano profissional</div>
+          <h3>${isEdit ? 'Editar plano sem quebrar a regra operacional.' : 'Crie um plano em poucos passos.'}</h3>
+          <p>
+            Escolha o tipo, defina os benefícios, aplique as travas de uso e finalize com uma regra clara para o dono e para o cliente.
+          </p>
         </div>
-        <div class="planos-wizard-safe-badge">🛡️ Regra clara evita prejuízo</div>
+        <div class="planos-wizard-safe-badge">🛡️ Plano protegido contra uso indevido</div>
       </div>
 
-      <form id="planos-form" class="planos-form planos-wizard-form">
-        <section class="planos-wizard-section">
-          <div class="planos-wizard-section-head">
-            <span>1</span>
-            <div>
-              <strong>Escolha o tipo do plano</strong>
-              <small>O tipo define como o cliente consome o benefício.</small>
-            </div>
+      <form id="planos-form" class="planos-form planos-wizard-form planos-wizard-stepper-form" data-current-step="0">
+        <div class="planos-wizard-topbar">
+          <div>
+            <strong data-planos-wizard-counter>Etapa 1 de 4</strong>
+            <small>Avance no estilo next, next e finish. Nada fica escondido no final.</small>
           </div>
-
-          <div class="planos-type-grid">
-            ${Object.entries(PLAN_TYPE_META).map(([value, meta]) => `
-              <label class="planos-type-card ${safePlanType === value ? 'is-selected' : ''}" data-plan-type-option="${escapeHtml(value)}">
-                <input type="radio" name="planType" value="${escapeHtml(value)}" ${safePlanType === value ? 'checked' : ''} />
-                <span>${escapeHtml(meta.icon)}</span>
-                <strong>${escapeHtml(meta.label)}</strong>
-                <small>${escapeHtml(meta.hint)}</small>
-              </label>
+          <div class="planos-wizard-progress-nav" role="tablist" aria-label="Etapas do plano">
+            ${PLAN_WIZARD_STEPS.map((step, index) => `
+              <button
+                type="button"
+                class="planos-wizard-progress-chip ${index === 0 ? 'is-active' : ''}"
+                data-planos-wizard-go="${index}"
+                aria-selected="${index === 0 ? 'true' : 'false'}"
+              >
+                <span>${index + 1}</span>
+                ${escapeHtml(step.label)}
+              </button>
             `).join('')}
           </div>
-        </section>
+        </div>
 
-        <section class="planos-wizard-section">
-          <div class="planos-wizard-section-head">
-            <span>2</span>
-            <div>
-              <strong>Oferta e benefícios</strong>
-              <small>Defina o que o cliente compra e quanto pode consumir no ciclo.</small>
-            </div>
-          </div>
-
-          <div class="planos-form-grid">
-            <div>
-              <div class="color-section-label">Nome</div>
-              <input class="modal-input" id="planos-plan-name" name="name" type="text" value="${escapeHtml(safePlan.name)}" placeholder="Ex.: Combo 4 cortes" maxlength="${PLAN_NAME_MAX_LENGTH}" />
-              <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
-                <span id="planos-plan-name-counter">0 / ${PLAN_NAME_MAX_LENGTH}</span>
+        <div class="planos-wizard-step-viewport">
+          <section class="planos-wizard-section planos-wizard-step is-active" data-planos-wizard-step="0">
+            <div class="planos-wizard-section-head">
+              <span>1</span>
+              <div>
+                <strong>Escolha o tipo do plano</strong>
+                <small>Essa escolha define como o cliente consome e como o sistema protege a margem da barbearia.</small>
               </div>
             </div>
 
-            <div>
-              <div class="color-section-label">Preço (formato: 69,90)</div>
-              <input class="modal-input" id="planos-price" name="price" type="text" inputmode="decimal" value="${escapeHtml(formatMoneyInputValue(safePrice))}" placeholder="Ex.: 99,90" />
-              <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:10px;color:#5a6888;">
-                <span>Valor cobrado no ciclo</span>
-                <span>BRL</span>
+            <div class="planos-type-grid planos-type-grid--stepper">
+              ${Object.entries(PLAN_TYPE_META).map(([value, meta]) => `
+                <label class="planos-type-card ${safePlanType === value ? 'is-selected' : ''}" data-plan-type-option="${escapeHtml(value)}">
+                  <input type="radio" name="planType" value="${escapeHtml(value)}" ${safePlanType === value ? 'checked' : ''} />
+                  <span>${escapeHtml(meta.icon)}</span>
+                  <strong>${escapeHtml(meta.label)}</strong>
+                  <small>${escapeHtml(meta.hint)}</small>
+                </label>
+              `).join('')}
+            </div>
+
+            <div class="planos-step-insight">
+              <strong>Dica de operação:</strong>
+              quantidade fixa é o melhor começo. O econômico é perfeito para horários fracos. O flexível por créditos é mais premium e exige regra bem clara.
+            </div>
+          </section>
+
+          <section class="planos-wizard-section planos-wizard-step" data-planos-wizard-step="1" hidden>
+            <div class="planos-wizard-section-head">
+              <span>2</span>
+              <div>
+                <strong>Oferta e benefícios</strong>
+                <small>Defina o que o cliente compra, quanto paga e qual saldo recebe no ciclo.</small>
               </div>
             </div>
 
-            <div>
-              <div class="color-section-label">Periodicidade</div>
-              <select class="modal-input" name="billingInterval">
-                <option value="Mensal" ${safePlan.billingInterval === 'Mensal' ? 'selected' : ''}>Mensal</option>
-                <option value="Anual" ${safePlan.billingInterval === 'Anual' ? 'selected' : ''}>Anual</option>
-              </select>
-            </div>
-
-            <div>
-              <div class="color-section-label">Status</div>
-              <select class="modal-input" name="isActive">
-                <option value="true" ${safePlan.isActive ? 'selected' : ''}>Ativo</option>
-                <option value="false" ${!safePlan.isActive ? 'selected' : ''}>Inativo</option>
-              </select>
-            </div>
-
-            <div>
-              <div class="color-section-label">Cortes incluídos</div>
-              <input class="modal-input" name="includedHaircuts" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedHaircuts)}" />
-            </div>
-
-            <div>
-              <div class="color-section-label">Barbas incluídas</div>
-              <input class="modal-input" name="includedBeards" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedBeards)}" />
-            </div>
-
-            <div>
-              <div class="color-section-label">Créditos totais</div>
-              <input class="modal-input" name="totalCredits" type="number" min="0" step="0.01" value="${escapeHtml(safePlan.totalCredits || (Number(safePlan.includedHaircuts || 0) + Number(safePlan.includedBeards || 0)))}" />
-              <div class="planos-field-help">Usado principalmente em planos flexíveis por créditos.</div>
-            </div>
-
-            <div>
-              <div class="color-section-label">Modo de consumo</div>
-              <select class="modal-input" name="creditMode">
-                <option value="service_quantity" ${safeCreditMode === 'service_quantity' ? 'selected' : ''}>Quantidade por serviço</option>
-                <option value="credit_balance" ${safeCreditMode === 'credit_balance' ? 'selected' : ''}>Saldo de créditos</option>
-                <option value="combo_unit" ${safeCreditMode === 'combo_unit' ? 'selected' : ''}>Unidade de combo</option>
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <div class="color-section-label">Descrição</div>
-            <textarea class="modal-input planos-textarea" id="planos-plan-description" name="description" placeholder="Explique o plano de forma simples para o dono e para o cliente." maxlength="${PLAN_DESCRIPTION_MAX_LENGTH}">${escapeHtml(safePlan.description)}</textarea>
-            <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
-              <span id="planos-plan-description-counter">0 / ${PLAN_DESCRIPTION_MAX_LENGTH}</span>
-            </div>
-          </div>
-        </section>
-
-        <section class="planos-wizard-section">
-          <div class="planos-wizard-section-head">
-            <span>3</span>
-            <div>
-              <strong>Regras de uso</strong>
-              <small>Controle agenda, sobra de saldo e consumo acima do contratado.</small>
-            </div>
-          </div>
-
-          <div class="planos-form-grid">
-            <div>
-              <div class="color-section-label">Uso acima do saldo</div>
-              <select class="modal-input" name="overusePolicy">
-                <option value="block" ${safePlan.overusePolicy === 'block' ? 'selected' : ''}>Bloquear ao acabar o saldo</option>
-                <option value="charge_extra" ${safePlan.overusePolicy === 'charge_extra' ? 'selected' : ''}>Permitir e cobrar como avulso</option>
-                <option value="manual_approval" ${safePlan.overusePolicy === 'manual_approval' ? 'selected' : ''}>Exigir liberação manual</option>
-              </select>
-            </div>
-
-            <div>
-              <div class="color-section-label">Uso parcial de combo</div>
-              <select class="modal-input" name="partialComboPolicy">
-                <option value="block_partial" ${safePlan.partialComboPolicy === 'block_partial' ? 'selected' : ''}>Bloquear uso parcial</option>
-                <option value="consume_full_combo" ${safePlan.partialComboPolicy === 'consume_full_combo' ? 'selected' : ''}>Consumir combo completo</option>
-                <option value="charge_partial_extra" ${safePlan.partialComboPolicy === 'charge_partial_extra' ? 'selected' : ''}>Cobrar parcial como avulso</option>
-                <option value="manual_approval" ${safePlan.partialComboPolicy === 'manual_approval' ? 'selected' : ''}>Exigir liberação manual</option>
-              </select>
-            </div>
-
-            <div>
-              <div class="color-section-label">Acumular saldo não usado?</div>
-              <select class="modal-input" name="allowRollover">
-                <option value="false" ${!safePlan.allowRollover ? 'selected' : ''}>Não, expira no fim do ciclo</option>
-                <option value="true" ${safePlan.allowRollover ? 'selected' : ''}>Sim, acumular por alguns dias</option>
-              </select>
-            </div>
-
-            <div>
-              <div class="color-section-label">Dias para acumular</div>
-              <input class="modal-input" name="rolloverDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.rolloverDays)}" />
-            </div>
-
-            <div>
-              <div class="color-section-label">Taxa de adesão (centavos)</div>
-              <input class="modal-input" name="signupFeeCents" type="number" min="0" step="1" value="${escapeHtml(safePlan.signupFeeCents)}" />
-            </div>
-
-            <div>
-              <div class="color-section-label">Carência para uso/cobrança (dias)</div>
-              <input class="modal-input" name="graceDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.graceDays)}" />
-            </div>
-          </div>
-
-          <div class="planos-rule-switch">
-            <div>
-              <strong>Restringir dias e horários?</strong>
-              <small>Ideal para planos econômicos que ocupam horários de menor movimento.</small>
-            </div>
-            <select class="modal-input" name="scheduleRestrictionEnabled">
-              <option value="false" ${!safePlan.scheduleRestrictionEnabled ? 'selected' : ''}>Não</option>
-              <option value="true" ${safePlan.scheduleRestrictionEnabled ? 'selected' : ''}>Sim</option>
-            </select>
-          </div>
-
-          <div class="planos-schedule-box">
-            <div class="planos-weekdays-grid">
-              ${renderWeekdayCheckboxes(safeAllowedWeekdays)}
-            </div>
             <div class="planos-form-grid">
               <div>
-                <div class="color-section-label">Horário inicial</div>
-                <input class="modal-input" name="allowedTimeStart" type="time" value="${escapeHtml(safePlan.allowedTimeStart)}" />
+                <div class="color-section-label">Nome</div>
+                <input class="modal-input" id="planos-plan-name" name="name" type="text" value="${escapeHtml(safePlan.name)}" placeholder="Ex.: Combo 4 cortes" maxlength="${PLAN_NAME_MAX_LENGTH}" />
+                <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
+                  <span id="planos-plan-name-counter">0 / ${PLAN_NAME_MAX_LENGTH}</span>
+                </div>
               </div>
+
               <div>
-                <div class="color-section-label">Horário final</div>
-                <input class="modal-input" name="allowedTimeEnd" type="time" value="${escapeHtml(safePlan.allowedTimeEnd)}" />
+                <div class="color-section-label">Preço</div>
+                <input class="modal-input" id="planos-price" name="price" type="text" inputmode="decimal" value="${escapeHtml(formatMoneyInputValue(safePrice))}" placeholder="Ex.: 99,90" />
+                <div style="display:flex;justify-content:space-between;gap:12px;margin-top:6px;font-size:10px;color:#5a6888;">
+                  <span>Valor cobrado no ciclo</span>
+                  <span>BRL</span>
+                </div>
+              </div>
+
+              <div>
+                <div class="color-section-label">Periodicidade</div>
+                <select class="modal-input" name="billingInterval">
+                  <option value="Mensal" ${safePlan.billingInterval === 'Mensal' ? 'selected' : ''}>Mensal</option>
+                  <option value="Anual" ${safePlan.billingInterval === 'Anual' ? 'selected' : ''}>Anual</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="color-section-label">Status</div>
+                <select class="modal-input" name="isActive">
+                  <option value="true" ${safePlan.isActive ? 'selected' : ''}>Ativo</option>
+                  <option value="false" ${!safePlan.isActive ? 'selected' : ''}>Inativo</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="color-section-label">Cortes incluídos</div>
+                <input class="modal-input" name="includedHaircuts" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedHaircuts)}" />
+              </div>
+
+              <div>
+                <div class="color-section-label">Barbas incluídas</div>
+                <input class="modal-input" name="includedBeards" type="number" min="0" step="1" value="${escapeHtml(safePlan.includedBeards)}" />
+              </div>
+
+              <div>
+                <div class="color-section-label">Créditos totais</div>
+                <input class="modal-input" name="totalCredits" type="number" min="0" step="0.01" value="${escapeHtml(safePlan.totalCredits || (Number(safePlan.includedHaircuts || 0) + Number(safePlan.includedBeards || 0)))}" />
+                <div class="planos-field-help">Usado principalmente em planos flexíveis por créditos.</div>
+              </div>
+
+              <div>
+                <div class="color-section-label">Modo de consumo</div>
+                <select class="modal-input" name="creditMode">
+                  <option value="service_quantity" ${safeCreditMode === 'service_quantity' ? 'selected' : ''}>Quantidade por serviço</option>
+                  <option value="credit_balance" ${safeCreditMode === 'credit_balance' ? 'selected' : ''}>Saldo de créditos</option>
+                  <option value="combo_unit" ${safeCreditMode === 'combo_unit' ? 'selected' : ''}>Unidade de combo</option>
+                </select>
               </div>
             </div>
-          </div>
-        </section>
 
-        <section class="planos-wizard-section planos-wizard-summary-box">
-          <div class="planos-wizard-section-head">
-            <span>4</span>
             <div>
-              <strong>Resumo para o dono entender</strong>
-              <small>Esta é a regra operacional que o sistema vai aplicar.</small>
+              <div class="color-section-label">Descrição</div>
+              <textarea class="modal-input planos-textarea" id="planos-plan-description" name="description" placeholder="Explique o plano de forma simples para o dono e para o cliente." maxlength="${PLAN_DESCRIPTION_MAX_LENGTH}">${escapeHtml(safePlan.description)}</textarea>
+              <div style="display:flex;justify-content:flex-end;margin-top:6px;font-size:10px;color:#5a6888;">
+                <span id="planos-plan-description-counter">0 / ${PLAN_DESCRIPTION_MAX_LENGTH}</span>
+              </div>
             </div>
-          </div>
+          </section>
 
-          <div class="planos-summary-grid">
-            <div><small>Tipo</small><strong id="planos-wizard-summary-type">${escapeHtml(getPlanTypeMeta(safePlanType).label)}</strong></div>
-            <div><small>Agenda</small><strong id="planos-wizard-summary-schedule">${escapeHtml(safePlan.scheduleRestrictionEnabled ? formatWeekdays(safeAllowedWeekdays) : 'Todos os dias')}</strong></div>
-            <div><small>Excedente</small><strong id="planos-wizard-summary-overuse">${escapeHtml(getOverusePolicyLabel(safePlan.overusePolicy))}</strong></div>
-          </div>
+          <section class="planos-wizard-section planos-wizard-step" data-planos-wizard-step="2" hidden>
+            <div class="planos-wizard-section-head">
+              <span>3</span>
+              <div>
+                <strong>Regras de uso</strong>
+                <small>Controle agenda, sobra de saldo e consumo acima do contratado.</small>
+              </div>
+            </div>
 
-          <div class="planos-human-summary" id="planos-wizard-summary-text">${escapeHtml(initialSummary)}</div>
-        </section>
+            <div class="planos-form-grid">
+              <div>
+                <div class="color-section-label">Uso acima do saldo</div>
+                <select class="modal-input" name="overusePolicy">
+                  <option value="block" ${safePlan.overusePolicy === 'block' ? 'selected' : ''}>Bloquear ao acabar o saldo</option>
+                  <option value="charge_extra" ${safePlan.overusePolicy === 'charge_extra' ? 'selected' : ''}>Permitir e cobrar como avulso</option>
+                  <option value="manual_approval" ${safePlan.overusePolicy === 'manual_approval' ? 'selected' : ''}>Exigir liberação manual</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="color-section-label">Uso parcial de combo</div>
+                <select class="modal-input" name="partialComboPolicy">
+                  <option value="block_partial" ${safePlan.partialComboPolicy === 'block_partial' ? 'selected' : ''}>Bloquear uso parcial</option>
+                  <option value="consume_full_combo" ${safePlan.partialComboPolicy === 'consume_full_combo' ? 'selected' : ''}>Consumir combo completo</option>
+                  <option value="charge_partial_extra" ${safePlan.partialComboPolicy === 'charge_partial_extra' ? 'selected' : ''}>Cobrar parcial como avulso</option>
+                  <option value="manual_approval" ${safePlan.partialComboPolicy === 'manual_approval' ? 'selected' : ''}>Exigir liberação manual</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="color-section-label">Acumular saldo não usado?</div>
+                <select class="modal-input" name="allowRollover">
+                  <option value="false" ${!safePlan.allowRollover ? 'selected' : ''}>Não, expira no fim do ciclo</option>
+                  <option value="true" ${safePlan.allowRollover ? 'selected' : ''}>Sim, acumular por alguns dias</option>
+                </select>
+              </div>
+
+              <div>
+                <div class="color-section-label">Dias para acumular</div>
+                <input class="modal-input" name="rolloverDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.rolloverDays)}" />
+              </div>
+
+              <div>
+                <div class="color-section-label">Taxa de adesão (centavos)</div>
+                <input class="modal-input" name="signupFeeCents" type="number" min="0" step="1" value="${escapeHtml(safePlan.signupFeeCents)}" />
+              </div>
+
+              <div>
+                <div class="color-section-label">Carência para uso/cobrança (dias)</div>
+                <input class="modal-input" name="graceDays" type="number" min="0" step="1" value="${escapeHtml(safePlan.graceDays)}" />
+              </div>
+            </div>
+
+            <div class="planos-rule-switch">
+              <div>
+                <strong>Restringir dias e horários?</strong>
+                <small>Ideal para planos econômicos que ocupam horários de menor movimento.</small>
+              </div>
+              <select class="modal-input" name="scheduleRestrictionEnabled">
+                <option value="false" ${!safePlan.scheduleRestrictionEnabled ? 'selected' : ''}>Não</option>
+                <option value="true" ${safePlan.scheduleRestrictionEnabled ? 'selected' : ''}>Sim</option>
+              </select>
+            </div>
+
+            <div class="planos-schedule-box">
+              <div class="planos-weekdays-grid">
+                ${renderWeekdayCheckboxes(safeAllowedWeekdays)}
+              </div>
+              <div class="planos-form-grid">
+                <div>
+                  <div class="color-section-label">Horário inicial</div>
+                  <input class="modal-input" name="allowedTimeStart" type="time" value="${escapeHtml(safePlan.allowedTimeStart)}" />
+                </div>
+                <div>
+                  <div class="color-section-label">Horário final</div>
+                  <input class="modal-input" name="allowedTimeEnd" type="time" value="${escapeHtml(safePlan.allowedTimeEnd)}" />
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="planos-wizard-section planos-wizard-step planos-wizard-summary-box" data-planos-wizard-step="3" hidden>
+            <div class="planos-wizard-section-head">
+              <span>4</span>
+              <div>
+                <strong>Resumo e finalização</strong>
+                <small>Revise a regra operacional antes de salvar.</small>
+              </div>
+            </div>
+
+            <div class="planos-summary-grid">
+              <div><small>Tipo</small><strong id="planos-wizard-summary-type">${escapeHtml(getPlanTypeMeta(safePlanType).label)}</strong></div>
+              <div><small>Agenda</small><strong id="planos-wizard-summary-schedule">${escapeHtml(safePlan.scheduleRestrictionEnabled ? formatWeekdays(safeAllowedWeekdays) : 'Todos os dias')}</strong></div>
+              <div><small>Excedente</small><strong id="planos-wizard-summary-overuse">${escapeHtml(getOverusePolicyLabel(safePlan.overusePolicy))}</strong></div>
+            </div>
+
+            <div class="planos-human-summary" id="planos-wizard-summary-text">${escapeHtml(initialSummary)}</div>
+
+            <div class="planos-step-insight planos-step-insight--success">
+              <strong>Pronto para salvar:</strong>
+              esse resumo é a explicação que o dono precisa entender. O sistema usará esses dados para bloquear uso indevido e calcular o consumo corretamente.
+            </div>
+          </section>
+        </div>
 
         <div id="planos-form-feedback" class="planos-form-feedback"></div>
 
-        <div class="modal-buttons planos-wizard-actions" style="margin-top:10px;">
+        <div class="modal-buttons planos-wizard-actions planos-wizard-actions--stepper">
           <button type="button" class="btn-cancel" id="${isEdit ? 'planos-form-back' : 'planos-form-cancel'}">
-            ${isEdit ? 'Voltar' : 'Cancelar'}
+            ${escapeHtml(cancelLabel)}
           </button>
-          <button type="submit" class="btn-save">
-            ${isEdit ? 'Salvar plano profissional' : 'Criar plano profissional'}
+          <button type="button" class="btn-cancel planos-wizard-prev-btn" data-planos-wizard-prev hidden>
+            Voltar etapa
+          </button>
+          <button type="button" class="btn-save planos-wizard-next-btn" data-planos-wizard-next>
+            Próximo
+          </button>
+          <button type="submit" class="btn-save planos-wizard-finish-btn" data-planos-wizard-finish hidden>
+            ${escapeHtml(finishLabel)}
           </button>
         </div>
       </form>
@@ -2934,6 +3071,11 @@ function bindPlanosModalEvents() {
 
   document.getElementById('planos-form-cancel')?.addEventListener('click', closePlanosModal);
   document.getElementById('planos-form')?.addEventListener('submit', handlePlanFormSubmit);
+  document.querySelector('[data-planos-wizard-next]')?.addEventListener('click', handlePlanWizardNext);
+  document.querySelector('[data-planos-wizard-prev]')?.addEventListener('click', handlePlanWizardPrev);
+  document.querySelectorAll('[data-planos-wizard-go]').forEach((button) => {
+    button.addEventListener('click', () => handlePlanWizardGo(button.dataset.planosWizardGo));
+  });
 
   const planForm = document.getElementById('planos-form');
   if (planForm) {
@@ -2956,6 +3098,7 @@ function bindPlanosModalEvents() {
     });
 
     updatePlanWizardSummary();
+    setPlanWizardStep(0);
   }
 
   document.getElementById('planos-subscription-cancel')?.addEventListener('click', closePlanosModal);
