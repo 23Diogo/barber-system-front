@@ -51,6 +51,9 @@ function persistActiveTab(tab) {
 const planosState = {
   plans: [],
   subscriptions: [],
+  subscriptionStatusFilter: 'all',
+  subscriptionSmartFilter: 'all',
+  subscriptionSearch: '',
   clients: [],
   clubPeriods: [],
   clubEntries: [],
@@ -342,24 +345,61 @@ function mapPlanFromApi(plan) {
 }
 
 function mapSubscriptionFromApi(subscription) {
+  const rawCycles = Array.isArray(subscription?.subscription_cycles)
+    ? subscription.subscription_cycles
+    : [];
+
+  const rawInvoices = Array.isArray(subscription?.subscription_invoices)
+    ? subscription.subscription_invoices
+    : [];
+
   const latestCycle = getLatestCycle(subscription);
   const latestInvoice = getLatestInvoice(subscription);
+  const nextInvoice = getNextOpenInvoice(subscription) || latestInvoice;
+
+  const usage = getSubscriptionUsageSnapshot(subscription, latestCycle);
+  const invoiceStats = getSubscriptionInvoiceStats(rawInvoices);
+  const plan = subscription?.plans || {};
+
+  const nextBillingRaw =
+    nextInvoice?.due_at ||
+    nextInvoice?.created_at ||
+    subscription.next_billing_at ||
+    subscription.current_period_end ||
+    latestCycle?.period_end ||
+    null;
+
+  const alerts = getSubscriptionSmartAlerts(subscription, usage, nextInvoice, invoiceStats);
 
   return {
     id: subscription.id,
     clientId: subscription.client_id || subscription.clients?.id || '',
     clientName: subscription.clients?.name || 'Cliente',
+    clientPhone: subscription.clients?.whatsapp || subscription.clients?.phone || '',
     planId: subscription.plan_id || subscription.plans?.id || '',
     planName: subscription.plans?.name || 'Plano',
     status: subscription.status || 'active',
-    nextBillingAt: formatDateDisplay(subscription.next_billing_at || subscription.current_period_end),
-    paymentMethod: subscription.payment_method_label || latestInvoice?.payment_method || '—',
+    nextBillingAt: formatDateDisplay(nextBillingRaw),
+    nextBillingRaw,
+    paymentMethod: subscription.payment_method_label || nextInvoice?.payment_method || latestInvoice?.payment_method || '—',
     remainingHaircuts: Number(latestCycle?.remaining_haircuts || 0),
     remainingBeards: Number(latestCycle?.remaining_beards || 0),
     lastInvoiceStatus: latestInvoice?.status || 'pending',
+    latestInvoice,
+    nextInvoice,
+    invoiceStats,
+    latestCycle,
+    usage,
+    alerts,
+    planPriceCents: Number(plan.price_cents || 0),
+    planType: plan.plan_type || 'fixed_quantity',
+    planTypeLabel: getPlanTypeMeta(plan.plan_type || 'fixed_quantity').label,
+    invoices: rawInvoices,
+    cycles: rawCycles,
     raw: subscription,
   };
 }
+
 
 function applySubscriberCounts(plans, subscriptions) {
   return plans.map((plan) => ({
@@ -431,6 +471,766 @@ function getInvoiceStatusMeta(status) {
 
   return map[status] || map.pending;
 }
+
+
+const SUBSCRIPTION_STATUS_FILTERS = [
+  { id: 'all', label: 'Todas', hint: 'Carteira completa' },
+  { id: 'active', label: 'Ativas', hint: 'Clientes liberados' },
+  { id: 'pending', label: 'Pendentes', hint: 'Aguardando ativação' },
+  { id: 'past_due', label: 'Vencidas', hint: 'Risco financeiro' },
+  { id: 'paused', label: 'Pausadas', hint: 'Temporariamente paradas' },
+  { id: 'canceled', label: 'Canceladas', hint: 'Histórico encerrado' },
+];
+
+const SUBSCRIPTION_SMART_FILTERS = [
+  { id: 'all', label: 'Todos', icon: '▦' },
+  { id: 'attention', label: 'Atenção', icon: '!' },
+  { id: 'high_usage', label: 'Uso alto', icon: '↗' },
+  { id: 'no_usage', label: 'Paga e não usa', icon: '○' },
+  { id: 'payment_risk', label: 'Risco de cobrança', icon: '◇' },
+];
+
+function getSubscriptionStatusGroup(status) {
+  const normalized = String(status || '').toLowerCase();
+
+  if (['active', 'trialing'].includes(normalized)) return 'active';
+  if (['pending_activation', 'pending'].includes(normalized)) return 'pending';
+  if (['past_due', 'expired', 'overdue'].includes(normalized)) return 'past_due';
+  if (['paused'].includes(normalized)) return 'paused';
+  if (['canceled', 'cancelled'].includes(normalized)) return 'canceled';
+
+  return normalized || 'active';
+}
+
+function getSubscriptionStatusPremiumMeta(status) {
+  const group = getSubscriptionStatusGroup(status);
+
+  const map = {
+    active: {
+      label: 'Ativa',
+      color: '#00e676',
+      bg: 'rgba(0,230,118,.11)',
+      border: 'rgba(0,230,118,.22)',
+      icon: '✓',
+      description: 'Cliente liberado para usar o plano',
+    },
+    pending: {
+      label: 'Pendente',
+      color: '#4fc3f7',
+      bg: 'rgba(79,195,247,.11)',
+      border: 'rgba(79,195,247,.24)',
+      icon: '…',
+      description: 'Aguardando ativação ou pagamento inicial',
+    },
+    past_due: {
+      label: 'Vencida',
+      color: '#ff5c74',
+      bg: 'rgba(255,23,68,.11)',
+      border: 'rgba(255,23,68,.24)',
+      icon: '!',
+      description: 'Existe risco de inadimplência',
+    },
+    paused: {
+      label: 'Pausada',
+      color: '#f97316',
+      bg: 'rgba(249,115,22,.12)',
+      border: 'rgba(249,115,22,.26)',
+      icon: 'Ⅱ',
+      description: 'Assinatura temporariamente pausada',
+    },
+    canceled: {
+      label: 'Cancelada',
+      color: '#5a6888',
+      bg: 'rgba(90,104,136,.12)',
+      border: 'rgba(90,104,136,.24)',
+      icon: '×',
+      description: 'Assinatura encerrada',
+    },
+  };
+
+  return map[group] || map.active;
+}
+
+function sortByNewestDate(items, fields = ['created_at', 'due_at', 'paid_at']) {
+  return [...(items || [])].sort((a, b) => {
+    const getTime = (item) => {
+      for (const field of fields) {
+        if (item?.[field]) {
+          const time = new Date(item[field]).getTime();
+          if (!Number.isNaN(time)) return time;
+        }
+      }
+      return 0;
+    };
+
+    return getTime(b) - getTime(a);
+  });
+}
+
+function getNextOpenInvoice(subscription) {
+  const invoices = Array.isArray(subscription?.subscription_invoices)
+    ? [...subscription.subscription_invoices]
+    : [];
+
+  const openStatuses = ['pending', 'open', 'created', 'authorized', 'failed', 'expired', 'past_due'];
+
+  const openInvoices = invoices
+    .filter((invoice) => openStatuses.includes(String(invoice?.status || '').toLowerCase()))
+    .sort((a, b) => {
+      const aTime = new Date(a?.due_at || a?.created_at || 0).getTime();
+      const bTime = new Date(b?.due_at || b?.created_at || 0).getTime();
+      return aTime - bTime;
+    });
+
+  return openInvoices[0] || null;
+}
+
+function getSubscriptionInvoiceStats(invoices = []) {
+  const stats = {
+    total: invoices.length,
+    paid: 0,
+    pending: 0,
+    failed: 0,
+    canceled: 0,
+    pendingAmountCents: 0,
+    paidAmountCents: 0,
+    nextDueAt: null,
+  };
+
+  const openStatuses = ['pending', 'open', 'created', 'authorized', 'failed', 'expired', 'past_due'];
+
+  for (const invoice of invoices) {
+    const status = String(invoice?.status || '').toLowerCase();
+    const amountCents = Number(invoice?.amount_cents || invoice?.total_cents || 0);
+
+    if (status === 'paid') {
+      stats.paid += 1;
+      stats.paidAmountCents += amountCents;
+    } else if (status === 'failed') {
+      stats.failed += 1;
+      stats.pending += 1;
+      stats.pendingAmountCents += amountCents;
+    } else if (['canceled', 'cancelled'].includes(status)) {
+      stats.canceled += 1;
+    } else if (openStatuses.includes(status)) {
+      stats.pending += 1;
+      stats.pendingAmountCents += amountCents;
+    }
+  }
+
+  const next = [...invoices]
+    .filter((invoice) => openStatuses.includes(String(invoice?.status || '').toLowerCase()))
+    .sort((a, b) => new Date(a?.due_at || 0).getTime() - new Date(b?.due_at || 0).getTime())[0];
+
+  stats.nextDueAt = next?.due_at || null;
+
+  return stats;
+}
+
+function getCycleServiceBalanceUsage(cycle) {
+  const balances = Array.isArray(cycle?.subscription_cycle_service_balances)
+    ? cycle.subscription_cycle_service_balances
+    : [];
+
+  return balances.map((balance) => {
+    const included = Number(balance?.included_quantity || 0);
+    const remaining = Number(balance?.remaining_quantity || 0);
+    const consumed = Math.max(included - remaining, 0);
+
+    return {
+      serviceId: balance?.service_id || balance?.services?.id || '',
+      serviceName: balance?.services?.name || 'Serviço',
+      included,
+      consumed,
+      reserved: Number(balance?.reserved_quantity || 0),
+      remaining,
+      pct: included > 0 ? Math.round(((consumed + Number(balance?.reserved_quantity || 0)) / included) * 100) : 0,
+    };
+  });
+}
+
+function getSubscriptionUsageSnapshot(subscription, cycle = null) {
+  const selectedCycle = cycle || getLatestCycle(subscription);
+  const serviceBalances = getCycleServiceBalanceUsage(selectedCycle);
+
+  const includedHaircuts = Number(selectedCycle?.included_haircuts || subscription?.plans?.included_haircuts || 0);
+  const remainingHaircuts = Number(selectedCycle?.remaining_haircuts || 0);
+  const reservedHaircuts = Number(selectedCycle?.reserved_haircuts || 0);
+  const consumedHaircuts =
+    selectedCycle?.consumed_haircuts != null
+      ? Number(selectedCycle.consumed_haircuts || 0)
+      : Math.max(includedHaircuts - remainingHaircuts - reservedHaircuts, 0);
+
+  const includedBeards = Number(selectedCycle?.included_beards || subscription?.plans?.included_beards || 0);
+  const remainingBeards = Number(selectedCycle?.remaining_beards || 0);
+  const reservedBeards = Number(selectedCycle?.reserved_beards || 0);
+  const consumedBeards =
+    selectedCycle?.consumed_beards != null
+      ? Number(selectedCycle.consumed_beards || 0)
+      : Math.max(includedBeards - remainingBeards - reservedBeards, 0);
+
+  const explicitIncluded = serviceBalances.reduce((sum, item) => sum + Number(item.included || 0), 0);
+  const explicitConsumed = serviceBalances.reduce((sum, item) => sum + Number(item.consumed || 0), 0);
+  const explicitReserved = serviceBalances.reduce((sum, item) => sum + Number(item.reserved || 0), 0);
+  const explicitRemaining = serviceBalances.reduce((sum, item) => sum + Number(item.remaining || 0), 0);
+
+  const includedTotal = includedHaircuts + includedBeards + explicitIncluded;
+  const consumedTotal = consumedHaircuts + consumedBeards + explicitConsumed;
+  const reservedTotal = reservedHaircuts + reservedBeards + explicitReserved;
+  const remainingTotal = remainingHaircuts + remainingBeards + explicitRemaining;
+
+  const usedOrReserved = consumedTotal + reservedTotal;
+  const pct = includedTotal > 0 ? Math.min(100, Math.round((usedOrReserved / includedTotal) * 100)) : 0;
+
+  return {
+    cycle: selectedCycle,
+    periodStart: selectedCycle?.period_start || null,
+    periodEnd: selectedCycle?.period_end || null,
+    includedHaircuts,
+    consumedHaircuts,
+    reservedHaircuts,
+    remainingHaircuts,
+    includedBeards,
+    consumedBeards,
+    reservedBeards,
+    remainingBeards,
+    serviceBalances,
+    includedTotal,
+    consumedTotal,
+    reservedTotal,
+    remainingTotal,
+    pct,
+  };
+}
+
+function getDaysSince(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return Math.floor((Date.now() - date.getTime()) / 86400000);
+}
+
+function isPastDate(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return date < today;
+}
+
+function getSubscriptionSmartAlerts(subscription, usage, nextInvoice, invoiceStats) {
+  const alerts = [];
+  const statusGroup = getSubscriptionStatusGroup(subscription?.status);
+  const isActive = statusGroup === 'active';
+  const latestCycle = usage?.cycle;
+  const cycleAgeDays = getDaysSince(latestCycle?.period_start);
+
+  if (statusGroup === 'past_due' || isPastDate(nextInvoice?.due_at) || invoiceStats.failed > 0) {
+    alerts.push({
+      type: 'payment_risk',
+      tone: 'danger',
+      title: 'Risco de inadimplência',
+      text: 'Existe cobrança vencida, falha ou pendente para acompanhamento.',
+    });
+  }
+
+  if (isActive && Number(usage?.pct || 0) >= 90 && Number(usage?.includedTotal || 0) > 0) {
+    alerts.push({
+      type: 'high_usage',
+      tone: 'warning',
+      title: 'Cliente usa muito',
+      text: 'A utilização está alta neste ciclo. Bom para retenção, mas atenção à margem.',
+    });
+  }
+
+  if (isActive && Number(usage?.usedOrReserved || usage?.consumedTotal || 0) <= 0 && Number(cycleAgeDays || 0) >= 7) {
+    alerts.push({
+      type: 'no_usage',
+      tone: 'info',
+      title: 'Paga e não usa',
+      text: 'Cliente ativo sem utilização recente. Ótimo candidato para ação de relacionamento.',
+    });
+  }
+
+  if (!alerts.length && isActive) {
+    alerts.push({
+      type: 'healthy',
+      tone: 'success',
+      title: 'Recorrência saudável',
+      text: 'Assinatura ativa sem alerta crítico no momento.',
+    });
+  }
+
+  return alerts;
+}
+
+function getSubscriptionPrimaryAlert(subscription) {
+  return Array.isArray(subscription?.alerts) && subscription.alerts.length
+    ? subscription.alerts[0]
+    : null;
+}
+
+function getSubscriptionAlertMeta(tone) {
+  const map = {
+    success: { color: '#00e676', bg: 'rgba(0,230,118,.10)', border: 'rgba(0,230,118,.22)' },
+    warning: { color: '#f97316', bg: 'rgba(249,115,22,.11)', border: 'rgba(249,115,22,.26)' },
+    danger: { color: '#ff5c74', bg: 'rgba(255,23,68,.10)', border: 'rgba(255,23,68,.24)' },
+    info: { color: '#4fc3f7', bg: 'rgba(79,195,247,.10)', border: 'rgba(79,195,247,.24)' },
+  };
+
+  return map[tone] || map.info;
+}
+
+function getFilteredSubscriptions() {
+  const statusFilter = planosState.subscriptionStatusFilter || 'all';
+  const smartFilter = planosState.subscriptionSmartFilter || 'all';
+  const search = String(planosState.subscriptionSearch || '').trim().toLowerCase();
+
+  return planosState.subscriptions.filter((subscription) => {
+    const statusGroup = getSubscriptionStatusGroup(subscription.status);
+
+    if (statusFilter !== 'all' && statusGroup !== statusFilter) return false;
+
+    if (smartFilter !== 'all') {
+      const types = (subscription.alerts || []).map((alert) => alert.type);
+      if (smartFilter === 'attention') {
+        if (!types.some((type) => ['payment_risk', 'high_usage', 'no_usage'].includes(type))) return false;
+      } else if (!types.includes(smartFilter)) {
+        return false;
+      }
+    }
+
+    if (search) {
+      const haystack = [
+        subscription.clientName,
+        subscription.planName,
+        subscription.clientPhone,
+        subscription.status,
+        subscription.lastInvoiceStatus,
+      ].join(' ').toLowerCase();
+
+      if (!haystack.includes(search)) return false;
+    }
+
+    return true;
+  });
+}
+
+function getSubscriptionsV2Stats() {
+  const subscriptions = planosState.subscriptions;
+  const active = subscriptions.filter((item) => getSubscriptionStatusGroup(item.status) === 'active');
+  const pending = subscriptions.filter((item) => getSubscriptionStatusGroup(item.status) === 'pending');
+  const pastDue = subscriptions.filter((item) => getSubscriptionStatusGroup(item.status) === 'past_due');
+  const paused = subscriptions.filter((item) => getSubscriptionStatusGroup(item.status) === 'paused');
+  const canceled = subscriptions.filter((item) => getSubscriptionStatusGroup(item.status) === 'canceled');
+
+  const recurringRevenueCents = active.reduce((sum, subscription) => {
+    const plan = getPlanById(subscription.planId);
+    return sum + Number(plan?.priceCents || subscription.planPriceCents || 0);
+  }, 0);
+
+  const pendingInvoicesCents = subscriptions.reduce((sum, subscription) => {
+    return sum + Number(subscription.invoiceStats?.pendingAmountCents || 0);
+  }, 0);
+
+  const usageItems = active.filter((item) => Number(item.usage?.includedTotal || 0) > 0);
+  const avgUsage = usageItems.length
+    ? Math.round(usageItems.reduce((sum, item) => sum + Number(item.usage?.pct || 0), 0) / usageItems.length)
+    : 0;
+
+  const alertsCount = subscriptions.reduce((sum, item) => {
+    const relevant = (item.alerts || []).filter((alert) => ['payment_risk', 'high_usage', 'no_usage'].includes(alert.type));
+    return sum + relevant.length;
+  }, 0);
+
+  return {
+    total: subscriptions.length,
+    active: active.length,
+    pending: pending.length,
+    pastDue: pastDue.length,
+    paused: paused.length,
+    canceled: canceled.length,
+    recurringRevenueCents,
+    pendingInvoicesCents,
+    avgUsage,
+    alertsCount,
+  };
+}
+
+function renderSubscriptionUsageMini(subscription) {
+  const usage = subscription.usage || {};
+  const pct = Number(usage.pct || 0);
+
+  return `
+    <div class="planos-subscription-usage-mini">
+      <div class="planos-subscription-usage-head">
+        <span>Uso do ciclo</span>
+        <strong>${escapeHtml(`${pct}%`)}</strong>
+      </div>
+      ${buildProgressBar(pct, 100, pct >= 90 ? 'planos-progress--warning' : 'planos-progress--money')}
+      <div class="planos-subscription-usage-foot">
+        <span>${escapeHtml(formatNumber(usage.consumedTotal || 0, 0))} consumido(s)</span>
+        <span>${escapeHtml(formatNumber(usage.reservedTotal || 0, 0))} reservado(s)</span>
+        <span>${escapeHtml(formatNumber(usage.remainingTotal || 0, 0))} saldo</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderSubscriptionAlerts(subscription) {
+  const alerts = subscription.alerts || [];
+  if (!alerts.length) return '';
+
+  return `
+    <div class="planos-subscription-alerts">
+      ${alerts.slice(0, 2).map((alert) => {
+        const meta = getSubscriptionAlertMeta(alert.tone);
+        return `
+          <span class="planos-subscription-alert" style="background:${meta.bg};color:${meta.color};border-color:${meta.border};">
+            ${escapeHtml(alert.title)}
+          </span>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderSubscriptionActions(subscription, compact = false) {
+  const group = getSubscriptionStatusGroup(subscription.status);
+  const invoice = getNextOpenInvoice(subscription.raw) || subscription.latestInvoice;
+  const canMarkPaid = invoice && ['pending', 'open', 'created', 'authorized', 'failed', 'expired', 'past_due'].includes(String(invoice.status || '').toLowerCase());
+
+  const buttons = [];
+
+  if (['active', 'past_due', 'pending'].includes(group)) {
+    buttons.push(`<button type="button" class="planos-action-btn planos-subscription-quick-action" data-subscription-id="${escapeHtml(subscription.id)}" data-action="pause">Pausar</button>`);
+  }
+
+  if (['paused', 'past_due', 'pending'].includes(group)) {
+    buttons.push(`<button type="button" class="planos-action-btn planos-subscription-quick-action" data-subscription-id="${escapeHtml(subscription.id)}" data-action="reactivate">Reativar</button>`);
+  }
+
+  if (canMarkPaid) {
+    buttons.push(`<button type="button" class="planos-action-btn planos-action-btn--success planos-subscription-quick-action" data-subscription-id="${escapeHtml(subscription.id)}" data-action="manual-payment">Pagamento manual</button>`);
+  }
+
+  if (!['canceled'].includes(group)) {
+    buttons.push(`<button type="button" class="planos-action-btn planos-subscription-quick-action" data-subscription-id="${escapeHtml(subscription.id)}" data-action="cancel">Cancelar</button>`);
+  }
+
+  buttons.push(`<button type="button" class="planos-action-btn planos-action-btn--ghost planos-subscription-quick-action" data-subscription-id="${escapeHtml(subscription.id)}" data-action="retry-charge">Tentar cobrar</button>`);
+
+  return `
+    <div class="planos-subscription-actions ${compact ? 'is-compact' : ''}">
+      ${buttons.join('')}
+    </div>
+  `;
+}
+
+function renderSubscriptionsV2Cockpit() {
+  const stats = getSubscriptionsV2Stats();
+
+  return `
+    <div class="planos-subscriptions-hero">
+      <div>
+        <div class="planos-club-eyebrow">Central de Recorrência</div>
+        <h3>Assinantes, uso do plano e cobrança no mesmo radar.</h3>
+        <p>
+          A tela mostra quem está ativo, quem está devendo, quem usa demais, quem paga e não usa, e qual fatura precisa de ação.
+        </p>
+      </div>
+      <div class="planos-subscriptions-hero-meter">
+        <span>Receita recorrente prevista</span>
+        <strong>${escapeHtml(formatCompactCurrencyFromCents(stats.recurringRevenueCents))}</strong>
+        <small>${escapeHtml(`${stats.active} ativa(s) · ${stats.alertsCount} alerta(s) inteligentes`)}</small>
+      </div>
+    </div>
+
+    <div class="planos-subscriptions-kpis">
+      ${[
+        { label: 'Ativas', value: stats.active, hint: 'Clientes liberados', tone: 'success' },
+        { label: 'Pendentes', value: stats.pending, hint: 'Aguardando ativação', tone: 'info' },
+        { label: 'Vencidas', value: stats.pastDue, hint: 'Risco de inadimplência', tone: 'danger' },
+        { label: 'Pausadas', value: stats.paused, hint: 'Temporariamente paradas', tone: 'warning' },
+        { label: 'Faturas pendentes', value: formatCompactCurrencyFromCents(stats.pendingInvoicesCents), hint: 'Cobranças em aberto', tone: 'info' },
+        { label: 'Uso médio', value: `${stats.avgUsage}%`, hint: 'Uso dos planos ativos', tone: stats.avgUsage >= 90 ? 'warning' : 'success' },
+      ].map((item) => `
+        <div class="planos-subscription-kpi is-${escapeHtml(item.tone)}">
+          <span>${escapeHtml(item.label)}</span>
+          <strong>${escapeHtml(item.value)}</strong>
+          <small>${escapeHtml(item.hint)}</small>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderSubscriptionsV2Filters() {
+  const activeStatus = planosState.subscriptionStatusFilter || 'all';
+  const activeSmart = planosState.subscriptionSmartFilter || 'all';
+
+  return `
+    <div class="planos-subscriptions-toolbar">
+      <div class="planos-subscription-filter-row">
+        ${SUBSCRIPTION_STATUS_FILTERS.map((filter) => {
+          const count = filter.id === 'all'
+            ? planosState.subscriptions.length
+            : planosState.subscriptions.filter((item) => getSubscriptionStatusGroup(item.status) === filter.id).length;
+
+          return `
+            <button type="button" class="planos-subscription-filter ${activeStatus === filter.id ? 'is-active' : ''}" data-subscription-status-filter="${escapeHtml(filter.id)}">
+              <span>${escapeHtml(filter.label)}</span>
+              <strong>${escapeHtml(count)}</strong>
+            </button>
+          `;
+        }).join('')}
+      </div>
+
+      <div class="planos-subscription-tools">
+        <input
+          type="search"
+          class="modal-input planos-subscription-search"
+          id="planos-subscription-search"
+          placeholder="Buscar por cliente, plano, telefone ou status..."
+          value="${escapeHtml(planosState.subscriptionSearch || '')}"
+        />
+
+        <div class="planos-subscription-smart-filters">
+          ${SUBSCRIPTION_SMART_FILTERS.map((filter) => `
+            <button type="button" class="planos-subscription-smart ${activeSmart === filter.id ? 'is-active' : ''}" data-subscription-smart-filter="${escapeHtml(filter.id)}">
+              <span>${escapeHtml(filter.icon)}</span>
+              ${escapeHtml(filter.label)}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function renderSubscriptionPremiumCard(subscription) {
+  const statusMeta = getSubscriptionStatusPremiumMeta(subscription.status);
+  const invoiceMeta = getInvoiceStatusMeta(subscription.lastInvoiceStatus);
+  const primaryAlert = getSubscriptionPrimaryAlert(subscription);
+  const alertMeta = primaryAlert ? getSubscriptionAlertMeta(primaryAlert.tone) : null;
+  const nextInvoice = subscription.nextInvoice || subscription.latestInvoice;
+
+  return `
+    <article class="planos-subscription-premium-card">
+      <div class="planos-subscription-card-top">
+        <div class="planos-subscription-client">
+          <div class="planos-club-avatar">${escapeHtml(String(subscription.clientName || 'C').slice(0, 2).toUpperCase())}</div>
+          <div>
+            <h4>${escapeHtml(subscription.clientName)}</h4>
+            <p>${escapeHtml(subscription.planName)} · ${escapeHtml(subscription.planTypeLabel)}</p>
+          </div>
+        </div>
+
+        <div class="planos-subscription-status-stack">
+          <span class="planos-badge" style="background:${statusMeta.bg};color:${statusMeta.color};border:1px solid ${statusMeta.border};">
+            ${escapeHtml(statusMeta.icon)} ${escapeHtml(statusMeta.label)}
+          </span>
+          <small style="color:${invoiceMeta.color};">${escapeHtml(invoiceMeta.label)}</small>
+        </div>
+      </div>
+
+      ${primaryAlert ? `
+        <div class="planos-subscription-alert-card" style="background:${alertMeta.bg};border-color:${alertMeta.border};">
+          <strong style="color:${alertMeta.color};">${escapeHtml(primaryAlert.title)}</strong>
+          <span>${escapeHtml(primaryAlert.text)}</span>
+        </div>
+      ` : ''}
+
+      ${renderSubscriptionUsageMini(subscription)}
+
+      <div class="planos-subscription-card-grid">
+        <div>
+          <span>Saldo atual</span>
+          <strong>${escapeHtml(formatNumber(subscription.usage?.remainingTotal || 0, 0))}</strong>
+          <small>benefício(s) disponível(is)</small>
+        </div>
+        <div>
+          <span>Próxima cobrança</span>
+          <strong>${escapeHtml(subscription.nextBillingAt || '—')}</strong>
+          <small>${escapeHtml(nextInvoice ? formatCurrencyFromCents(nextInvoice.amount_cents || 0) : 'sem fatura prevista')}</small>
+        </div>
+        <div>
+          <span>Faturas</span>
+          <strong>${escapeHtml(subscription.invoiceStats?.paid || 0)}/${escapeHtml(subscription.invoiceStats?.total || 0)}</strong>
+          <small>${escapeHtml(`${subscription.invoiceStats?.pending || 0} pendente(s)`)}</small>
+        </div>
+      </div>
+
+      <div class="planos-subscription-card-footer">
+        ${renderSubscriptionAlerts(subscription)}
+        <div class="planos-subscription-card-buttons">
+          <button type="button" class="planos-action-btn planos-action-btn--ghost" data-subscription-view="${escapeHtml(subscription.id)}">Ver detalhes</button>
+          ${renderSubscriptionActions(subscription, true)}
+        </div>
+      </div>
+    </article>
+  `;
+}
+
+function renderSubscriptionsV2() {
+  if (planosState.isLoading && !planosState.isLoaded) {
+    return renderLoadingState('Assinaturas', 'Carregando carteira de recorrência...');
+  }
+
+  if (!planosState.subscriptions.length) {
+    return `
+      ${renderSubscriptionsV2Cockpit()}
+      <div class="planos-club-empty">
+        <strong>Nenhuma assinatura cadastrada.</strong>
+        <span>Crie a primeira assinatura para começar a acompanhar cobrança, saldo de plano e utilização.</span>
+      </div>
+    `;
+  }
+
+  const filtered = getFilteredSubscriptions();
+
+  return `
+    <div class="planos-subscriptions-v2">
+      ${renderSubscriptionsV2Cockpit()}
+      ${renderSubscriptionsV2Filters()}
+
+      ${filtered.length ? `
+        <div class="planos-subscription-count-line">
+          Mostrando ${escapeHtml(filtered.length)} de ${escapeHtml(planosState.subscriptions.length)} assinatura(s)
+        </div>
+        <div class="planos-subscription-premium-grid">
+          ${filtered.map(renderSubscriptionPremiumCard).join('')}
+        </div>
+      ` : `
+        <div class="planos-club-empty">
+          <strong>Nenhuma assinatura encontrada com esses filtros.</strong>
+          <span>Troque o status, limpe a busca ou selecione “Todos” nos alertas inteligentes.</span>
+        </div>
+      `}
+    </div>
+  `;
+}
+
+function renderSubscriptionCycleDetails(subscription) {
+  const usage = subscription.usage || {};
+
+  const rows = [
+    {
+      label: 'Cortes',
+      included: usage.includedHaircuts,
+      consumed: usage.consumedHaircuts,
+      reserved: usage.reservedHaircuts,
+      remaining: usage.remainingHaircuts,
+    },
+    {
+      label: 'Barbas',
+      included: usage.includedBeards,
+      consumed: usage.consumedBeards,
+      reserved: usage.reservedBeards,
+      remaining: usage.remainingBeards,
+    },
+    ...(usage.serviceBalances || []).map((item) => ({
+      label: item.serviceName,
+      included: item.included,
+      consumed: item.consumed,
+      reserved: item.reserved,
+      remaining: item.remaining,
+    })),
+  ].filter((row) => Number(row.included || 0) > 0 || Number(row.remaining || 0) > 0 || Number(row.consumed || 0) > 0 || Number(row.reserved || 0) > 0);
+
+  if (!rows.length) {
+    return `
+      <div class="planos-modal-info-row">
+        Nenhum saldo detalhado encontrado para o ciclo atual.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="planos-subscription-balance-list">
+      ${rows.map((row) => {
+        const used = Number(row.consumed || 0) + Number(row.reserved || 0);
+        const pct = Number(row.included || 0) > 0 ? Math.round((used / Number(row.included || 1)) * 100) : 0;
+
+        return `
+          <div class="planos-subscription-balance-row">
+            <div>
+              <strong>${escapeHtml(row.label)}</strong>
+              <span>${escapeHtml(formatNumber(row.consumed || 0, 0))} consumido(s) · ${escapeHtml(formatNumber(row.reserved || 0, 0))} reservado(s) · ${escapeHtml(formatNumber(row.remaining || 0, 0))} restante(s)</span>
+              ${buildProgressBar(pct, 100, pct >= 90 ? 'planos-progress--warning' : 'planos-progress--money')}
+            </div>
+            <em>${escapeHtml(`${pct}%`)}</em>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderSubscriptionInvoicesPremium(subscription) {
+  const invoices = sortByNewestDate(subscription.invoices || [], ['due_at', 'created_at', 'paid_at']);
+
+  if (!invoices.length) {
+    return `<div class="planos-modal-info-row">Nenhuma fatura encontrada para esta assinatura.</div>`;
+  }
+
+  return `
+    <div class="planos-invoice-list">
+      ${invoices.map((invoice) => {
+        const meta = getInvoiceStatusMeta(invoice.status);
+        const amountCents = Number(invoice.amount_cents || invoice.total_cents || 0);
+        const due = formatDateDisplay(invoice.due_at || invoice.created_at);
+        const canMarkPaid = ['pending', 'open', 'created', 'authorized', 'failed', 'expired', 'past_due'].includes(String(invoice.status || '').toLowerCase());
+
+        return `
+          <div class="planos-invoice-row">
+            <div class="planos-invoice-main">
+              <div class="planos-invoice-title">Fatura ${escapeHtml(String(invoice.id || '').slice(0, 8))}</div>
+              <div class="planos-invoice-sub">
+                Vencimento ${escapeHtml(due)}
+                ${invoice.payment_method ? ` · ${escapeHtml(invoice.payment_method)}` : ''}
+              </div>
+            </div>
+            <div class="planos-invoice-side">
+              <div style="font-weight:900;color:${meta.color};">${escapeHtml(formatCurrencyFromCents(amountCents))}</div>
+              <span class="planos-badge" style="color:${meta.color};background:rgba(255,255,255,.04);border:1px solid ${meta.color}33;">${escapeHtml(meta.label)}</span>
+              ${canMarkPaid ? `
+                <div class="planos-invoice-actions">
+                  <button type="button" class="planos-action-btn planos-invoice-action" data-action="markPaid" data-invoice-id="${escapeHtml(invoice.id)}" data-subscription-id="${escapeHtml(subscription.id)}">Marcar pago</button>
+                  <button type="button" class="planos-action-btn planos-invoice-action" data-action="markFailed" data-invoice-id="${escapeHtml(invoice.id)}" data-subscription-id="${escapeHtml(subscription.id)}">Falhou</button>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderSubscriptionDetailTimeline(subscription) {
+  const consumptions = Array.isArray(subscription.raw?.subscription_consumptions)
+    ? sortByNewestDate(subscription.raw.subscription_consumptions, ['consumed_at', 'reserved_at', 'created_at'])
+    : [];
+
+  if (!consumptions.length) {
+    return `<div class="planos-modal-info-row">Nenhum consumo registrado nesta assinatura ainda.</div>`;
+  }
+
+  return `
+    <div class="planos-subscription-timeline">
+      ${consumptions.slice(0, 10).map((item) => `
+        <div class="planos-subscription-timeline-row">
+          <span>${escapeHtml(item.services?.name || item.consumed_type || 'Benefício')}</span>
+          <strong>${escapeHtml(item.status || 'consumed')}</strong>
+          <small>${escapeHtml(formatDateDisplay(item.finalized_at || item.consumed_at || item.reserved_at || item.created_at))}</small>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+
 
 
 const PLAN_TYPE_META = {
@@ -802,41 +1602,9 @@ function renderPlanRow(plan) {
 }
 
 function renderSubscriptionRow(subscription) {
-  const plan = getPlanById(subscription.planId);
-  const statusMeta = getSubscriptionStatusMeta(subscription.status);
-  const invoiceMeta = getInvoiceStatusMeta(subscription.lastInvoiceStatus);
-
-  return `
-    <button
-      type="button"
-      class="planos-row-button"
-      data-subscription-id="${escapeHtml(subscription.id)}"
-      title="Ver assinatura de ${escapeHtml(subscription.clientName)}"
-    >
-      <div class="planos-row">
-        <div class="planos-row-main">
-          <div class="planos-row-title">${escapeHtml(subscription.clientName)}</div>
-          <div class="planos-row-sub">${escapeHtml(plan?.name || subscription.planName || 'Plano não encontrado')}</div>
-          <div class="planos-row-sub">
-            ${escapeHtml(`Próxima cobrança ${subscription.nextBillingAt} · ${subscription.paymentMethod}`)}
-          </div>
-        </div>
-
-        <div class="planos-row-side">
-          <div
-            class="planos-badge"
-            style="background:${statusMeta.bg};color:${statusMeta.color};border:1px solid ${statusMeta.border};"
-          >
-            ${escapeHtml(statusMeta.label)}
-          </div>
-          <div class="planos-row-sub" style="color:${invoiceMeta.color};font-weight:700;">
-            ${escapeHtml(invoiceMeta.label)}
-          </div>
-        </div>
-      </div>
-    </button>
-  `;
+  return renderSubscriptionPremiumCard(subscription);
 }
+
 
 function renderPlanDetails(plan) {
   const statusClass = plan.isActive ? 'planos-badge planos-badge--success' : 'planos-badge planos-badge--muted';
@@ -1341,84 +2109,103 @@ function renderInvoicesList(subscription) {
 }
 
 function renderSubscriptionDetails(subscription) {
-  const plan = getPlanById(subscription.planId);
-  const statusMeta = getSubscriptionStatusMeta(subscription.status);
+  const statusMeta = getSubscriptionStatusPremiumMeta(subscription.status);
   const invoiceMeta = getInvoiceStatusMeta(subscription.lastInvoiceStatus);
-  const actionButtons = getSubscriptionActionButtons(subscription);
+  const primaryAlert = getSubscriptionPrimaryAlert(subscription);
+  const alertMeta = primaryAlert ? getSubscriptionAlertMeta(primaryAlert.tone) : null;
+  const nextInvoice = subscription.nextInvoice || subscription.latestInvoice;
 
   return `
-    <div class="planos-modal-body">
-      <div>
-        <div class="modal-title" style="margin:0;">${escapeHtml(subscription.clientName)}</div>
-        <div class="modal-sub" style="margin-top:4px;">Detalhes da assinatura</div>
-      </div>
-
-      <div class="planos-modal-grid">
-        <div class="mini-card">
-          <div class="mini-lbl">Plano</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(plan?.name || subscription.planName || '—')}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Status</div>
-          <div class="mini-val" style="font-size:15px;color:${statusMeta.color}">
-            ${escapeHtml(statusMeta.label)}
+    <div class="planos-modal-body planos-subscription-detail-v2">
+      <div class="planos-subscription-detail-hero">
+        <div>
+          <div class="planos-club-eyebrow">Assinatura inteligente</div>
+          <div class="modal-title" style="margin:0;">${escapeHtml(subscription.clientName)}</div>
+          <div class="modal-sub" style="margin-top:4px;">
+            ${escapeHtml(subscription.planName)} · ${escapeHtml(subscription.planTypeLabel)}
           </div>
         </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Próxima cobrança</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(subscription.nextBillingAt)}</div>
-        </div>
-        <div class="mini-card">
-          <div class="mini-lbl">Pagamento</div>
-          <div class="mini-val" style="font-size:15px;">${escapeHtml(subscription.paymentMethod)}</div>
+
+        <div class="planos-subscription-detail-status">
+          <span class="planos-badge" style="background:${statusMeta.bg};color:${statusMeta.color};border:1px solid ${statusMeta.border};">
+            ${escapeHtml(statusMeta.icon)} ${escapeHtml(statusMeta.label)}
+          </span>
+          <small>${escapeHtml(statusMeta.description)}</small>
         </div>
       </div>
 
-      <div class="planos-modal-info">
-        <div class="planos-modal-info-row">
-          <strong>Saldo de cortes:</strong> ${escapeHtml(String(subscription.remainingHaircuts))}
+      ${primaryAlert ? `
+        <div class="planos-subscription-alert-card is-large" style="background:${alertMeta.bg};border-color:${alertMeta.border};">
+          <strong style="color:${alertMeta.color};">${escapeHtml(primaryAlert.title)}</strong>
+          <span>${escapeHtml(primaryAlert.text)}</span>
         </div>
-        <div class="planos-modal-info-row">
-          <strong>Saldo de barbas:</strong> ${escapeHtml(String(subscription.remainingBeards))}
+      ` : ''}
+
+      <div class="planos-subscription-detail-kpis">
+        <div>
+          <span>Saldo atual</span>
+          <strong>${escapeHtml(formatNumber(subscription.usage?.remainingTotal || 0, 0))}</strong>
+          <small>benefício(s) disponível(is)</small>
         </div>
-        <div class="planos-modal-info-row">
-          <strong>Última cobrança:</strong>
-          <span style="color:${invoiceMeta.color};font-weight:700;">${escapeHtml(invoiceMeta.label)}</span>
+        <div>
+          <span>Uso do ciclo</span>
+          <strong>${escapeHtml(`${subscription.usage?.pct || 0}%`)}</strong>
+          <small>${escapeHtml(formatPeriodLabel({ period_start: subscription.usage?.periodStart, period_end: subscription.usage?.periodEnd }))}</small>
+        </div>
+        <div>
+          <span>Próxima cobrança</span>
+          <strong>${escapeHtml(nextInvoice ? formatCurrencyFromCents(nextInvoice.amount_cents || 0) : '—')}</strong>
+          <small>${escapeHtml(subscription.nextBillingAt || 'sem data')}</small>
+        </div>
+        <div>
+          <span>Fatura</span>
+          <strong style="color:${invoiceMeta.color};">${escapeHtml(invoiceMeta.label)}</strong>
+          <small>${escapeHtml(`${subscription.invoiceStats?.pending || 0} pendente(s)`)}</small>
         </div>
       </div>
 
-      <div>
-        <div class="planos-section-title">Ações da assinatura</div>
-        ${
-          actionButtons.length
-            ? `
-              <div class="planos-actions-grid">
-                ${actionButtons.map((button) => `
-                  <button
-                    type="button"
-                    class="planos-action-btn planos-subscription-action"
-                    data-subscription-id="${escapeHtml(subscription.id)}"
-                    data-action="${escapeHtml(button.action)}"
-                  >
-                    ${escapeHtml(button.label)}
-                  </button>
-                `).join('')}
-              </div>
-            `
-            : `
-              <div class="planos-modal-info-row">
-                Nenhuma ação disponível para o status atual.
-              </div>
-            `
-        }
+      <div class="planos-subscription-detail-grid">
+        <section class="planos-club-panel">
+          <div class="planos-rules-panel-head">
+            <div>
+              <h3>Utilização do plano</h3>
+              <p>Mostra o saldo consumido, reservado e restante no ciclo atual.</p>
+            </div>
+          </div>
+          ${renderSubscriptionCycleDetails(subscription)}
+        </section>
+
+        <section class="planos-club-panel">
+          <div class="planos-rules-panel-head">
+            <div>
+              <h3>Ações rápidas</h3>
+              <p>Controle administrativo da recorrência sem sair da tela.</p>
+            </div>
+          </div>
+          ${renderSubscriptionActions(subscription)}
+          <div id="planos-details-feedback" class="planos-detail-feedback"></div>
+        </section>
       </div>
 
-      <div>
-        <div class="planos-section-title">Cobranças</div>
-        ${renderInvoicesList(subscription)}
-      </div>
+      <section class="planos-club-panel">
+        <div class="planos-rules-panel-head">
+          <div>
+            <h3>Faturas e cobranças</h3>
+            <p>Pagas, pendentes, vencidas ou canceladas. Use pagamento manual quando o cliente pagar fora do gateway.</p>
+          </div>
+        </div>
+        ${renderSubscriptionInvoicesPremium(subscription)}
+      </section>
 
-      <div id="planos-details-feedback" class="planos-detail-feedback"></div>
+      <section class="planos-club-panel">
+        <div class="planos-rules-panel-head">
+          <div>
+            <h3>Histórico de utilização</h3>
+            <p>Reservas, consumos e atendimentos vinculados ao plano.</p>
+          </div>
+        </div>
+        ${renderSubscriptionDetailTimeline(subscription)}
+      </section>
 
       <div class="modal-buttons" style="margin-top:10px;">
         <button type="button" class="btn-cancel" id="planos-modal-close">Fechar</button>
@@ -1426,6 +2213,7 @@ function renderSubscriptionDetails(subscription) {
     </div>
   `;
 }
+
 
 function renderSubscriptionForm() {
   return `
@@ -2272,7 +3060,10 @@ function setSubscriptionFormFeedback(message, variant = 'neutral') {
 }
 
 function setSubscriptionDetailsFeedback(message, variant = 'neutral') {
-  const el = document.getElementById('planos-details-feedback');
+  const el =
+    document.getElementById('planos-details-feedback') ||
+    document.getElementById('planos-subscription-detail-feedback');
+
   if (!el) return;
 
   el.textContent = message || '';
@@ -2281,6 +3072,7 @@ function setSubscriptionDetailsFeedback(message, variant = 'neutral') {
     variant === 'success' ? '#00e676' :
     '#5a6888';
 }
+
 
 function setRulesFeedback(message, variant = 'neutral') {
   planosState.rulesFeedback = message || '';
@@ -2767,6 +3559,68 @@ async function handleSubscriptionFormSubmit(event) {
   }
 }
 
+
+async function handleSubscriptionQuickAction(subscriptionId, action) {
+  const subscription = getSubscriptionById(subscriptionId);
+  const buttons = document.querySelectorAll('.planos-subscription-quick-action, .planos-invoice-action');
+
+  if (!subscription) return;
+
+  if (action === 'cancel') {
+    const ok = window.confirm(`Deseja cancelar a assinatura de ${subscription.clientName}?`);
+    if (!ok) return;
+  }
+
+  if (action === 'retry-charge') {
+    window.alert('A retentativa automática será conectada ao gateway na próxima etapa. Por enquanto, use pagamento manual ou gere nova cobrança.');
+    return;
+  }
+
+  try {
+    buttons.forEach((button) => button.setAttribute('disabled', 'disabled'));
+    setSubscriptionDetailsFeedback('Executando ação...', 'neutral');
+
+    if (action === 'activate') {
+      await activateSubscription(subscriptionId);
+    }
+
+    if (action === 'pause') {
+      await pauseSubscription(subscriptionId);
+    }
+
+    if (action === 'reactivate') {
+      await reactivateSubscription(subscriptionId);
+    }
+
+    if (action === 'cancel') {
+      await cancelSubscription(subscriptionId);
+    }
+
+    if (action === 'manual-payment') {
+      const invoice = getNextOpenInvoice(subscription.raw) || subscription.latestInvoice;
+
+      if (!invoice?.id) {
+        throw new Error('Nenhuma fatura pendente encontrada para pagamento manual.');
+      }
+
+      await markInvoicePaid(invoice.id);
+    }
+
+    await loadPlanosData();
+    rerenderPlanos();
+
+    if (planosState.modalMode === 'viewSubscription') {
+      openSubscriptionModal(subscriptionId);
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Não foi possível executar a ação.';
+    setSubscriptionDetailsFeedback(message, 'error');
+    window.alert(message);
+  } finally {
+    buttons.forEach((button) => button.removeAttribute('disabled'));
+  }
+}
+
 async function handleSubscriptionAction(subscriptionId, action) {
   const buttons = document.querySelectorAll('.planos-subscription-action');
 
@@ -3053,7 +3907,56 @@ function bindSubscriptionEvents() {
       openSubscriptionModal(button.dataset.subscriptionId);
     });
   });
+
+  document.querySelectorAll('[data-subscription-view]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const subscriptionId = button.dataset.subscriptionView;
+      if (!subscriptionId) return;
+      openSubscriptionModal(subscriptionId);
+    });
+  });
+
+  document.querySelectorAll('[data-subscription-status-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+      planosState.subscriptionStatusFilter = button.dataset.subscriptionStatusFilter || 'all';
+      rerenderPlanos();
+    });
+  });
+
+  document.querySelectorAll('[data-subscription-smart-filter]').forEach((button) => {
+    button.addEventListener('click', () => {
+      planosState.subscriptionSmartFilter = button.dataset.subscriptionSmartFilter || 'all';
+      rerenderPlanos();
+    });
+  });
+
+  const searchInput = document.getElementById('planos-subscription-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', () => {
+      planosState.subscriptionSearch = searchInput.value || '';
+      const list = document.getElementById('planos-subscriptions-list');
+      if (list) {
+        list.innerHTML = renderSubscriptionsV2();
+        bindSubscriptionEvents();
+      }
+    });
+  }
+
+  document.querySelectorAll('.planos-subscription-quick-action').forEach((button) => {
+    button.addEventListener('click', (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+
+      const subscriptionId = button.dataset.subscriptionId;
+      const action = button.dataset.action;
+
+      if (!subscriptionId || !action) return;
+
+      handleSubscriptionQuickAction(subscriptionId, action);
+    });
+  });
 }
+
 
 function bindPlanosModalEvents() {
   document.getElementById('planos-modal-close')?.addEventListener('click', closePlanosModal);
@@ -3238,9 +4141,7 @@ function rerenderPlanos() {
   }
 
   if (subscriptionsList) {
-    subscriptionsList.innerHTML = planosState.subscriptions.length
-      ? planosState.subscriptions.map(renderSubscriptionRow).join('')
-      : renderEmptyState('Assinaturas', 'Nenhuma assinatura encontrada até o momento.');
+    subscriptionsList.innerHTML = renderSubscriptionsV2();
   }
 
   if (clubCommissions) {
@@ -3287,11 +4188,11 @@ export function renderPlanos() {
     </div>
 
     <div class="planos-tab-panel" data-planos-panel="assinaturas" ${planosState.activeTab === 'assinaturas' ? '' : 'hidden'}>
-      <div class="card">
-        <div class="card-header">
+      <div class="card planos-subscriptions-card">
+        <div class="card-header planos-club-header">
           <div>
             <div class="card-title">Assinaturas</div>
-            <div class="row-sub" style="margin-top:4px;">Controle clientes ativos, cobranças, saldo de cortes e situação da recorrência.</div>
+            <div class="row-sub" style="margin-top:4px;">Central de clientes recorrentes, uso do plano, faturas e alertas inteligentes.</div>
           </div>
           <button type="button" class="btn-primary-gradient" id="planos-new-subscription-button">+ Nova assinatura</button>
         </div>
