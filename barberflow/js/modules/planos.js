@@ -14,18 +14,48 @@ import {
   markInvoicePaid,
   markInvoiceFailed,
   cancelInvoice,
+  getClubCommissionPeriods,
+  getClubCommissionEntries,
+  getClubCommissionConsumptions,
+  markClubCommissionPeriodPaid,
 } from '../services/api.js';
 
 const PLAN_NAME_MAX_LENGTH = 100;
 const PLAN_DESCRIPTION_MAX_LENGTH = 500;
+const PLANOS_ACTIVE_TAB_STORAGE_KEY = 'barberflow.planos.activeTab';
+const PLANOS_TABS = ['planos', 'assinaturas', 'comissoes'];
+
+function getInitialActiveTab() {
+  try {
+    const stored = localStorage.getItem(PLANOS_ACTIVE_TAB_STORAGE_KEY);
+    return PLANOS_TABS.includes(stored) ? stored : 'planos';
+  } catch {
+    return 'planos';
+  }
+}
+
+function persistActiveTab(tab) {
+  try {
+    localStorage.setItem(PLANOS_ACTIVE_TAB_STORAGE_KEY, tab);
+  } catch {
+    // noop
+  }
+}
 
 const planosState = {
   plans: [],
   subscriptions: [],
   clients: [],
+  clubPeriods: [],
+  clubEntries: [],
+  clubConsumptions: [],
+  clubSelectedPeriodId: null,
+  clubIsLoading: false,
+  clubError: '',
   isLoaded: false,
   isLoading: false,
   modalMode: 'closed',
+  activeTab: getInitialActiveTab(),
   activePlanId: null,
   activeSubscriptionId: null,
 };
@@ -50,6 +80,58 @@ function formatCompactCurrencyFromCents(cents) {
   const value = Number(cents || 0) / 100;
   if (value >= 1000) return `R$${value.toFixed(1)}k`;
   return formatCurrencyFromCents(cents);
+}
+
+function formatCurrencyFromReais(value) {
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number(value || 0));
+}
+
+function formatNumber(value, fractionDigits = 2) {
+  return new Intl.NumberFormat('pt-BR', {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  }).format(Number(value || 0));
+}
+
+function formatPercent(value) {
+  return `${formatNumber(value, 2)}%`;
+}
+
+function formatPeriodLabel(period) {
+  if (!period?.period_start || !period?.period_end) return 'Período não definido';
+  return `${formatDateDisplay(period.period_start)} a ${formatDateDisplay(period.period_end)}`;
+}
+
+function getClubPeriodStatusMeta(status) {
+  const map = {
+    draft: { label: 'Prévia', className: 'planos-badge--info', tone: 'info' },
+    closed: { label: 'Fechado', className: 'planos-badge--warning', tone: 'warning' },
+    paid: { label: 'Pago', className: 'planos-badge--success', tone: 'success' },
+    canceled: { label: 'Cancelado', className: 'planos-badge--muted', tone: 'muted' },
+  };
+
+  return map[status] || map.draft;
+}
+
+function getSelectedClubPeriod() {
+  return planosState.clubPeriods.find((period) => period.id === planosState.clubSelectedPeriodId)
+    || planosState.clubPeriods[0]
+    || null;
+}
+
+function buildProgressBar(value, max, className = '') {
+  const safeValue = Number(value || 0);
+  const safeMax = Math.max(Number(max || 0), safeValue, 1);
+  const pct = Math.max(0, Math.min(100, Math.round((safeValue / safeMax) * 100)));
+
+  return `
+    <div class="planos-progress ${escapeHtml(className)}">
+      <span style="width:${pct}%"></span>
+    </div>
+  `;
 }
 
 function formatDateDisplay(value) {
@@ -902,6 +984,240 @@ function renderSubscriptionForm() {
   `;
 }
 
+
+function renderPlanosTabs() {
+  const tabs = [
+    { id: 'planos', label: 'Planos', hint: 'Produtos recorrentes' },
+    { id: 'assinaturas', label: 'Assinaturas', hint: 'Clientes do clube' },
+    { id: 'comissoes', label: 'Comissões do Clube', hint: 'Pontos e rateio' },
+  ];
+
+  return `
+    <div class="planos-tabs" role="tablist" aria-label="Planos e assinaturas">
+      ${tabs.map((tab) => `
+        <button
+          type="button"
+          class="planos-tab ${planosState.activeTab === tab.id ? 'is-active' : ''}"
+          data-planos-tab="${escapeHtml(tab.id)}"
+          role="tab"
+          aria-selected="${planosState.activeTab === tab.id ? 'true' : 'false'}"
+        >
+          <span>${escapeHtml(tab.label)}</span>
+          <small>${escapeHtml(tab.hint)}</small>
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderClubPeriodSelector() {
+  if (!planosState.clubPeriods.length) return '';
+
+  const selected = getSelectedClubPeriod();
+
+  return `
+    <div class="planos-club-selector">
+      <div>
+        <div class="planos-section-title">Competência</div>
+        <select class="modal-input" id="planos-club-period-select">
+          ${planosState.clubPeriods.map((period) => `
+            <option value="${escapeHtml(period.id)}" ${selected?.id === period.id ? 'selected' : ''}>
+              ${escapeHtml(formatPeriodLabel(period))} · ${escapeHtml(getClubPeriodStatusMeta(period.status).label)}
+            </option>
+          `).join('')}
+        </select>
+      </div>
+
+      <button type="button" class="planos-action-btn" id="planos-club-refresh-button">
+        Atualizar dados
+      </button>
+    </div>
+  `;
+}
+
+function renderClubSummary(period) {
+  if (!period) return '';
+
+  const statusMeta = getClubPeriodStatusMeta(period.status);
+  const hasPoints = Number(period.total_commission_points || 0) > 0;
+
+  return `
+    <div class="planos-club-hero">
+      <div class="planos-club-hero-main">
+        <div class="planos-club-eyebrow">Divisão inteligente do Clube</div>
+        <h3>Comissões por pontos, sem cálculo escondido.</h3>
+        <p>
+          O sistema soma as mensalidades pagas, separa a parte da barbearia e divide o valor do time conforme os pontos gerados pelos atendimentos finalizados.
+        </p>
+      </div>
+      <div class="planos-club-status">
+        <span class="planos-badge ${statusMeta.className}">${escapeHtml(statusMeta.label)}</span>
+        <strong>${escapeHtml(formatPeriodLabel(period))}</strong>
+        <small>${hasPoints ? `${escapeHtml(formatNumber(period.total_commission_points, 2))} ponto(s) no período` : 'Nenhum ponto finalizado neste período'}</small>
+      </div>
+    </div>
+
+    <div class="planos-club-flow">
+      <div class="planos-club-step">
+        <span>1</span>
+        <small>Entrou no Clube</small>
+        <strong>${escapeHtml(formatCurrencyFromReais(period.gross_revenue))}</strong>
+      </div>
+      <div class="planos-club-step">
+        <span>2</span>
+        <small>Fica para a barbearia</small>
+        <strong>${escapeHtml(formatCurrencyFromReais(period.barbershop_share))}</strong>
+        <em>${escapeHtml(formatPercent(period.barbershop_share_pct))}</em>
+      </div>
+      <div class="planos-club-step">
+        <span>3</span>
+        <small>Vai para o time</small>
+        <strong>${escapeHtml(formatCurrencyFromReais(period.team_pool))}</strong>
+        <em>${escapeHtml(formatPercent(period.team_share_pct))}</em>
+      </div>
+      <div class="planos-club-step">
+        <span>4</span>
+        <small>Valor do ponto</small>
+        <strong>${escapeHtml(formatCurrencyFromReais(period.point_value))}</strong>
+        <em>${escapeHtml(`${formatNumber(period.total_commission_points, 2)} pts`)}</em>
+      </div>
+    </div>
+  `;
+}
+
+function renderClubEntries() {
+  if (!planosState.clubEntries.length) {
+    return `
+      <div class="planos-modal-info-row">
+        Nenhuma comissão de barbeiro encontrada para esta competência.
+      </div>
+    `;
+  }
+
+  const maxAmount = Math.max(...planosState.clubEntries.map((entry) => Number(entry.commission_amount_cents || 0)), 1);
+
+  return `
+    <div class="planos-club-list">
+      ${planosState.clubEntries.map((entry) => {
+        const amount = Number(entry.commission_amount || 0);
+        return `
+          <div class="planos-club-entry-row">
+            <div class="planos-club-avatar">${escapeHtml(String(entry.barber_name || 'B').slice(0, 2).toUpperCase())}</div>
+            <div class="planos-club-entry-main">
+              <div class="planos-row-title">${escapeHtml(entry.barber_name || 'Barbeiro')}</div>
+              <div class="planos-row-sub">
+                ${escapeHtml(`${formatNumber(entry.total_points, 2)} ponto(s) · ${entry.consumptions_count || 0} atendimento(s) finalizado(s)`)}
+              </div>
+              ${buildProgressBar(entry.commission_amount_cents, maxAmount, 'planos-progress--money')}
+            </div>
+            <div class="planos-club-entry-side">
+              <strong>${escapeHtml(formatCurrencyFromReais(amount))}</strong>
+              <span class="planos-badge ${getClubPeriodStatusMeta(entry.status).className}">${escapeHtml(getClubPeriodStatusMeta(entry.status).label)}</span>
+            </div>
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function renderClubConsumptions() {
+  if (!planosState.clubConsumptions.length) {
+    return `
+      <div class="planos-modal-info-row">
+        Nenhum atendimento finalizado com pontos nesta competência.
+      </div>
+    `;
+  }
+
+  return `
+    <div class="planos-club-consumptions">
+      ${planosState.clubConsumptions.map((item) => `
+        <div class="planos-club-consumption-row">
+          <div>
+            <div class="planos-row-title">${escapeHtml(item.client_name || 'Cliente')}</div>
+            <div class="planos-row-sub">
+              ${escapeHtml(item.service_name || 'Serviço')} · ${escapeHtml(item.barber_name || 'Barbeiro')} · ${escapeHtml(formatDateDisplay(item.scheduled_at))}
+            </div>
+          </div>
+          <div class="planos-club-consumption-side">
+            <strong>${escapeHtml(`${formatNumber(item.commission_points, 2)} pts`)}</strong>
+            <span>${escapeHtml(formatCurrencyFromReais(item.commission_amount))}</span>
+          </div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderClubCommissions() {
+  if (planosState.clubIsLoading) {
+    return renderLoadingState('Comissões do Clube', 'Carregando fechamentos e pontos de comissão...');
+  }
+
+  if (planosState.clubError) {
+    return `
+      <div class="card planos-club-card">
+        <div class="card-header">
+          <div class="card-title">Comissões do Clube</div>
+          <button type="button" class="btn-primary-gradient" id="planos-club-refresh-button">Tentar novamente</button>
+        </div>
+        <div class="planos-modal-info-row">${escapeHtml(planosState.clubError)}</div>
+      </div>
+    `;
+  }
+
+  if (!planosState.clubPeriods.length) {
+    return `
+      <div class="card planos-club-card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Comissões do Clube</div>
+            <div class="row-sub" style="margin-top:4px;">Ainda não há competências geradas.</div>
+          </div>
+        </div>
+        <div class="planos-club-empty">
+          <strong>Nenhum fechamento encontrado</strong>
+          <span>Quando uma competência for gerada, o BBarberFlow mostrará quanto entrou no Clube, quanto ficou para a barbearia e quanto cada barbeiro recebe por pontos.</span>
+        </div>
+      </div>
+    `;
+  }
+
+  const period = getSelectedClubPeriod();
+  const canMarkPaid = period?.status === 'closed';
+
+  return `
+    <div class="card planos-club-card">
+      <div class="card-header planos-club-header">
+        <div>
+          <div class="card-title">Comissões do Clube</div>
+          <div class="row-sub" style="margin-top:4px;">Rateio por pontos de comissão, pronto para o dono entender sem planilha.</div>
+        </div>
+        ${canMarkPaid ? `
+          <button type="button" class="btn-primary-gradient" id="planos-club-mark-paid-button">
+            Marcar como pago
+          </button>
+        ` : ''}
+      </div>
+
+      ${renderClubPeriodSelector()}
+      ${renderClubSummary(period)}
+
+      <div class="planos-club-grid">
+        <div class="planos-club-panel">
+          <div class="planos-section-title">Quanto cada barbeiro recebe</div>
+          ${renderClubEntries()}
+        </div>
+        <div class="planos-club-panel">
+          <div class="planos-section-title">Atendimentos que geraram pontos</div>
+          ${renderClubConsumptions()}
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 function setPlanFormFeedback(message, variant = 'neutral') {
   const el = document.getElementById('planos-form-feedback');
   if (!el) return;
@@ -942,12 +1258,57 @@ async function ensureClientsLoaded() {
   planosState.clients = Array.isArray(clients) ? clients : [];
 }
 
+
+async function loadClubCommissionsData({ render = true } = {}) {
+  if (!hasApiConfig() || !hasAuthToken()) return;
+
+  planosState.clubIsLoading = true;
+  planosState.clubError = '';
+
+  if (render) rerenderPlanos();
+
+  try {
+    const periodsPayload = await getClubCommissionPeriods();
+    planosState.clubPeriods = Array.isArray(periodsPayload) ? periodsPayload : [];
+
+    const selectedStillExists = planosState.clubPeriods.some((period) => period.id === planosState.clubSelectedPeriodId);
+    planosState.clubSelectedPeriodId = selectedStillExists
+      ? planosState.clubSelectedPeriodId
+      : planosState.clubPeriods[0]?.id || null;
+
+    if (!planosState.clubSelectedPeriodId) {
+      planosState.clubEntries = [];
+      planosState.clubConsumptions = [];
+      return;
+    }
+
+    const [entriesPayload, consumptionsPayload] = await Promise.all([
+      getClubCommissionEntries(planosState.clubSelectedPeriodId),
+      getClubCommissionConsumptions(planosState.clubSelectedPeriodId),
+    ]);
+
+    planosState.clubEntries = Array.isArray(entriesPayload) ? entriesPayload : [];
+    planosState.clubConsumptions = Array.isArray(consumptionsPayload) ? consumptionsPayload : [];
+  } catch (error) {
+    planosState.clubPeriods = [];
+    planosState.clubEntries = [];
+    planosState.clubConsumptions = [];
+    planosState.clubError = error instanceof Error
+      ? error.message
+      : 'Não foi possível carregar as comissões do clube.';
+  } finally {
+    planosState.clubIsLoading = false;
+    if (render) rerenderPlanos();
+  }
+}
+
 async function loadPlanosData() {
   const metricsEl = document.getElementById('planos-metrics');
   const plansListEl = document.getElementById('planos-list');
   const subscriptionsListEl = document.getElementById('planos-subscriptions-list');
+  const clubCommissionsEl = document.getElementById('planos-club-commissions');
 
-  if (!metricsEl || !plansListEl || !subscriptionsListEl) return;
+  if (!metricsEl || !plansListEl || !subscriptionsListEl || !clubCommissionsEl) return;
 
   if (!hasApiConfig()) {
     planosState.isLoaded = false;
@@ -960,6 +1321,10 @@ async function loadPlanosData() {
     subscriptionsListEl.innerHTML = renderEmptyState(
       'Assinaturas',
       'Aguardando configuração da API para exibir as assinaturas.',
+    );
+    clubCommissionsEl.innerHTML = renderEmptyState(
+      'Comissões do Clube',
+      'Aguardando configuração da API para exibir os fechamentos.',
     );
     return;
   }
@@ -976,6 +1341,10 @@ async function loadPlanosData() {
       'Assinaturas',
       'Aguardando autenticação para exibir as assinaturas.',
     );
+    clubCommissionsEl.innerHTML = renderEmptyState(
+      'Comissões do Clube',
+      'Aguardando autenticação para exibir os fechamentos.',
+    );
     return;
   }
 
@@ -983,6 +1352,7 @@ async function loadPlanosData() {
   metricsEl.innerHTML = '';
   plansListEl.innerHTML = renderLoadingState('Planos', 'Carregando planos...');
   subscriptionsListEl.innerHTML = renderLoadingState('Assinaturas', 'Carregando assinaturas...');
+  clubCommissionsEl.innerHTML = renderLoadingState('Comissões do Clube', 'Carregando comissões por pontos...');
 
   try {
     const [plansPayload, subscriptionsPayload] = await Promise.all([
@@ -997,6 +1367,9 @@ async function loadPlanosData() {
 
     planosState.plans = applySubscriberCounts(mappedPlans, mappedSubscriptions);
     planosState.subscriptions = mappedSubscriptions;
+
+    await loadClubCommissionsData({ render: false });
+
     planosState.isLoaded = true;
 
     rerenderPlanos();
@@ -1007,6 +1380,10 @@ async function loadPlanosData() {
     plansListEl.innerHTML = renderConfigHint('Erro ao carregar planos', message, true);
     subscriptionsListEl.innerHTML = renderEmptyState(
       'Assinaturas',
+      'Sem dados por causa do erro de integração.',
+    );
+    clubCommissionsEl.innerHTML = renderEmptyState(
+      'Comissões do Clube',
       'Sem dados por causa do erro de integração.',
     );
   } finally {
@@ -1301,6 +1678,35 @@ async function handleInvoiceAction(invoiceId, subscriptionId, action) {
   }
 }
 
+
+async function handleClubPeriodChange(periodId) {
+  if (!periodId) return;
+  planosState.clubSelectedPeriodId = periodId;
+  await loadClubCommissionsData({ render: true });
+}
+
+async function handleMarkClubPeriodPaid() {
+  const period = getSelectedClubPeriod();
+  if (!period || period.status !== 'closed') return;
+
+  const ok = window.confirm('Deseja marcar este fechamento do Clube como pago? Essa ação muda o status das comissões para pago.');
+  if (!ok) return;
+
+  try {
+    planosState.clubIsLoading = true;
+    rerenderPlanos();
+    await markClubCommissionPeriodPaid(period.id);
+    await loadClubCommissionsData({ render: false });
+    rerenderPlanos();
+  } catch (error) {
+    planosState.clubError = error instanceof Error
+      ? error.message
+      : 'Não foi possível marcar o fechamento como pago.';
+    planosState.clubIsLoading = false;
+    rerenderPlanos();
+  }
+}
+
 function renderPlanosModal() {
   const modal = document.getElementById('planos-details-modal');
   const content = document.getElementById('planos-details-content');
@@ -1414,6 +1820,33 @@ function bindPlanosModalEvents() {
   });
 }
 
+
+function bindPlanosTabsEvents() {
+  document.querySelectorAll('[data-planos-tab]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const tab = button.dataset.planosTab;
+      if (!PLANOS_TABS.includes(tab)) return;
+      planosState.activeTab = tab;
+      persistActiveTab(tab);
+      rerenderPlanos();
+    });
+  });
+}
+
+function bindClubCommissionEvents() {
+  document.getElementById('planos-club-period-select')?.addEventListener('change', (event) => {
+    handleClubPeriodChange(event.target.value);
+  });
+
+  document.getElementById('planos-club-refresh-button')?.addEventListener('click', () => {
+    loadClubCommissionsData({ render: true });
+  });
+
+  document.getElementById('planos-club-mark-paid-button')?.addEventListener('click', () => {
+    handleMarkClubPeriodPaid();
+  });
+}
+
 function bindPlanosStaticEvents() {
   document.getElementById('planos-new-plan-button')?.addEventListener('click', () => {
     openCreatePlanModal();
@@ -1432,10 +1865,18 @@ function bindPlanosStaticEvents() {
 
 function rerenderPlanos() {
   const metrics = document.getElementById('planos-metrics');
+  const tabs = document.getElementById('planos-tabs-wrap');
   const plansList = document.getElementById('planos-list');
   const subscriptionsList = document.getElementById('planos-subscriptions-list');
+  const clubCommissions = document.getElementById('planos-club-commissions');
 
   if (metrics) metrics.innerHTML = renderMetrics();
+  if (tabs) tabs.innerHTML = renderPlanosTabs();
+
+  document.querySelectorAll('.planos-tab-panel').forEach((panel) => {
+    const isActive = panel.dataset.planosPanel === planosState.activeTab;
+    panel.hidden = !isActive;
+  });
 
   if (plansList) {
     plansList.innerHTML = planosState.plans.length
@@ -1449,8 +1890,14 @@ function rerenderPlanos() {
       : renderEmptyState('Assinaturas', 'Nenhuma assinatura encontrada até o momento.');
   }
 
+  if (clubCommissions) {
+    clubCommissions.innerHTML = renderClubCommissions();
+  }
+
+  bindPlanosTabsEvents();
   bindPlanEvents();
   bindSubscriptionEvents();
+  bindClubCommissionEvents();
 }
 
 export function renderPlanos() {
@@ -1460,26 +1907,46 @@ export function renderPlanos() {
     ${renderMetrics()}
   </div>
 
-  <div class="grid-2">
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Planos</div>
-        <button type="button" class="btn-primary-gradient" id="planos-new-plan-button">+ Novo plano</button>
-      </div>
+  <div id="planos-tabs-wrap">
+    ${renderPlanosTabs()}
+  </div>
 
-      <div id="planos-list">
-        ${renderLoadingState('Planos', 'Carregando planos...')}
+  <div class="planos-tab-panels">
+    <div class="planos-tab-panel" data-planos-panel="planos" ${planosState.activeTab === 'planos' ? '' : 'hidden'}>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Planos</div>
+            <div class="row-sub" style="margin-top:4px;">Cadastre pacotes recorrentes, limites de uso e benefícios vendidos pela barbearia.</div>
+          </div>
+          <button type="button" class="btn-primary-gradient" id="planos-new-plan-button">+ Novo plano</button>
+        </div>
+
+        <div id="planos-list">
+          ${renderLoadingState('Planos', 'Carregando planos...')}
+        </div>
       </div>
     </div>
 
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">Assinaturas</div>
-        <button type="button" class="btn-primary-gradient" id="planos-new-subscription-button">+ Nova assinatura</button>
-      </div>
+    <div class="planos-tab-panel" data-planos-panel="assinaturas" ${planosState.activeTab === 'assinaturas' ? '' : 'hidden'}>
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Assinaturas</div>
+            <div class="row-sub" style="margin-top:4px;">Controle clientes ativos, cobranças, saldo de cortes e situação da recorrência.</div>
+          </div>
+          <button type="button" class="btn-primary-gradient" id="planos-new-subscription-button">+ Nova assinatura</button>
+        </div>
 
-      <div id="planos-subscriptions-list">
-        ${renderLoadingState('Assinaturas', 'Carregando assinaturas...')}
+        <div id="planos-subscriptions-list">
+          ${renderLoadingState('Assinaturas', 'Carregando assinaturas...')}
+        </div>
+      </div>
+    </div>
+
+    <div class="planos-tab-panel" data-planos-panel="comissoes" ${planosState.activeTab === 'comissoes' ? '' : 'hidden'}>
+      <div id="planos-club-commissions">
+        ${renderLoadingState('Comissões do Clube', 'Carregando comissões por pontos...')}
       </div>
     </div>
   </div>
@@ -1495,7 +1962,9 @@ export function renderPlanos() {
 
 export function initPlanosPage() {
   bindPlanosStaticEvents();
+  bindPlanosTabsEvents();
   bindPlanEvents();
   bindSubscriptionEvents();
+  bindClubCommissionEvents();
   loadPlanosData();
 }
