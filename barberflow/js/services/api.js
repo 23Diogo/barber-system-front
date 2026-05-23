@@ -536,6 +536,39 @@ export async function markClubCommissionPeriodPaid(periodId) {
   });
 }
 
+export async function getClubCommissionSettings() {
+  return apiFetch('/api/club-commissions/settings');
+}
+
+export async function updateClubCommissionSettings(payload) {
+  return apiFetch('/api/club-commissions/settings', {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getClubCommissionServicePoints() {
+  return apiFetch('/api/club-commissions/service-points');
+}
+
+export async function updateClubCommissionServicePoint(pointId, payload) {
+  return apiFetch(`/api/club-commissions/service-points/${pointId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getClubCommissionPlanRules() {
+  return apiFetch('/api/club-commissions/plan-rules');
+}
+
+export async function updateClubCommissionPlanRule(ruleId, payload) {
+  return apiFetch(`/api/club-commissions/plan-rules/${ruleId}`, {
+    method: 'PUT',
+    body: JSON.stringify(payload),
+  });
+}
+
 /* =========================
    MERCADO PAGO
 ========================= */
@@ -596,5 +629,11 @@ window.BarberFlowApi = {
   getClubCommissionEntries,
   getClubCommissionConsumptions,
   markClubCommissionPeriodPaid,
+  getClubCommissionSettings,
+  updateClubCommissionSettings,
+  getClubCommissionServicePoints,
+  updateClubCommissionServicePoint,
+  getClubCommissionPlanRules,
+  updateClubCommissionPlanRule,
   createMercadoPagoPreference,
 };
