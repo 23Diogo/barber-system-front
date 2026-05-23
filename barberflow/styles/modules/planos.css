@@ -840,3 +840,514 @@ html[data-theme="light"] .page--planos {
     }
   }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   Regras do Clube UX 200% — painel guiado, leigo e premium
+   ════════════════════════════════════════════════════════════════ */
+.page--planos .planos-rules-card--ux200 {
+  position: relative;
+  overflow: hidden;
+}
+
+.page--planos .planos-rules-card--ux200::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 220px;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(0, 230, 118, .10), transparent 32%),
+    radial-gradient(circle at 72% 10%, rgba(79, 195, 247, .13), transparent 36%),
+    radial-gradient(circle at 98% 0%, rgba(156, 111, 255, .12), transparent 34%);
+  opacity: .95;
+}
+
+.page--planos .planos-rules-card--ux200 > * {
+  position: relative;
+  z-index: 1;
+}
+
+.page--planos .planos-rules-header-premium {
+  align-items: flex-start;
+}
+
+.page--planos .planos-rules-cockpit {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(230px, 290px) minmax(210px, 250px);
+  gap: 14px;
+  padding: 18px;
+  margin-bottom: 14px;
+  border: 1px solid rgba(79, 195, 247, .18);
+  border-radius: 22px;
+  background:
+    linear-gradient(135deg, rgba(79, 195, 247, .10), rgba(156, 111, 255, .055)),
+    rgba(7, 10, 24, .74);
+  box-shadow: 0 18px 55px rgba(0, 0, 0, .22), inset 0 1px 0 rgba(255,255,255,.04);
+}
+
+.page--planos .planos-rules-cockpit-main h3 {
+  margin: 0;
+  max-width: 720px;
+  color: #e8f0fe;
+  font-size: clamp(20px, 2vw, 28px);
+  line-height: 1.12;
+  letter-spacing: -.02em;
+}
+
+.page--planos .planos-rules-cockpit-main p {
+  margin: 10px 0 0;
+  max-width: 800px;
+  color: #8ea0c2;
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.page--planos .planos-rules-cockpit-card {
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  min-height: 116px;
+  padding: 14px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 18px;
+  background: rgba(3, 6, 18, .36);
+}
+
+.page--planos .planos-rules-cockpit-card span,
+.page--planos .planos-rules-guide-card small,
+.page--planos .planos-rules-field-mini small,
+.page--planos .planos-rules-input-shell small {
+  color: #5a6888;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.page--planos .planos-rules-cockpit-card strong {
+  color: #e8f0fe;
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.page--planos .planos-rules-cockpit-card small {
+  color: #8ea0c2;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.page--planos .planos-rules-cockpit-card--result {
+  background: linear-gradient(135deg, rgba(0,230,118,.12), rgba(79,195,247,.08));
+  border-color: rgba(0,230,118,.20);
+}
+
+.page--planos .planos-rules-cockpit-card--result strong {
+  font-family: 'Orbitron', sans-serif;
+  color: #00e676;
+  font-size: 23px;
+}
+
+.page--planos .planos-rules-guide {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.page--planos .planos-rules-guide-card {
+  position: relative;
+  overflow: hidden;
+  min-height: 112px;
+  padding: 14px;
+  border: 1px solid rgba(79,195,247,.12);
+  border-radius: 18px;
+  background: rgba(255,255,255,.025);
+}
+
+.page--planos .planos-rules-guide-card::after {
+  content: '';
+  position: absolute;
+  inset: auto -26px -32px auto;
+  width: 92px;
+  height: 92px;
+  border-radius: 999px;
+  background: rgba(79, 195, 247, .07);
+}
+
+.page--planos .planos-rules-guide-card span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  margin-bottom: 10px;
+  border-radius: 999px;
+  background: rgba(79,195,247,.12);
+  border: 1px solid rgba(79,195,247,.24);
+  color: #4fc3f7;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.page--planos .planos-rules-guide-card strong {
+  display: block;
+  margin-top: 8px;
+  color: #e8f0fe;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.page--planos .planos-rules-guide-card--glow {
+  background: linear-gradient(135deg, rgba(0,230,118,.11), rgba(79,195,247,.07));
+  border-color: rgba(0,230,118,.20);
+}
+
+.page--planos .planos-rules-stack--premium {
+  gap: 16px;
+}
+
+.page--planos .planos-rules-panel {
+  border-radius: 20px;
+}
+
+.page--planos .planos-rules-panel--split,
+.page--planos .planos-rules-panel--services,
+.page--planos .planos-rules-panel--plans {
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,.028), rgba(255,255,255,.014)),
+    rgba(8, 10, 25, .82);
+}
+
+.page--planos .planos-rules-panel-head--premium {
+  align-items: stretch;
+}
+
+.page--planos .planos-rules-money-flow {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(110px, 1fr));
+  gap: 8px;
+  min-width: 420px;
+}
+
+.page--planos .planos-rules-money-flow div {
+  padding: 12px;
+  border: 1px solid rgba(79,195,247,.14);
+  border-radius: 16px;
+  background: rgba(79,195,247,.045);
+}
+
+.page--planos .planos-rules-money-flow small {
+  display: block;
+  color: #5a6888;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.page--planos .planos-rules-money-flow strong {
+  display: block;
+  margin-top: 6px;
+  font-family: 'Orbitron', sans-serif;
+  color: #00e676;
+  font-size: 16px;
+  white-space: nowrap;
+}
+
+.page--planos .planos-rules-presets {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.page--planos .planos-rules-preset {
+  display: grid;
+  gap: 5px;
+  padding: 13px;
+  border: 1px solid rgba(79,195,247,.13);
+  border-radius: 16px;
+  background: rgba(255,255,255,.022);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+
+.page--planos .planos-rules-preset:hover,
+.page--planos .planos-rules-preset:focus-visible {
+  transform: translateY(-2px);
+  border-color: rgba(79,195,247,.34);
+  background: rgba(79,195,247,.07);
+}
+
+.page--planos .planos-rules-preset span {
+  color: #e8f0fe;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.page--planos .planos-rules-preset strong {
+  font-family: 'Orbitron', sans-serif;
+  color: #4fc3f7;
+  font-size: 16px;
+}
+
+.page--planos .planos-rules-preset small {
+  color: #8ea0c2;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.page--planos .planos-rules-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+}
+
+.page--planos .planos-rules-input-shell,
+.page--planos .planos-rules-switches {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,.07);
+  border-radius: 16px;
+  background: rgba(255,255,255,.022);
+}
+
+.page--planos .planos-rules-input-shell small {
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+  line-height: 1.45;
+}
+
+.page--planos .planos-rules-switches {
+  align-content: center;
+}
+
+.page--planos .planos-rules-check--switch span {
+  display: grid;
+  gap: 3px;
+}
+
+.page--planos .planos-rules-check--switch strong {
+  color: #e8f0fe;
+  font-size: 11px;
+}
+
+.page--planos .planos-rules-check--switch small {
+  color: #5a6888;
+  font-size: 10px;
+}
+
+.page--planos .planos-rules-explain--story strong {
+  color: #e8f0fe;
+}
+
+.page--planos .planos-rules-action-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 4px;
+}
+
+.page--planos .planos-rules-action-row span {
+  color: #5a6888;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.page--planos .planos-rules-save-btn {
+  width: auto;
+  min-width: 180px;
+  padding-inline: 22px;
+}
+
+.page--planos .planos-rules-mini-legend,
+.page--planos .planos-rules-factor-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+  max-width: 420px;
+}
+
+.page--planos .planos-rules-mini-legend span,
+.page--planos .planos-rules-factor-strip span {
+  padding: 7px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(79,195,247,.14);
+  background: rgba(79,195,247,.045);
+  color: #8ea0c2;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.page--planos .planos-rules-factor-strip strong {
+  color: #4fc3f7;
+}
+
+.page--planos .planos-rules-row--service,
+.page--planos .planos-rules-row--plan {
+  align-items: stretch;
+  padding: 14px;
+}
+
+.page--planos .planos-rules-service-name {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.page--planos .planos-rules-service-dot {
+  width: 38px;
+  height: 38px;
+  border-radius: 14px;
+  flex: 0 0 auto;
+  background:
+    radial-gradient(circle at 35% 25%, rgba(255,255,255,.35), transparent 22%),
+    linear-gradient(135deg, rgba(79,195,247,.25), rgba(156,111,255,.16));
+  border: 1px solid rgba(79,195,247,.18);
+  box-shadow: 0 0 24px rgba(79,195,247,.08);
+}
+
+.page--planos .planos-rules-formula-line {
+  margin-top: 10px;
+  padding: 9px 10px;
+  border: 1px dashed rgba(79,195,247,.18);
+  border-radius: 12px;
+  background: rgba(79,195,247,.035);
+  color: #8ea0c2;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.page--planos .planos-rules-formula-line strong {
+  color: #00e676;
+}
+
+.page--planos .planos-rules-row-controls--premium {
+  align-content: center;
+}
+
+.page--planos .planos-rules-field-mini {
+  display: grid;
+  gap: 6px;
+}
+
+.page--planos .planos-rules-field-mini--wide {
+  min-width: 180px;
+}
+
+body.theme-light .page--planos .planos-rules-cockpit,
+body.light .page--planos .planos-rules-cockpit,
+html[data-theme="light"] .page--planos .planos-rules-cockpit,
+body.theme-light .page--planos .planos-rules-panel--split,
+body.light .page--planos .planos-rules-panel--split,
+html[data-theme="light"] .page--planos .planos-rules-panel--split,
+body.theme-light .page--planos .planos-rules-panel--services,
+body.light .page--planos .planos-rules-panel--services,
+html[data-theme="light"] .page--planos .planos-rules-panel--services,
+body.theme-light .page--planos .planos-rules-panel--plans,
+body.light .page--planos .planos-rules-panel--plans,
+html[data-theme="light"] .page--planos .planos-rules-panel--plans {
+  background: rgba(255,255,255,.76);
+  border-color: rgba(18, 29, 57, .12);
+}
+
+body.theme-light .page--planos .planos-rules-cockpit-main h3,
+body.light .page--planos .planos-rules-cockpit-main h3,
+html[data-theme="light"] .page--planos .planos-rules-cockpit-main h3,
+body.theme-light .page--planos .planos-rules-guide-card strong,
+body.light .page--planos .planos-rules-guide-card strong,
+html[data-theme="light"] .page--planos .planos-rules-guide-card strong,
+body.theme-light .page--planos .planos-rules-cockpit-card strong,
+body.light .page--planos .planos-rules-cockpit-card strong,
+html[data-theme="light"] .page--planos .planos-rules-cockpit-card strong,
+body.theme-light .page--planos .planos-rules-check--switch strong,
+body.light .page--planos .planos-rules-check--switch strong,
+html[data-theme="light"] .page--planos .planos-rules-check--switch strong {
+  color: #111827;
+}
+
+body.theme-light .page--planos .planos-rules-cockpit-main p,
+body.light .page--planos .planos-rules-cockpit-main p,
+html[data-theme="light"] .page--planos .planos-rules-cockpit-main p,
+body.theme-light .page--planos .planos-rules-preset small,
+body.light .page--planos .planos-rules-preset small,
+html[data-theme="light"] .page--planos .planos-rules-preset small,
+body.theme-light .page--planos .planos-rules-formula-line,
+body.light .page--planos .planos-rules-formula-line,
+html[data-theme="light"] .page--planos .planos-rules-formula-line {
+  color: #62708a;
+}
+
+@media (max-width: 1180px) {
+  .page--planos .planos-rules-cockpit,
+  .page--planos .planos-rules-guide,
+  .page--planos .planos-rules-presets {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .page--planos .planos-rules-cockpit-main {
+    grid-column: 1 / -1;
+  }
+
+  .page--planos .planos-rules-money-flow {
+    min-width: 0;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 980px) {
+  .page--planos .planos-rules-cockpit,
+  .page--planos .planos-rules-guide,
+  .page--planos .planos-rules-presets,
+  .page--planos .planos-rules-form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .page--planos .planos-rules-money-flow {
+    width: 100%;
+  }
+
+  .page--planos .planos-rules-mini-legend,
+  .page--planos .planos-rules-factor-strip {
+    justify-content: flex-start;
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  .page--planos .planos-rules-cockpit,
+  .page--planos .planos-rules-panel--split,
+  .page--planos .planos-rules-panel--services,
+  .page--planos .planos-rules-panel--plans {
+    padding: 12px;
+    border-radius: 16px;
+  }
+
+  .page--planos .planos-rules-money-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .page--planos .planos-rules-action-row {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .page--planos .planos-rules-save-btn {
+    width: 100%;
+  }
+
+  .page--planos .planos-rules-field-mini,
+  .page--planos .planos-rules-field-mini--wide,
+  .page--planos .planos-rules-number,
+  .page--planos .planos-rules-select {
+    width: 100%;
+    min-width: 0;
+  }
+}
