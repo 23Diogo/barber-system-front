@@ -1,33 +1,19 @@
 // ─── Sidebar mobile toggle ────────────────────────────────────────────────────
 
 export function initMobileSidebar() {
-  // Injeta o botão hamburger no topbar
   const topbar = document.querySelector('.topbar');
   const sidebar = document.querySelector('.sidebar');
   if (!topbar || !sidebar) return;
 
-  // Evita duplicar backdrop/botão se a inicialização rodar mais de uma vez.
-  if (document.querySelector('.sidebar-toggle')) return;
+  const toggle =
+    document.getElementById('sidebarToggle') ||
+    document.querySelector('.sidebar-toggle');
 
-  // Backdrop
-  const backdrop = document.createElement('div');
-  backdrop.className = 'sidebar-backdrop';
-  document.body.appendChild(backdrop);
+  const backdrop =
+    document.getElementById('sidebarBackdrop') ||
+    document.querySelector('.sidebar-backdrop');
 
-  // Botão hamburger
-  const toggle = document.createElement('button');
-  toggle.className = 'sidebar-toggle';
-  toggle.setAttribute('aria-label', 'Abrir menu');
-  toggle.innerHTML = `
-    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round">
-      <line x1="2" y1="4" x2="14" y2="4"/>
-      <line x1="2" y1="8" x2="14" y2="8"/>
-      <line x1="2" y1="12" x2="14" y2="12"/>
-    </svg>
-  `;
-
-  // Insere no início do topbar
-  topbar.insertBefore(toggle, topbar.firstChild);
+  if (!toggle || !backdrop) return;
 
   function openSidebar() {
     sidebar.classList.add('is-open');
@@ -51,7 +37,6 @@ export function initMobileSidebar() {
 
   backdrop.addEventListener('click', closeSidebar);
 
-  // Fecha ao navegar ou ao sair do sistema
   sidebar.querySelectorAll('.nav-item, .sidebar-logout-btn').forEach(item => {
     item.addEventListener('click', () => {
       if (window.innerWidth <= 768) {
@@ -60,7 +45,6 @@ export function initMobileSidebar() {
     });
   });
 
-  // Fecha ao redimensionar para desktop
   window.addEventListener('resize', () => {
     if (window.innerWidth > 768) {
       closeSidebar();
