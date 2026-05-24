@@ -595,6 +595,75 @@ export async function createMercadoPagoPreference(payload) {
   });
 }
 
+
+/* =========================
+   TAXAS E REPASSE TRANSPARENTE
+========================= */
+
+export async function getTransparentBillingSettings() {
+  return apiFetch('/api/transparent-billing/settings');
+}
+
+export async function updateTransparentBillingSettings(payload) {
+  return apiFetch('/api/transparent-billing/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getTransparentBillingPaymentRules(filters = {}) {
+  return apiFetch(`/api/transparent-billing/payment-rules${buildQueryString(filters)}`);
+}
+
+export async function createTransparentBillingPaymentRule(payload) {
+  return apiFetch('/api/transparent-billing/payment-rules', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateTransparentBillingPaymentRule(ruleId, payload) {
+  return apiFetch(`/api/transparent-billing/payment-rules/${ruleId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function deleteTransparentBillingPaymentRule(ruleId) {
+  return apiFetch(`/api/transparent-billing/payment-rules/${ruleId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function simulateTransparentBilling(payload) {
+  return apiFetch('/api/transparent-billing/simulate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getTransparentBillingLedger(filters = {}) {
+  return apiFetch(`/api/transparent-billing/ledger${buildQueryString(filters)}`);
+}
+
+export async function getTransparentBillingDashboard(filters = {}) {
+  return apiFetch(`/api/transparent-billing/dashboard${buildQueryString(filters)}`);
+}
+
+export async function recalculateAppointmentTransparentBilling(appointmentId, payload = {}) {
+  return apiFetch(`/api/transparent-billing/appointments/${appointmentId}/recalculate`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function recalculateSubscriptionInvoiceTransparentBilling(invoiceId, payload = {}) {
+  return apiFetch(`/api/transparent-billing/subscription-invoices/${invoiceId}/recalculate`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 window.BarberFlowApi = {
   getApiBaseUrl,
   setApiBaseUrl,
@@ -653,6 +722,17 @@ window.BarberFlowApi = {
   getClubCommissionPlanRules,
   updateClubCommissionPlanRule,
   createMercadoPagoPreference,
+  getTransparentBillingSettings,
+  updateTransparentBillingSettings,
+  getTransparentBillingPaymentRules,
+  createTransparentBillingPaymentRule,
+  updateTransparentBillingPaymentRule,
+  deleteTransparentBillingPaymentRule,
+  simulateTransparentBilling,
+  getTransparentBillingLedger,
+  getTransparentBillingDashboard,
+  recalculateAppointmentTransparentBilling,
+  recalculateSubscriptionInvoiceTransparentBilling,
 };
 
 /* =========================
