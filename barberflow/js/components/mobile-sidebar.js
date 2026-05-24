@@ -6,6 +6,9 @@ export function initMobileSidebar() {
   const sidebar = document.querySelector('.sidebar');
   if (!topbar || !sidebar) return;
 
+  // Evita duplicar backdrop/botão se a inicialização rodar mais de uma vez.
+  if (document.querySelector('.sidebar-toggle')) return;
+
   // Backdrop
   const backdrop = document.createElement('div');
   backdrop.className = 'sidebar-backdrop';
@@ -48,8 +51,8 @@ export function initMobileSidebar() {
 
   backdrop.addEventListener('click', closeSidebar);
 
-  // Fecha ao navegar (clique em item do menu)
-  sidebar.querySelectorAll('.nav-item').forEach(item => {
+  // Fecha ao navegar ou ao sair do sistema
+  sidebar.querySelectorAll('.nav-item, .sidebar-logout-btn').forEach(item => {
     item.addEventListener('click', () => {
       if (window.innerWidth <= 768) {
         closeSidebar();
