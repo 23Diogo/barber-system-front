@@ -141,8 +141,8 @@ function clearAuthStorage() {
 export function logout() {
   clearAuthStorage();
 
-  // Se algum dia a rota mudar, basta definir window.BARBERFLOW_LOGIN_URL antes do app iniciar.
-  const loginUrl = window.BARBERFLOW_LOGIN_URL || '/login';
+  // O login do admin é o modal interno da área /app
+  const loginUrl = window.BARBERFLOW_LOGIN_URL || '/app';
   window.location.replace(loginUrl);
 }
 
