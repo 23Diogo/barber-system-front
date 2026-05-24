@@ -194,12 +194,19 @@ body::before {
 
 /* ── Form ── */
 .ob-form         { display: grid; gap: 14px; }
-.ob-field        { display: grid; gap: 7px; }
+
+.ob-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  align-content: flex-start;
+}
 
 .ob-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
+  align-items: flex-start;
 }
 
 .ob-section-label {
@@ -222,14 +229,18 @@ body::before {
 
 .ob-input {
   width: 100%;
+  height: 50px;
   min-height: 50px;
+  max-height: 50px;
   border-radius: 14px;
   border: 1px solid var(--input-border);
   background: var(--input-bg);
   color: var(--text);
   padding: 0 15px;
   font: inherit;
+  line-height: 1;
   outline: none;
+  resize: none;
   transition: .18s ease;
 }
 
@@ -300,6 +311,8 @@ body::before {
 
 /* ─── Password strength ───────────────────────────────────────────────────── */
 .ob-password-strength-card {
+  width: 100%;
+  align-self: flex-start;
   margin-top: 8px;
   padding: 10px 12px;
   border-radius: 14px;
@@ -360,3 +373,24 @@ body::before {
   border-color: rgba(0, 230, 118, 0.35);
   background: rgba(0, 230, 118, 0.08);
 }
+
+/* ─── Password grid correction ────────────────────────────────────────────────
+   Evita que o campo "Confirmar senha" estique quando o checklist da senha
+   aumenta a altura da coluna esquerda.
+*/
+#ob-password,
+#ob-password-confirm {
+  height: 50px;
+  min-height: 50px;
+  max-height: 50px;
+}
+
+#ob-password-confirm {
+  align-self: flex-start;
+}
+
+#ob-password-strength,
+.ob-password-strength-card {
+  align-self: flex-start;
+}
+
