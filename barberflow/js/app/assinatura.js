@@ -102,7 +102,15 @@ function getLicenseStatus(payload) {
 }
 
 async function fetchLicenseStatus() {
-  const data = await apiFetch('/api/auth/me');
+  const data = await apiFetch(`/api/auth/me?_=${Date.now()}`, {
+    method: 'GET',
+    cache: 'no-store',
+    headers: {
+      'Cache-Control': 'no-cache',
+      Pragma: 'no-cache',
+    },
+  });
+
   return {
     status: getLicenseStatus(data),
     payload: data,
@@ -143,7 +151,7 @@ async function waitForLicenseActivation() {
     await sleep(POLL_INTERVAL_MS);
   }
 
-  setPayButtonLoading(false, 'Verificar / pagar novamente');
+  setPayButtonLoading(false, 'Verificar assinatura');
   setAssinaturaMessage(
     'Seu pagamento pode estar em processamento. Se você já pagou via PIX, aguarde alguns instantes e clique em “Verificar / pagar novamente”.',
     'pending'
