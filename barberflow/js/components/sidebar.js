@@ -99,9 +99,81 @@ function initNewClientsBadge() {
   _badgeInterval = setInterval(_checkNewClients, 60_000);
 }
 
+// ─── Logout ───────────────────────────────────────────────────────────────────
+
+const AUTH_STORAGE_KEYS = [
+  'barberflow.authToken',
+  'barberflow.user',
+  'barberflow.barbershop',
+  'barberflow.authUser',
+  'barberflow.auth.user',
+  'barberflow.authBarbershop',
+  'barberflow.license',
+  'barberflow.devAuth',
+];
+
+function clearAuthStorage() {
+  AUTH_STORAGE_KEYS.forEach((key) => {
+    try { localStorage.removeItem(key); } catch {}
+  });
+
+  // Limpa variações futuras de autenticação sem apagar preferências visuais/widgets.
+  try {
+    Object.keys(localStorage).forEach((key) => {
+      const normalized = key.toLowerCase();
+      const isBarberFlowKey = normalized.startsWith('barberflow.');
+      const looksLikeAuth =
+        normalized.includes('authtoken') ||
+        normalized.includes('token') ||
+        normalized.includes('auth') ||
+        normalized.includes('session') ||
+        normalized.includes('license');
+
+      if (isBarberFlowKey && looksLikeAuth) {
+        localStorage.removeItem(key);
+      }
+    });
+  } catch {}
+
+  try { sessionStorage.clear(); } catch {}
+}
+
+export function logout() {
+  clearAuthStorage();
+
+  // Se algum dia a rota mudar, basta definir window.BARBERFLOW_LOGIN_URL antes do app iniciar.
+  const loginUrl = window.BARBERFLOW_LOGIN_URL || '/login';
+  window.location.replace(loginUrl);
+}
+
+function ensureLogoutButton() {
+  const footer = document.querySelector('.sidebar-footer');
+  if (!footer || document.getElementById('sidebar-logout-button')) return;
+
+  const button = document.createElement('button');
+  button.type = 'button';
+  button.id = 'sidebar-logout-button';
+  button.className = 'sidebar-logout-btn';
+  button.setAttribute('aria-label', 'Sair do sistema');
+  button.innerHTML = `
+    <svg class="sidebar-logout-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+      <path d="M16 17l5-5-5-5"/>
+      <path d="M21 12H9"/>
+    </svg>
+    <span class="sidebar-logout-text">Sair do sistema</span>
+    <span class="sidebar-logout-hint">Logout</span>
+  `;
+
+  button.addEventListener('click', logout);
+  footer.appendChild(button);
+}
+
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
 
 export function bindSidebar(onNavigate) {
+  ensureLogoutButton();
+
   document.querySelectorAll('.nav-item[data-nav-target]').forEach((item) => {
     item.addEventListener('click', () => {
       const target = item.dataset.navTarget;
