@@ -14,6 +14,7 @@ import { renderAvaliacoes, initAvaliacoesPage } from './modules/avaliacoes.js';
 import { renderConfiguracoes, initConfiguracoesPage } from './modules/configuracoes.js';
 import { renderPlanos, initPlanosPage } from './modules/planos.js';
 import { renderCrescimento, initCrescimentoPage } from './modules/crescimento.js';
+import { renderRepasseTransparente, initRepasseTransparentePage } from './modules/repasse-transparente.js';
 import { hasAuthToken } from './services/api.js';
 
 const ADMIN_BASE_PATH = '/app';
@@ -33,6 +34,7 @@ const renderers = {
   config:     renderConfiguracoes,
   planos:     renderPlanos,
   cres:       renderCrescimento,
+  'repasse-transparente': renderRepasseTransparente,
 };
 
 const initializers = {
@@ -48,6 +50,7 @@ const initializers = {
   config:     initConfiguracoesPage,
   planos:     initPlanosPage,
   cres:       initCrescimentoPage,
+  'repasse-transparente': initRepasseTransparentePage,
 };
 
 const validPages = new Set(['dash', ...Object.keys(renderers)]);
