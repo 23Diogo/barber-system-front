@@ -50,18 +50,44 @@ function renderPasswordChecklist(password = '', context = {}) {
   `;
 }
 
+function getPasswordStrengthContainer() {
+  const passwordInput = document.getElementById('ob-password');
+  const confirmInput = document.getElementById('ob-password-confirm');
+
+  if (!passwordInput || !confirmInput) return null;
+
+  const confirmField = confirmInput.closest('.ob-field');
+  const passwordGrid = confirmField?.closest('.ob-grid');
+
+  if (!passwordGrid) return null;
+
+  let container = document.getElementById('ob-password-strength');
+
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'ob-password-strength';
+  }
+
+  container.className = 'ob-password-strength-wide';
+
+  // Mantém apenas um container e posiciona como terceiro item do grid:
+  // [Senha] [Confirmar senha]
+  // [Checklist ocupando duas colunas]
+  if (container.parentElement !== passwordGrid) {
+    passwordGrid.appendChild(container);
+  }
+
+  return container;
+}
+
 function ensurePasswordUi() {
   const passwordInput = document.getElementById('ob-password');
   if (!passwordInput) return;
 
-  passwordInput.setAttribute('placeholder', 'Mínimo 8 caracteres, letras e números');
+  passwordInput.setAttribute('placeholder', 'Mín. 8 caracteres');
 
-  let container = document.getElementById('ob-password-strength');
-  if (!container) {
-    container = document.createElement('div');
-    container.id = 'ob-password-strength';
-    passwordInput.insertAdjacentElement('afterend', container);
-  }
+  const container = getPasswordStrengthContainer();
+  if (!container) return;
 
   container.innerHTML = renderPasswordChecklist(passwordInput.value || '', getPasswordContext());
 }
