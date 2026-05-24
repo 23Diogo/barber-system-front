@@ -193,7 +193,7 @@ body::before {
 }
 
 /* ── Form ── */
-.ob-form         { display: grid; gap: 14px; }
+.ob-form { display: grid; gap: 14px; }
 
 .ob-field {
   display: grid;
@@ -285,7 +285,7 @@ body::before {
   font-size: 13px;
 }
 
-.ob-muted    { color: var(--muted); }
+.ob-muted { color: var(--muted); }
 
 .ob-link-btn {
   color: var(--blue-1);
@@ -302,19 +302,18 @@ body::before {
   50%       { transform: scale(1.04); filter: brightness(1.12); }
 }
 
-/* ── Responsivo ── */
-@media (max-width: 600px) {
-  .ob-grid     { grid-template-columns: 1fr; }
-  .card        { padding: 22px 18px; }
-  .card-title  { font-size: 26px; }
+/* ─── Password strength full width ─────────────────────────────────────────── */
+
+.ob-password-strength-wide {
+  grid-column: 1 / -1;
+  width: 100%;
+  min-width: 0;
 }
 
-/* ─── Password strength ───────────────────────────────────────────────────── */
 .ob-password-strength-card {
   width: 100%;
-  align-self: flex-start;
-  margin-top: 8px;
-  padding: 10px 12px;
+  margin-top: -2px;
+  padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(79, 195, 247, 0.14);
   background:
@@ -327,7 +326,7 @@ body::before {
   align-items: center;
   justify-content: space-between;
   gap: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
   font-size: 11px;
   color: var(--muted);
 }
@@ -339,13 +338,15 @@ body::before {
 
 .ob-password-checklist {
   display: grid;
-  gap: 5px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px 14px;
 }
 
 .ob-password-check-item {
   display: flex;
   align-items: center;
   gap: 7px;
+  min-width: 0;
   font-size: 10.5px;
   color: #6f7c9c;
   line-height: 1.35;
@@ -374,23 +375,17 @@ body::before {
   background: rgba(0, 230, 118, 0.08);
 }
 
-/* ─── Password grid correction ────────────────────────────────────────────────
-   Evita que o campo "Confirmar senha" estique quando o checklist da senha
-   aumenta a altura da coluna esquerda.
-*/
-#ob-password,
-#ob-password-confirm {
-  height: 50px;
-  min-height: 50px;
-  max-height: 50px;
-}
+/* ── Responsivo ── */
+@media (max-width: 600px) {
+  .ob-grid { grid-template-columns: 1fr; }
+  .card { padding: 22px 18px; }
+  .card-title { font-size: 26px; }
 
-#ob-password-confirm {
-  align-self: flex-start;
-}
+  .ob-password-strength-wide {
+    grid-column: auto;
+  }
 
-#ob-password-strength,
-.ob-password-strength-card {
-  align-self: flex-start;
+  .ob-password-checklist {
+    grid-template-columns: 1fr;
+  }
 }
-
