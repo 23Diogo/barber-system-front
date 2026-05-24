@@ -2,21 +2,99 @@ import { apiFetch } from '../services/api.js';
 
 // ─── State ────────────────────────────────────────────────────────────────────
 
+const ACTIVE_TAB_KEY = 'barberflow.config.activeTab';
+
 const configState = {
   shop: null,
+  overview: null,
+  whatsappStatus: null,
+  inviteStats: null,
   settings: null,
   workingHours: null,
+  activeTab: getInitialTab(),
+  isLoading: false,
   isSaving: false,
-  isSavingHours: false,
-  isSavingReactivation: false,
-  isSavingBot: false,
   isConnectingMeta: false,
 };
 
+const TABS = [
+  { id: 'overview', label: 'Comando', icon: '⚙️' },
+  { id: 'business', label: 'Meu negócio', icon: '🏪' },
+  { id: 'agenda', label: 'Agenda', icon: '📅' },
+  { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
+  { id: 'notifications', label: 'Notificações', icon: '🔔' },
+  { id: 'links', label: 'Links', icon: '🔗' },
+  { id: 'tests', label: 'Diagnóstico', icon: '🧪' },
+];
+
+const DAY_LABELS = {
+  monday: 'Segunda-feira',
+  tuesday: 'Terça-feira',
+  wednesday: 'Quarta-feira',
+  thursday: 'Quinta-feira',
+  friday: 'Sexta-feira',
+  saturday: 'Sábado',
+  sunday: 'Domingo',
+};
+
+const DAY_KEYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
+
+const REACTIVATION_DEFAULT_MSG =
+  `Olá, {nome}! Sentimos sua falta na barbearia 💈\n\n` +
+  `Já faz {dias} dias desde sua última visita. Que tal agendar um horário para renovar o visual?\n\n` +
+  `Agende aqui: {link}`;
+
+const NOTIF_DEFAULTS = {
+  appointment_confirmed: true,
+  appointment_cancelled: true,
+  appointment_reminder_1h: true,
+
+  bills_reminder_enabled: true,
+  bills_reminder_days: [5, 3, 1, 0],
+  bills_reminder_hour: 9,
+
+  subscription_reminder_enabled: true,
+  subscription_reminder_days: [5, 3, 1, 0],
+  subscription_reminder_hour: 9,
+
+  stock_alert_enabled: true,
+  stock_alert_hour: 8,
+
+  reactivation_enabled: true,
+  reactivation_hour: 10,
+  reactivation_message: '',
+
+  new_client_alert: true,
+};
+
+function getInitialTab() {
+  try {
+    return localStorage.getItem(ACTIVE_TAB_KEY) || 'overview';
+  } catch {
+    return 'overview';
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function escapeHtml(v) {
-  return String(v ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
+
+function formatNumber(value) {
+  return new Intl.NumberFormat('pt-BR').format(Number(value || 0));
+}
+
+function formatDate(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleDateString('pt-BR');
 }
 
 function setFeedback(id, message, variant = 'neutral') {
@@ -26,121 +104,21 @@ function setFeedback(id, message, variant = 'neutral') {
   el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
-// ─── Defaults ─────────────────────────────────────────────────────────────────
+function showToast(message, variant = 'neutral') {
+  const old = document.getElementById('cfg-toast');
+  if (old) old.remove();
 
-const REACTIVATION_DEFAULT_MSG =
-  `👋 Olá, {nome}! Sentimos muito a sua falta 😊\n\n` +
-  `Faz *{dias} dias* que você não passa aqui, e a gente ficou preocupado! 💈\n\n` +
-  `Que tal dar uma renovada no visual essa semana?\n\n` +
-  `🎁 Como presente de retorno, você ganha um *desconto especial* na próxima visita!\n\n` +
-  `👉 Agende agora: {link}\n\n` +
-  `_Te esperamos! Qualquer dúvida é só chamar._ 😄`;
-
-const notifDefaults = {
-  appointment_confirmed:         true,
-  appointment_cancelled:         true,
-  appointment_reminder_1h:       true,
-  bills_reminder_enabled:        true,
-  bills_reminder_days:           [5, 3, 1, 0],
-  bills_reminder_hour:           9,
-  subscription_reminder_enabled: true,
-  subscription_reminder_days:    [5, 3, 1, 0],
-  subscription_reminder_hour:    9,
-  stock_alert_enabled:           true,
-  stock_alert_hour:              8,
-  reactivation_enabled:          true,
-  reactivation_hour:             10,
-  reactivation_message:          '',
-  new_client_alert:              true,
-};
+  const toast = document.createElement('div');
+  toast.id = 'cfg-toast';
+  toast.className = `cfg-toast cfg-toast--${variant}`;
+  toast.textContent = message;
+  document.body.appendChild(toast);
+  window.setTimeout(() => toast.remove(), 4200);
+}
 
 function getSettings() {
-  return { ...notifDefaults, ...(configState.settings || {}) };
+  return { ...NOTIF_DEFAULTS, ...(configState.settings || {}) };
 }
-
-// ─── Render helpers ───────────────────────────────────────────────────────────
-
-function renderToggle(key, label, hint) {
-  const s = getSettings();
-  return `
-    <div class="cfg-row" style="cursor:default;">
-      <div>
-        <div class="cfg-label">${escapeHtml(label)}</div>
-        <div class="cfg-sub">${escapeHtml(hint)}</div>
-      </div>
-      <label class="cfg-toggle">
-        <input type="checkbox" data-setting="${escapeHtml(key)}" ${s[key] ? 'checked' : ''} />
-        <span class="cfg-toggle-track"></span>
-      </label>
-    </div>`;
-}
-
-function renderToggleWithHour(enabledKey, hourKey, label, hint) {
-  const s = getSettings();
-  return `
-    <div class="cfg-row" style="cursor:default;flex-wrap:wrap;gap:8px;">
-      <div style="flex:1;">
-        <div class="cfg-label">${escapeHtml(label)}</div>
-        <div class="cfg-sub">${escapeHtml(hint)}</div>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;">
-        <div style="display:flex;align-items:center;gap:5px;">
-          <span style="font-size:10px;color:#5a6888;">🕐 Hora:</span>
-          <input type="number" data-setting="${escapeHtml(hourKey)}"
-            value="${escapeHtml(s[hourKey] ?? 9)}"
-            min="0" max="23"
-            class="modal-input"
-            style="width:60px;margin:0;text-align:center;padding:5px 6px;font-size:11px;"
-            title="Hora de envio (0–23h)"/>
-        </div>
-        <label class="cfg-toggle">
-          <input type="checkbox" data-setting="${escapeHtml(enabledKey)}" ${s[enabledKey] ? 'checked' : ''} />
-          <span class="cfg-toggle-track"></span>
-        </label>
-      </div>
-    </div>`;
-}
-
-function renderDaysWithHour(daysKey, hourKey, enabledKey, label) {
-  const s   = getSettings();
-  const val = (s[daysKey] || []).join(', ');
-  return `
-    <div style="background:rgba(255,255,255,.02);border-radius:10px;padding:12px 14px;margin-bottom:7px;border:1px solid transparent;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;">
-        <div style="flex:1;">
-          <div class="cfg-label">${escapeHtml(label)}</div>
-          <div class="cfg-sub">Dias antes do vencimento (separados por vírgula)</div>
-        </div>
-        <label class="cfg-toggle">
-          <input type="checkbox" data-setting="${escapeHtml(enabledKey)}" ${s[enabledKey] ? 'checked' : ''} />
-          <span class="cfg-toggle-track"></span>
-        </label>
-      </div>
-      <div style="display:flex;align-items:center;gap:10px;margin-top:10px;flex-wrap:wrap;">
-        <div style="display:flex;align-items:center;gap:6px;flex:1;">
-          <span style="font-size:10px;color:#5a6888;white-space:nowrap;">📅 Dias:</span>
-          <input type="text" data-setting="${escapeHtml(daysKey)}" value="${escapeHtml(val)}"
-            class="modal-input" style="flex:1;margin:0;text-align:center;" placeholder="5, 3, 1, 0"/>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-          <span style="font-size:10px;color:#5a6888;white-space:nowrap;">🕐 Hora:</span>
-          <input type="number" data-setting="${escapeHtml(hourKey)}"
-            value="${escapeHtml(s[hourKey] ?? 9)}"
-            min="0" max="23"
-            class="modal-input"
-            style="width:60px;margin:0;text-align:center;padding:5px 6px;font-size:11px;"/>
-        </div>
-      </div>
-    </div>`;
-}
-
-// ─── Horário de funcionamento ─────────────────────────────────────────────────
-
-const DAY_LABELS = {
-  monday:'Segunda-feira', tuesday:'Terça-feira', wednesday:'Quarta-feira',
-  thursday:'Quinta-feira', friday:'Sexta-feira', saturday:'Sábado', sunday:'Domingo',
-};
-const DAY_KEYS = ['monday','tuesday','wednesday','thursday','friday','saturday','sunday'];
 
 function getDefaultHours() {
   return {
@@ -157,738 +135,1126 @@ function getDefaultHours() {
 function parseWorkingHours(raw) {
   const defaults = getDefaultHours();
   if (!raw || typeof raw !== 'object') return defaults;
+
   const result = { ...defaults };
-  for (const key of DAY_KEYS) {
-    if (raw[key]) {
-      result[key] = {
-        active: raw[key].active !== undefined ? Boolean(raw[key].active) : defaults[key].active,
-        open:   raw[key].open   || defaults[key].open,
-        close:  raw[key].close  || defaults[key].close,
-      };
-    }
-  }
+  DAY_KEYS.forEach((key) => {
+    const day = raw[key] || {};
+    result[key] = {
+      active: day.active !== undefined ? Boolean(day.active) : defaults[key].active,
+      open: day.open || defaults[key].open,
+      close: day.close || defaults[key].close,
+    };
+  });
+
   return result;
 }
-
-function renderWorkingHoursForm() {
-  const hours = parseWorkingHours(configState.workingHours);
-  const rows = DAY_KEYS.map(key => {
-    const day = hours[key];
-    return `
-      <div class="cfg-row" style="cursor:default;gap:12px;flex-wrap:wrap;">
-        <label class="cfg-toggle" style="flex-shrink:0;">
-          <input type="checkbox" data-wh-day="${escapeHtml(key)}" data-wh-field="active" ${day.active ? 'checked' : ''}/>
-          <span class="cfg-toggle-track"></span>
-        </label>
-        <div style="flex:1;min-width:100px;">
-          <div class="cfg-label" style="font-size:11px;">${escapeHtml(DAY_LABELS[key])}</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0;">
-          <input type="time" data-wh-day="${escapeHtml(key)}" data-wh-field="open"
-            value="${escapeHtml(day.open)}" class="modal-input"
-            style="width:100px;margin:0;padding:6px 8px;font-size:12px;"
-            ${!day.active ? 'disabled' : ''}/>
-          <span style="color:#5a6888;font-size:11px;">até</span>
-          <input type="time" data-wh-day="${escapeHtml(key)}" data-wh-field="close"
-            value="${escapeHtml(day.close)}" class="modal-input"
-            style="width:100px;margin:0;padding:6px 8px;font-size:12px;"
-            ${!day.active ? 'disabled' : ''}/>
-        </div>
-      </div>`;
-  }).join('');
-
-  return `
-    <div class="card">
-      <div class="card-header"><div class="card-title">🕐 Horário de Funcionamento</div></div>
-      ${rows}
-      <div id="cfg-hours-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:4px;">
-        <button type="button" class="btn-primary-gradient" id="cfg-hours-save-btn" style="min-height:38px;">
-          Salvar horários
-        </button>
-      </div>
-    </div>`;
-}
-
-// ─── Info da barbearia ────────────────────────────────────────────────────────
 
 function buildInviteLink(slug) {
-  return `https://bbarberflow.com.br/client/cadastro/${encodeURIComponent(slug)}`;
+  return slug ? `https://bbarberflow.com.br/client/cadastro/${encodeURIComponent(slug)}` : '';
 }
 
-function renderShopInfo() {
-  const shop = configState.shop;
-  if (!shop) return `<div class="card"><div class="card-header"><div class="card-title">Carregando...</div></div></div>`;
-
-  const statusBadge = shop.plan_status === 'active'
-    ? '<span style="color:#00e676;font-weight:700;">● Ativo</span>'
-    : `<span style="color:#f97316;font-weight:700;">⚠️ ${escapeHtml(shop.plan_status || 'Pendente')}</span>`;
-
-  const subEnd = shop.subscription_end
-    ? new Date(shop.subscription_end).toLocaleDateString('pt-BR') : '—';
-
-  const inviteLink = shop.slug ? buildInviteLink(shop.slug) : null;
-
-  const botConnected = !!(shop.meta_phone_id && shop.meta_access_token);
-
-  return `
-    <div class="card">
-      <div class="card-header"><div class="card-title">Configurações da Barbearia</div></div>
-
-      <div class="cfg-row" style="cursor:default;">
-        <div><div class="cfg-label">🏪 Nome</div></div>
-        <div class="cfg-action-muted">${escapeHtml(shop.name || '—')}</div>
-      </div>
-
-      <div class="cfg-row" style="cursor:default;">
-        <div><div class="cfg-label">📧 E-mail</div></div>
-        <div class="cfg-action-muted">${escapeHtml(shop.email || '—')}</div>
-      </div>
-
-      <div class="cfg-row" style="cursor:default;flex-wrap:wrap;gap:8px;">
-        <div style="flex:1;">
-          <div class="cfg-label">📱 WhatsApp da barbearia</div>
-          <div class="cfg-sub">Com código do país + DDD. Ex: 5511999990000</div>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;">
-          <input type="text" id="cfg-whatsapp-input" class="modal-input"
-            style="width:180px;margin:0;padding:7px 10px;"
-            placeholder="5511999990000"
-            value="${escapeHtml(shop.whatsapp || '')}"/>
-          <button type="button" id="cfg-whatsapp-save-btn" class="btn-primary-gradient"
-            style="min-height:34px;padding:7px 14px;font-size:11px;white-space:nowrap;">
-            Salvar
-          </button>
-        </div>
-      </div>
-      <div id="cfg-whatsapp-feedback" style="min-height:16px;font-size:10px;margin:-4px 0 6px;color:#5a6888;padding:0 4px;"></div>
-
-      <div class="cfg-row" style="cursor:default;">
-        <div><div class="cfg-label">💳 Plano atual</div></div>
-        <div>${statusBadge}</div>
-      </div>
-
-      <div class="cfg-row" style="cursor:default;">
-        <div><div class="cfg-label">📅 Vigência até</div></div>
-        <div class="cfg-action-muted">${escapeHtml(subEnd)}</div>
-      </div>
-
-      <div class="cfg-row" style="cursor:default;flex-direction:column;align-items:flex-start;gap:8px;">
-        <div>
-          <div class="cfg-label">📨 Link de convite de clientes</div>
-          <div class="cfg-sub">Compartilhe este link para que clientes se cadastrem direto na sua barbearia</div>
-        </div>
-        ${inviteLink ? `
-          <div class="cfg-invite-link-box">
-            <span class="cfg-invite-link-text">${escapeHtml(inviteLink)}</span>
-            <button type="button" id="cfg-invite-copy-btn" class="btn-save cfg-invite-copy-btn">Copiar link</button>
-          </div>
-          <div id="cfg-invite-feedback" style="min-height:14px;font-size:10px;color:#5a6888;"></div>
-        ` : `<div class="cfg-action-muted">Slug da barbearia não configurado.</div>`}
-      </div>
-    </div>
-
-    <!-- ── WhatsApp Bot ── -->
-    <div class="card" id="cfg-whatsapp-bot-card" style="border-color:${botConnected ? 'rgba(0,230,118,.2)' : 'rgba(79,195,247,.12)'};">
-      <div class="card-header">
-        <div class="card-title">🤖 WhatsApp Bot</div>
-        <span style="font-size:11px;font-weight:700;color:${botConnected ? '#00e676' : '#5a6888'};">
-          ${botConnected ? '● Conectado' : '○ Não configurado'}
-        </span>
-      </div>
-
-      ${botConnected ? `
-        <!-- ── Já conectado ── -->
-        <div style="display:flex;align-items:center;gap:10px;background:rgba(0,230,118,.06);border:1px solid rgba(0,230,118,.15);border-radius:10px;padding:12px 14px;margin-bottom:14px;">
-          <span style="font-size:22px;">✅</span>
-          <div>
-            <div style="font-size:12px;font-weight:700;color:#00e676;">WhatsApp Business conectado!</div>
-            <div style="font-size:10px;color:#5a6888;margin-top:2px;">Phone Number ID: ${escapeHtml(shop.meta_phone_id)}</div>
-          </div>
-        </div>
-        <div style="display:flex;justify-content:flex-end;">
-          <button type="button" id="cfg-meta-reconnect-btn"
-            style="font-size:11px;color:#4a5880;background:none;border:none;cursor:pointer;padding:4px 0;">
-            ↺ Reconectar com outra conta
-          </button>
-        </div>
-      ` : `
-        <!-- ── Não conectado ── -->
-        <div class="cfg-sub" style="margin-bottom:16px;">
-          Conecte sua conta do WhatsApp Business para enviar notificações automáticas aos clientes.
-        </div>
-        <button type="button" id="cfg-meta-connect-btn" class="btn-meta-connect">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;">
-            <path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" fill="#25D366"/>
-            <path d="M8.5 8.5c-.28 0-.5.22-.5.5v1c0 2.485 2.015 4.5 4.5 4.5h1c.28 0 .5-.22.5-.5v-1l-1.5-.5-.5 1c-.5-.25-1.25-1-1.5-1.5l1-.5L11 10l-2.5-1.5z" fill="white"/>
-          </svg>
-          Conectar com WhatsApp Business
-        </button>
-        <div id="cfg-bot-feedback" style="min-height:18px;font-size:10px;margin:10px 0 0;color:#5a6888;text-align:center;"></div>
-
-        <div style="margin-top:20px;padding-top:16px;border-top:1px solid #1a2040;">
-          <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;margin-bottom:10px;">
-            ou configure manualmente
-          </div>
-          <div style="display:grid;gap:10px;">
-            <div>
-              <div class="color-section-label">Phone Number ID</div>
-              <input type="text" id="cfg-meta-phone-id" class="modal-input"
-                placeholder="Ex: 1118500758022349"
-                value="${escapeHtml(shop.meta_phone_id || '')}"/>
-            </div>
-            <div>
-              <div class="color-section-label">Access Token</div>
-              <input type="password" id="cfg-meta-token" class="modal-input"
-                placeholder="EAAxxxxxx..."
-                value="${escapeHtml(shop.meta_access_token || '')}"/>
-              <div style="font-size:10px;color:#3a4568;margin-top:4px;">
-                ⚠️ O token temporário expira em 24h. Para produção use um token permanente via System User.
-              </div>
-            </div>
-          </div>
-          <div id="cfg-bot-manual-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
-          <div style="display:flex;justify-content:flex-end;margin-top:4px;">
-            <button type="button" class="btn-primary-gradient" id="cfg-bot-save-btn" style="min-height:38px;">
-              Salvar configuração manual
-            </button>
-          </div>
-        </div>
-      `}
-    </div>
-
-    <style>
-      .btn-meta-connect {
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
-        width: 100%;
-        padding: 12px 20px;
-        border-radius: 12px;
-        border: none;
-        background: linear-gradient(135deg, #25D366, #128C7E);
-        color: #fff;
-        font-size: 13px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: opacity .15s, transform .1s;
-        font-family: inherit;
-      }
-      .btn-meta-connect:hover { opacity: .9; }
-      .btn-meta-connect:active { transform: scale(.98); }
-      .btn-meta-connect:disabled { opacity: .5; cursor: not-allowed; }
-    </style>`;
+function buildClientAgendaLink(slug) {
+  return slug ? `https://bbarberflow.com.br/client/cadastro/${encodeURIComponent(slug)}` : 'https://bbarberflow.com.br/client';
 }
 
-// ─── Notificações ─────────────────────────────────────────────────────────────
-
-function renderNotificationSettings() {
-  return `
-    <div class="card">
-      <div class="card-header"><div class="card-title">🔔 Notificações Automáticas</div></div>
-
-      <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;padding:4px 0 8px;">
-        Agendamentos — disparo imediato
-      </div>
-      ${renderToggle('appointment_confirmed',   '✅ Confirmação de agendamento', 'Envia msg para cliente e barbeiro ao confirmar')}
-      ${renderToggle('appointment_cancelled',   '❌ Cancelamento de agendamento', 'Envia msg para o cliente ao cancelar')}
-      ${renderToggle('appointment_reminder_1h', '⏰ Lembrete 1h antes', 'Envia lembrete ao cliente 1 hora antes do horário')}
-
-      <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;padding:12px 0 8px;">
-        Financeiro — horário configurável
-      </div>
-      ${renderDaysWithHour('bills_reminder_days', 'bills_reminder_hour', 'bills_reminder_enabled', '💳 Lembretes de contas a pagar')}
-      ${renderDaysWithHour('subscription_reminder_days', 'subscription_reminder_hour', 'subscription_reminder_enabled', '🔔 Lembretes de mensalidade do sistema')}
-
-      <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;padding:12px 0 8px;">
-        Operacional — horário configurável
-      </div>
-      ${renderToggleWithHour('stock_alert_enabled', 'stock_alert_hour', '📦 Alerta de estoque baixo', 'Envia resumo diário de itens abaixo do estoque mínimo')}
-
-      <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;padding:12px 0 8px;">
-        Clientes
-      </div>
-      ${renderToggle('new_client_alert', '🎉 Novo cliente cadastrado', 'Receba uma msg quando um cliente se cadastrar pelo link de convite')}
-      ${renderToggleWithHour('reactivation_enabled', 'reactivation_hour', '🔄 Reativação de clientes inativos', 'Envia mensagem automática para clientes sem visita há 30–60 dias')}
-
-      <div id="cfg-notif-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:4px;">
-        <button type="button" class="btn-primary-gradient" id="cfg-save-btn" style="min-height:38px;">
-          Salvar configurações
-        </button>
-      </div>
-    </div>`;
+function normalizePhone(value) {
+  return String(value || '').replace(/\D/g, '');
 }
 
-// ─── Mensagem de reativação ───────────────────────────────────────────────────
-
-function renderReactivationMessage() {
-  const s   = getSettings();
-  const msg = s.reactivation_message || REACTIVATION_DEFAULT_MSG;
-
-  return `
-    <div class="card">
-      <div class="card-header">
-        <div class="card-title">💬 Mensagem de Reativação</div>
-      </div>
-      <div class="cfg-sub" style="margin-bottom:12px;">
-        Use as variáveis abaixo — clique para inserir no cursor.
-      </div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-        <span class="cfg-var-chip" data-var="{nome}">{nome} — nome do cliente</span>
-        <span class="cfg-var-chip" data-var="{dias}">{dias} — dias sem visitar</span>
-        <span class="cfg-var-chip" data-var="{link}">{link} — link de agendamento</span>
-      </div>
-      <textarea id="cfg-reactivation-msg" class="modal-input" rows="10" maxlength="1000"
-        style="resize:vertical;min-height:180px;line-height:1.6;font-size:12px;"
-        placeholder="Digite a mensagem...">${escapeHtml(msg)}</textarea>
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
-        <span id="cfg-reactivation-char" style="font-size:10px;color:#3a4568;">${msg.length} / 1000</span>
-        <button type="button" class="cfg-reactivation-reset"
-          style="font-size:10px;color:#4a5880;background:none;border:none;cursor:pointer;padding:0;">
-          ↺ Restaurar padrão
-        </button>
-      </div>
-      <div style="margin-top:14px;">
-        <div style="font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:#3a4568;margin-bottom:8px;">Preview (exemplo)</div>
-        <div id="cfg-reactivation-preview"
-          style="background:#080b18;border:1px solid #1a2040;border-radius:10px;padding:12px 14px;font-size:12px;color:#c0cce8;line-height:1.7;white-space:pre-wrap;word-break:break-word;"></div>
-      </div>
-      <div id="cfg-reactivation-feedback" style="min-height:18px;font-size:10px;margin:10px 0 4px;color:#5a6888;"></div>
-      <div style="display:flex;justify-content:flex-end;margin-top:4px;">
-        <button type="button" class="btn-primary-gradient" id="cfg-reactivation-save-btn" style="min-height:38px;">
-          Salvar mensagem
-        </button>
-      </div>
-    </div>
-
-    <style>
-      .cfg-var-chip{display:inline-flex;align-items:center;padding:3px 10px;border-radius:8px;
-        background:rgba(79,195,247,.08);border:1px solid rgba(79,195,247,.2);color:#4fc3f7;
-        font-size:11px;font-weight:700;cursor:pointer;transition:background .15s;user-select:none;}
-      .cfg-var-chip:hover{background:rgba(79,195,247,.16);}
-      .cfg-reactivation-reset:hover{color:#c0cce8;}
-    </style>`;
+function maskSecret(value) {
+  if (!value) return 'Não configurado';
+  const raw = String(value);
+  if (raw.length <= 12) return '••••••';
+  return `${raw.slice(0, 6)}••••••${raw.slice(-4)}`;
 }
 
-// ─── Card de testes ───────────────────────────────────────────────────────────
-
-function renderTestCard() {
-  const tests = [
-    { id: 'test-bills',                 icon: '💳', label: 'Conta a pagar',          endpoint: '/api/test-notifications/bills' },
-    { id: 'test-stock',                 icon: '📦', label: 'Estoque baixo',           endpoint: '/api/test-notifications/stock' },
-    { id: 'test-subscription',          icon: '🔔', label: 'Mensalidade do sistema',  endpoint: '/api/test-notifications/subscription' },
-    { id: 'test-appointment-confirmed', icon: '✅', label: 'Confirmação agendamento', endpoint: '/api/test-notifications/appointment-confirmed' },
-    { id: 'test-appointment-reminder',  icon: '⏰', label: 'Lembrete 1h antes',       endpoint: '/api/test-notifications/appointment-reminder' },
-    { id: 'test-new-client',            icon: '🎉', label: 'Novo cliente cadastrado', endpoint: '/api/test-notifications/new-client' },
-    { id: 'test-reactivation',          icon: '🔄', label: 'Reativação de clientes',  endpoint: '/api/test-notifications/reactivation' },
-  ];
-
-  const buttons = tests.map(t => `
-    <button type="button" class="cfg-test-btn" data-endpoint="${t.endpoint}" id="${t.id}">
-      <span class="cfg-test-icon">${t.icon}</span>
-      <span class="cfg-test-label">${t.label}</span>
-      <span class="cfg-test-status" id="${t.id}-status"></span>
-    </button>
-  `).join('');
-
-  return `
-    <div class="card" style="border-color:rgba(255,193,7,.15);">
-      <div class="card-header">
-        <div class="card-title" style="color:#ffc107;">🧪 Testar Notificações</div>
-      </div>
-      <div class="cfg-sub" style="margin-bottom:14px;">
-        Clique em qualquer botão para enviar uma mensagem de teste para o WhatsApp da barbearia agora mesmo.
-      </div>
-      <div style="display:grid;gap:8px;">
-        ${buttons}
-      </div>
-      <div id="cfg-test-feedback" style="min-height:18px;font-size:11px;margin-top:12px;color:#5a6888;text-align:center;"></div>
-    </div>
-
-    <style>
-      .cfg-test-btn{
-        display:flex;align-items:center;gap:10px;width:100%;
-        padding:10px 14px;border-radius:10px;
-        border:1px solid rgba(255,193,7,.15);background:rgba(255,193,7,.04);
-        color:#e8f0fe;font:inherit;font-size:12px;font-weight:600;
-        cursor:pointer;transition:all .15s;text-align:left;
-      }
-      .cfg-test-btn:hover{border-color:rgba(255,193,7,.35);background:rgba(255,193,7,.08);}
-      .cfg-test-btn:disabled{opacity:.5;cursor:not-allowed;}
-      .cfg-test-icon{font-size:16px;flex-shrink:0;}
-      .cfg-test-label{flex:1;}
-      .cfg-test-status{font-size:10px;font-weight:700;flex-shrink:0;min-width:60px;text-align:right;}
-    </style>`;
-}
-
-// ─── Preview da reativação ────────────────────────────────────────────────────
-
-function updateReactivationPreview() {
-  const preview  = document.getElementById('cfg-reactivation-preview');
-  const textarea = document.getElementById('cfg-reactivation-msg');
-  if (!preview || !textarea) return;
-  const slug = configState.shop?.slug || 'minha-barbearia';
-  const link = `https://bbarberflow.com.br/client/cadastro/${slug}`;
-  preview.textContent = (textarea.value || REACTIVATION_DEFAULT_MSG)
-    .replace(/\{nome\}/g, 'Carlos')
-    .replace(/\{dias\}/g, '35')
-    .replace(/\{link\}/g, link);
-}
-
-// ─── Coleta dados ─────────────────────────────────────────────────────────────
-
-function collectSettings() {
-  const result = { ...getSettings() };
-  document.querySelectorAll('[data-setting]').forEach(el => {
-    const key = el.dataset.setting;
-    if (el.type === 'checkbox') {
-      result[key] = el.checked;
-    } else if (key === 'bills_reminder_days' || key === 'subscription_reminder_days') {
-      result[key] = el.value.split(',').map(v => parseInt(v.trim(), 10)).filter(n => !isNaN(n) && n >= 0);
-    } else if (['bills_reminder_hour','subscription_reminder_hour','stock_alert_hour','reactivation_hour'].includes(key)) {
-      const h = parseInt(el.value, 10);
-      result[key] = isNaN(h) ? 9 : Math.min(23, Math.max(0, h));
-    } else {
-      result[key] = String(el.value || '');
-    }
-  });
-  return result;
-}
-
-function collectWorkingHours() {
-  const result = parseWorkingHours(configState.workingHours);
-  document.querySelectorAll('[data-wh-day][data-wh-field]').forEach(el => {
-    const day = el.dataset.whDay; const field = el.dataset.whField;
-    if (!result[day]) return;
-    if (field === 'active') result[day].active = el.checked;
-    else result[day][field] = el.value;
-  });
-  return result;
-}
-
-function collectReactivationSettings() {
-  return {
-    ...getSettings(),
-    reactivation_message: document.getElementById('cfg-reactivation-msg')?.value || '',
+function getReadiness() {
+  return configState.overview?.readiness || {
+    score: 0,
+    completed: 0,
+    total: 0,
+    checklist: {},
   };
+}
+
+function readinessLabel(score) {
+  if (score >= 90) return 'Pronta para vender';
+  if (score >= 70) return 'Quase pronta';
+  if (score >= 45) return 'Em configuração';
+  return 'Precisa de atenção';
+}
+
+function statusChip(label, ok) {
+  return `<span class="cfg-chip ${ok ? 'cfg-chip--success' : 'cfg-chip--warning'}">${ok ? '✓' : '!'} ${escapeHtml(label)}</span>`;
+}
+
+function safeCount(value) {
+  return value === null || value === undefined ? '—' : formatNumber(value);
+}
+
+function setActiveTab(tab) {
+  configState.activeTab = TABS.some((item) => item.id === tab) ? tab : 'overview';
+  try { localStorage.setItem(ACTIVE_TAB_KEY, configState.activeTab); } catch {}
+  rerenderConfig();
+}
+
+async function copyToClipboard(value, feedbackId = null) {
+  try {
+    if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(value);
+    else {
+      const ta = document.createElement('textarea');
+      ta.value = value;
+      ta.style.position = 'fixed';
+      ta.style.left = '-9999px';
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      ta.remove();
+    }
+    if (feedbackId) setFeedback(feedbackId, 'Link copiado.', 'success');
+    else showToast('Copiado.', 'success');
+  } catch {
+    if (feedbackId) setFeedback(feedbackId, 'Não foi possível copiar.', 'error');
+    else showToast('Não foi possível copiar.', 'error');
+  }
+}
+
+function renderLoadingCard(title = 'Carregando...') {
+  return `<div class="cfg-card"><div class="cfg-card-title">${escapeHtml(title)}</div><div class="cfg-skeleton"></div></div>`;
 }
 
 // ─── API ──────────────────────────────────────────────────────────────────────
 
-async function loadShopData() {
+async function safeApi(path, fallback = null) {
   try {
-    const data = await apiFetch('/api/auth/me');
-    configState.shop = data?.barbershop || data?.barbershops || null;
-    configState.settings     = data?.barbershop?.notification_settings || null;
-    configState.workingHours = data?.barbershop?.working_hours || null;
+    return await apiFetch(path);
   } catch (error) {
-    console.error('Erro ao carregar dados da barbearia:', error);
+    console.warn(`Config fetch fallback ${path}:`, error);
+    return fallback;
   }
 }
 
-async function saveSettings() {
-  if (configState.isSaving) return;
-  configState.isSaving = true;
-  const btn = document.getElementById('cfg-save-btn');
-  if (btn) btn.disabled = true;
-  setFeedback('cfg-notif-feedback', 'Salvando...', 'neutral');
+async function loadConfigData() {
+  configState.isLoading = true;
+  rerenderConfig();
+
   try {
-    await apiFetch('/api/barbershops/settings', {
+    const [me, overview, whatsappStatus, inviteStats] = await Promise.all([
+      safeApi('/api/auth/me', null),
+      safeApi('/api/barbershops/config/overview', null),
+      safeApi('/api/whatsapp/status', null),
+      safeApi('/api/barbershops/invites/stats', null),
+    ]);
+
+    configState.shop = me?.barbershop || me?.barbershops || overview?.shop || null;
+    configState.overview = overview;
+    configState.whatsappStatus = whatsappStatus;
+    configState.inviteStats = inviteStats;
+    configState.settings = configState.shop?.notification_settings || null;
+    configState.workingHours = configState.shop?.working_hours || null;
+  } finally {
+    configState.isLoading = false;
+    rerenderConfig();
+  }
+}
+
+async function patchShopSettings(payload, feedbackId, successMessage = 'Configuração salva.') {
+  if (configState.isSaving) return null;
+  configState.isSaving = true;
+  setFeedback(feedbackId, 'Salvando...', 'neutral');
+
+  try {
+    const data = await apiFetch('/api/barbershops/settings', {
       method: 'PATCH',
-      body: JSON.stringify({ notification_settings: collectSettings() }),
+      body: JSON.stringify(payload),
     });
-    configState.settings = collectSettings();
-    setFeedback('cfg-notif-feedback', '✓ Configurações salvas!', 'success');
+
+    configState.shop = data || configState.shop;
+    configState.settings = data?.notification_settings || configState.settings;
+    configState.workingHours = data?.working_hours || configState.workingHours;
+
+    setFeedback(feedbackId, successMessage, 'success');
+    await loadConfigData();
+    return data;
   } catch (error) {
-    setFeedback('cfg-notif-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    setFeedback(feedbackId, error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    return null;
   } finally {
     configState.isSaving = false;
-    if (btn) btn.disabled = false;
   }
 }
-
-async function saveReactivationSettings() {
-  if (configState.isSavingReactivation) return;
-  configState.isSavingReactivation = true;
-  const btn = document.getElementById('cfg-reactivation-save-btn');
-  if (btn) btn.disabled = true;
-  setFeedback('cfg-reactivation-feedback', 'Salvando...', 'neutral');
-  try {
-    const settings = collectReactivationSettings();
-    await apiFetch('/api/barbershops/settings', {
-      method: 'PATCH',
-      body: JSON.stringify({ notification_settings: settings }),
-    });
-    configState.settings = settings;
-    setFeedback('cfg-reactivation-feedback', '✓ Mensagem salva!', 'success');
-  } catch (error) {
-    setFeedback('cfg-reactivation-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
-  } finally {
-    configState.isSavingReactivation = false;
-    if (btn) btn.disabled = false;
-  }
-}
-
-async function saveWhatsApp() {
-  const input = document.getElementById('cfg-whatsapp-input');
-  const btn   = document.getElementById('cfg-whatsapp-save-btn');
-  const phone = String(input?.value || '').replace(/\D/g, '').trim();
-  if (!phone || phone.length < 10) {
-    setFeedback('cfg-whatsapp-feedback', 'Informe um número válido com DDD e código do país.', 'error');
-    return;
-  }
-  if (btn) btn.disabled = true;
-  setFeedback('cfg-whatsapp-feedback', 'Salvando...', 'neutral');
-  try {
-    await apiFetch('/api/barbershops/settings', {
-      method: 'PATCH',
-      body: JSON.stringify({ whatsapp: phone }),
-    });
-    if (configState.shop) configState.shop.whatsapp = phone;
-    if (input) input.value = phone;
-    setFeedback('cfg-whatsapp-feedback', '✓ Número salvo!', 'success');
-  } catch (error) {
-    setFeedback('cfg-whatsapp-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
-  } finally {
-    if (btn) btn.disabled = false;
-  }
-}
-
-async function saveWhatsAppBot() {
-  if (configState.isSavingBot) return;
-  configState.isSavingBot = true;
-  const btn     = document.getElementById('cfg-bot-save-btn');
-  const phoneId = String(document.getElementById('cfg-meta-phone-id')?.value || '').trim();
-  const token   = String(document.getElementById('cfg-meta-token')?.value || '').trim();
-  if (btn) btn.disabled = true;
-  setFeedback('cfg-bot-manual-feedback', 'Salvando...', 'neutral');
-  try {
-    if (!phoneId) throw new Error('Informe o Phone Number ID.');
-    if (!token)   throw new Error('Informe o Access Token.');
-    await apiFetch('/api/barbershops/settings', {
-      method: 'PATCH',
-      body: JSON.stringify({ meta_phone_id: phoneId, meta_access_token: token }),
-    });
-    if (configState.shop) {
-      configState.shop.meta_phone_id    = phoneId;
-      configState.shop.meta_access_token = token;
-    }
-    setFeedback('cfg-bot-manual-feedback', '✓ WhatsApp Bot configurado com sucesso!', 'success');
-    // Atualiza o card sem recarregar a página
-    const shopInfo = document.getElementById('cfg-shop-info');
-    if (shopInfo) shopInfo.innerHTML = renderShopInfo();
-    bindShopInfoEvents();
-  } catch (error) {
-    setFeedback('cfg-bot-manual-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
-  } finally {
-    configState.isSavingBot = false;
-    if (btn) btn.disabled = false;
-  }
-}
-
-// ─── Conectar com Meta OAuth ──────────────────────────────────────────────────
 
 async function connectWithMeta() {
   if (configState.isConnectingMeta) return;
   configState.isConnectingMeta = true;
-
-  const btn = document.getElementById('cfg-meta-connect-btn');
-  if (btn) { btn.disabled = true; btn.textContent = 'Redirecionando...'; }
-  setFeedback('cfg-bot-feedback', 'Aguarde, conectando com a Meta...', 'neutral');
+  setFeedback('cfg-wa-feedback', 'Redirecionando para conexão com a Meta...', 'neutral');
 
   try {
     const data = await apiFetch('/api/auth/meta/connect', { method: 'POST' });
-    if (data?.url) {
-      window.location.href = data.url;
-    } else {
-      throw new Error('URL de autorização não retornada.');
-    }
-  } catch (err) {
-    setFeedback('cfg-bot-feedback', err instanceof Error ? err.message : 'Erro ao conectar.', 'error');
-    if (btn) { btn.disabled = false; btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" style="flex-shrink:0;"><path d="M12 2C6.477 2 2 6.477 2 12c0 1.89.525 3.66 1.438 5.168L2 22l4.832-1.438A9.956 9.956 0 0012 22c5.523 0 10-4.477 10-10S17.523 2 12 2z" fill="#25D366"/><path d="M8.5 8.5c-.28 0-.5.22-.5.5v1c0 2.485 2.015 4.5 4.5 4.5h1c.28 0 .5-.22.5-.5v-1l-1.5-.5-.5 1c-.5-.25-1.25-1-1.5-1.5l1-.5L11 10l-2.5-1.5z" fill="white"/></svg> Conectar com WhatsApp Business`; }
+    if (!data?.url) throw new Error('URL de autorização não retornada.');
+    window.location.href = data.url;
+  } catch (error) {
+    setFeedback('cfg-wa-feedback', error instanceof Error ? error.message : 'Erro ao conectar.', 'error');
     configState.isConnectingMeta = false;
   }
 }
-
-async function saveWorkingHours() {
-  if (configState.isSavingHours) return;
-  configState.isSavingHours = true;
-  const btn = document.getElementById('cfg-hours-save-btn');
-  if (btn) btn.disabled = true;
-  setFeedback('cfg-hours-feedback', 'Salvando...', 'neutral');
-  try {
-    const hours = collectWorkingHours();
-    await apiFetch('/api/barbershops/settings', {
-      method: 'PATCH',
-      body: JSON.stringify({ working_hours: hours }),
-    });
-    configState.workingHours = hours;
-    setFeedback('cfg-hours-feedback', 'Horários salvos!', 'success');
-  } catch (error) {
-    setFeedback('cfg-hours-feedback', error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
-  } finally {
-    configState.isSavingHours = false;
-    if (btn) btn.disabled = false;
-  }
-}
-
-// ─── Checa meta_status na URL após retorno do OAuth ──────────────────────────
 
 function checkMetaStatusFromUrl() {
   const params = new URLSearchParams(window.location.search);
   const status = params.get('meta_status');
   if (!status) return;
 
-  // Remove o param da URL sem recarregar
-  const cleanUrl = window.location.pathname;
-  window.history.replaceState({}, '', cleanUrl);
+  window.history.replaceState({}, '', window.location.pathname);
 
-  // Mostra o feedback após o DOM estar pronto
-  setTimeout(() => {
-    const shopInfo = document.getElementById('cfg-shop-info');
-    if (status === 'success') {
-      if (shopInfo) {
-        // Força recarga dos dados para pegar o novo token
-        loadShopData().then(() => {
-          shopInfo.innerHTML = renderShopInfo();
-          bindShopInfoEvents();
-        });
-      }
-      // Toast de sucesso
-      showToast('✅ WhatsApp Business conectado com sucesso!', 'success');
-    } else {
-      showToast('❌ Erro ao conectar com a Meta. Tente novamente.', 'error');
-    }
-  }, 300);
+  if (status === 'success') showToast('WhatsApp Business conectado com sucesso.', 'success');
+  else showToast('Erro ao conectar com a Meta.', 'error');
 }
 
-function showToast(message, variant = 'neutral') {
-  const existing = document.getElementById('cfg-meta-toast');
-  if (existing) existing.remove();
+async function saveBusinessForm(event) {
+  event.preventDefault();
+  const form = document.getElementById('cfg-business-form');
+  const data = new FormData(form);
 
-  const toast = document.createElement('div');
-  toast.id = 'cfg-meta-toast';
-  toast.textContent = message;
-  toast.style.cssText = `
-    position: fixed;
-    top: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    padding: 12px 24px;
-    border-radius: 12px;
-    font-size: 13px;
-    font-weight: 700;
-    z-index: 9999;
-    animation: fadeInDown .3s ease;
-    background: ${variant === 'success' ? 'rgba(0,230,118,.15)' : 'rgba(255,82,82,.15)'};
-    border: 1px solid ${variant === 'success' ? 'rgba(0,230,118,.4)' : 'rgba(255,82,82,.4)'};
-    color: ${variant === 'success' ? '#00e676' : '#ff8a8a'};
-  `;
-  document.body.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
+  await patchShopSettings({
+    name: String(data.get('name') || '').trim(),
+    phone: normalizePhone(data.get('phone')),
+    whatsapp: normalizePhone(data.get('whatsapp')),
+    address: String(data.get('address') || '').trim(),
+    city: String(data.get('city') || '').trim(),
+    state: String(data.get('state') || '').trim(),
+    zip_code: String(data.get('zip_code') || '').trim(),
+    logo_url: String(data.get('logo_url') || '').trim(),
+    cover_url: String(data.get('cover_url') || '').trim(),
+    timezone: String(data.get('timezone') || 'America/Sao_Paulo'),
+    is_active: String(data.get('is_active')) === 'true',
+    absence_message: String(data.get('absence_message') || '').trim(),
+  }, 'cfg-business-feedback', 'Dados do negócio salvos.');
 }
 
-// ─── Event binding ────────────────────────────────────────────────────────────
+async function saveAgendaForm(event) {
+  event.preventDefault();
+  const form = document.getElementById('cfg-agenda-form');
+  const data = new FormData(form);
 
-function bindShopInfoEvents() {
-  document.getElementById('cfg-whatsapp-save-btn')?.addEventListener('click', saveWhatsApp);
-  document.getElementById('cfg-bot-save-btn')?.addEventListener('click', saveWhatsAppBot);
-  document.getElementById('cfg-meta-connect-btn')?.addEventListener('click', connectWithMeta);
-  document.getElementById('cfg-meta-reconnect-btn')?.addEventListener('click', connectWithMeta);
-  bindInviteLinkCopy();
+  await patchShopSettings({
+    booking_advance_days: Number(data.get('booking_advance_days') || 30),
+    cancellation_hours: Number(data.get('cancellation_hours') || 2),
+    absence_message: String(data.get('absence_message') || '').trim(),
+  }, 'cfg-agenda-feedback', 'Regras de agenda salvas.');
 }
 
-function bindInviteLinkCopy() {
-  document.getElementById('cfg-invite-copy-btn')?.addEventListener('click', async () => {
-    const slug = configState.shop?.slug;
-    if (!slug) return;
-    const link = buildInviteLink(slug);
-    try {
-      if (navigator.clipboard?.writeText) await navigator.clipboard.writeText(link);
-      else {
-        const ta = document.createElement('textarea');
-        ta.value = link; ta.style.position = 'absolute'; ta.style.left = '-9999px';
-        document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
-      }
-      setFeedback('cfg-invite-feedback', '✓ Link copiado!', 'success');
-    } catch {
-      setFeedback('cfg-invite-feedback', 'Não foi possível copiar.', 'error');
-    }
+async function saveWorkingHours(event) {
+  event?.preventDefault?.();
+  const hours = parseWorkingHours(configState.workingHours);
+
+  document.querySelectorAll('[data-wh-day][data-wh-field]').forEach((el) => {
+    const day = el.dataset.whDay;
+    const field = el.dataset.whField;
+    if (!hours[day]) return;
+
+    if (field === 'active') hours[day].active = el.checked;
+    else hours[day][field] = el.value || hours[day][field];
   });
+
+  await patchShopSettings({ working_hours: hours }, 'cfg-hours-feedback', 'Horários salvos.');
 }
 
-function bindWorkingHoursEvents() {
-  document.querySelectorAll('[data-wh-field="active"]').forEach(checkbox => {
+function collectNotificationSettings() {
+  const result = { ...getSettings() };
+
+  document.querySelectorAll('[data-setting]').forEach((el) => {
+    const key = el.dataset.setting;
+
+    if (el.type === 'checkbox') {
+      result[key] = el.checked;
+      return;
+    }
+
+    if (['bills_reminder_days', 'subscription_reminder_days'].includes(key)) {
+      result[key] = String(el.value || '')
+        .split(',')
+        .map((item) => parseInt(item.trim(), 10))
+        .filter((item) => Number.isFinite(item) && item >= 0);
+      return;
+    }
+
+    if (key.includes('_hour')) {
+      const h = parseInt(el.value, 10);
+      result[key] = Number.isFinite(h) ? Math.min(23, Math.max(0, h)) : 9;
+      return;
+    }
+
+    result[key] = String(el.value || '');
+  });
+
+  return result;
+}
+
+async function saveNotifications(event) {
+  event.preventDefault();
+  await patchShopSettings({
+    notification_settings: collectNotificationSettings(),
+  }, 'cfg-notifications-feedback', 'Notificações salvas.');
+}
+
+async function saveReactivationMessage(event) {
+  event.preventDefault();
+  const textarea = document.getElementById('cfg-reactivation-message');
+  const settings = { ...getSettings(), reactivation_message: textarea?.value || '' };
+
+  await patchShopSettings({
+    notification_settings: settings,
+  }, 'cfg-reactivation-feedback', 'Mensagem de reativação salva.');
+}
+
+async function saveWhatsAppManual(event) {
+  event.preventDefault();
+
+  const form = document.getElementById('cfg-whatsapp-form');
+  const data = new FormData(form);
+  const phoneNumberId = String(data.get('phone_number_id') || '').trim();
+  const accessToken = String(data.get('access_token') || '').trim();
+  const displayPhone = normalizePhone(data.get('display_phone'));
+
+  if (!phoneNumberId || !accessToken) {
+    setFeedback('cfg-wa-feedback', 'Informe Phone Number ID e Access Token.', 'error');
+    return;
+  }
+
+  setFeedback('cfg-wa-feedback', 'Validando com a Meta...', 'neutral');
+
+  try {
+    await apiFetch('/api/whatsapp/connect/manual', {
+      method: 'POST',
+      body: JSON.stringify({
+        phone_number_id: phoneNumberId,
+        access_token: accessToken,
+        display_phone: displayPhone || configState.shop?.whatsapp || null,
+      }),
+    });
+
+    setFeedback('cfg-wa-feedback', 'WhatsApp conectado.', 'success');
+    await loadConfigData();
+  } catch (error) {
+    setFeedback('cfg-wa-feedback', error instanceof Error ? error.message : 'Erro ao conectar WhatsApp.', 'error');
+  }
+}
+
+async function disconnectWhatsApp() {
+  const ok = window.confirm('Desconectar o WhatsApp Business desta barbearia?');
+  if (!ok) return;
+
+  setFeedback('cfg-wa-feedback', 'Desconectando...', 'neutral');
+
+  try {
+    await apiFetch('/api/whatsapp/disconnect', { method: 'DELETE' });
+    setFeedback('cfg-wa-feedback', 'WhatsApp desconectado.', 'success');
+    await loadConfigData();
+  } catch (error) {
+    setFeedback('cfg-wa-feedback', error instanceof Error ? error.message : 'Erro ao desconectar.', 'error');
+  }
+}
+
+async function registerInvite(channel) {
+  try {
+    await apiFetch('/api/barbershops/invites', {
+      method: 'POST',
+      body: JSON.stringify({ channel }),
+    });
+    await loadConfigData();
+  } catch (error) {
+    console.warn('Não foi possível registrar convite:', error);
+  }
+}
+
+async function runNotificationTest(endpoint, btn) {
+  const status = btn.querySelector('.cfg-test-status');
+  if (status) status.textContent = 'enviando...';
+  btn.disabled = true;
+  setFeedback('cfg-test-feedback', 'Enviando teste...', 'neutral');
+
+  try {
+    await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({}) });
+    if (status) status.textContent = 'ok';
+    setFeedback('cfg-test-feedback', 'Mensagem de teste enviada.', 'success');
+  } catch (error) {
+    if (status) status.textContent = 'erro';
+    setFeedback('cfg-test-feedback', error instanceof Error ? error.message : 'Erro ao testar.', 'error');
+  } finally {
+    btn.disabled = false;
+    setTimeout(() => { if (status) status.textContent = ''; }, 4000);
+  }
+}
+
+// ─── Render primitives ────────────────────────────────────────────────────────
+
+function renderHero() {
+  const shop = configState.shop || {};
+  const readiness = getReadiness();
+  const connected = Boolean(configState.whatsappStatus?.connected || shop.meta_phone_id && shop.meta_access_token);
+
+  return `
+    <div class="cfg-hero">
+      <div>
+        <div class="cfg-section-title">Central de comando</div>
+        <h1>Configurações</h1>
+        <p>Ajuste dados do negócio, agenda, WhatsApp, notificações e links públicos em uma tela de controle limpa, rastreável e pronta para operação.</p>
+        <div class="cfg-chip-row">
+          ${statusChip(`Licença ${shop.plan_status || '—'}`, shop.plan_status === 'active')}
+          ${statusChip(connected ? 'WhatsApp conectado' : 'WhatsApp pendente', connected)}
+          ${statusChip(`${readiness.score || 0}% configurado`, (readiness.score || 0) >= 70)}
+        </div>
+      </div>
+      <div class="cfg-hero-score">
+        <strong>${escapeHtml(readiness.score || 0)}%</strong>
+        <span>${escapeHtml(readinessLabel(readiness.score || 0))}</span>
+      </div>
+    </div>
+  `;
+}
+
+function renderTabs() {
+  return `
+    <div class="cfg-tabs" role="tablist">
+      ${TABS.map((tab) => `
+        <button type="button" class="cfg-tab ${configState.activeTab === tab.id ? 'is-active' : ''}" data-cfg-tab="${escapeHtml(tab.id)}">
+          <span>${tab.icon}</span>
+          ${escapeHtml(tab.label)}
+        </button>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderMetric(label, value, hint, tone = 'info') {
+  return `
+    <div class="cfg-metric cfg-metric--${escapeHtml(tone)}">
+      <div class="cfg-metric-label">${escapeHtml(label)}</div>
+      <div class="cfg-metric-value">${escapeHtml(value)}</div>
+      <div class="cfg-metric-sub">${escapeHtml(hint)}</div>
+    </div>
+  `;
+}
+
+function renderToggle(key, label, hint) {
+  const s = getSettings();
+  return `
+    <div class="cfg-setting-row">
+      <div>
+        <strong>${escapeHtml(label)}</strong>
+        <span>${escapeHtml(hint)}</span>
+      </div>
+      <label class="cfg-toggle">
+        <input type="checkbox" data-setting="${escapeHtml(key)}" ${s[key] ? 'checked' : ''} />
+        <span></span>
+      </label>
+    </div>
+  `;
+}
+
+function renderToggleWithHour(enabledKey, hourKey, label, hint) {
+  const s = getSettings();
+  return `
+    <div class="cfg-setting-row cfg-setting-row--wrap">
+      <div>
+        <strong>${escapeHtml(label)}</strong>
+        <span>${escapeHtml(hint)}</span>
+      </div>
+      <div class="cfg-inline-controls">
+        <label class="cfg-small-label">Hora
+          <input class="modal-input cfg-hour-input" type="number" min="0" max="23" data-setting="${escapeHtml(hourKey)}" value="${escapeHtml(s[hourKey] ?? 9)}" />
+        </label>
+        <label class="cfg-toggle">
+          <input type="checkbox" data-setting="${escapeHtml(enabledKey)}" ${s[enabledKey] ? 'checked' : ''} />
+          <span></span>
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+function renderDaysWithHour(daysKey, hourKey, enabledKey, label, hint) {
+  const s = getSettings();
+  const days = Array.isArray(s[daysKey]) ? s[daysKey].join(', ') : '';
+
+  return `
+    <div class="cfg-notification-box">
+      <div class="cfg-setting-row cfg-setting-row--wrap">
+        <div>
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(hint)}</span>
+        </div>
+        <label class="cfg-toggle">
+          <input type="checkbox" data-setting="${escapeHtml(enabledKey)}" ${s[enabledKey] ? 'checked' : ''} />
+          <span></span>
+        </label>
+      </div>
+      <div class="cfg-form-grid cfg-form-grid--compact">
+        <label>Dias antes
+          <input class="modal-input" data-setting="${escapeHtml(daysKey)}" value="${escapeHtml(days)}" placeholder="5, 3, 1, 0" />
+        </label>
+        <label>Hora
+          <input class="modal-input" data-setting="${escapeHtml(hourKey)}" type="number" min="0" max="23" value="${escapeHtml(s[hourKey] ?? 9)}" />
+        </label>
+      </div>
+    </div>
+  `;
+}
+
+function renderSectionShell(content) {
+  if (configState.isLoading && !configState.shop) {
+    return `
+      <div class="cfg-grid">
+        ${renderLoadingCard('Carregando dados')}
+        ${renderLoadingCard('Carregando diagnóstico')}
+      </div>
+    `;
+  }
+
+  return content;
+}
+
+// ─── Sections ─────────────────────────────────────────────────────────────────
+
+function renderOverview() {
+  const overview = configState.overview || {};
+  const counters = overview.counters || {};
+  const readiness = getReadiness();
+  const checklist = readiness.checklist || {};
+  const shop = configState.shop || {};
+  const connected = Boolean(configState.whatsappStatus?.connected || shop.meta_phone_id && shop.meta_access_token);
+  const invite = configState.inviteStats || {};
+
+  const checks = [
+    ['Dados básicos', checklist.business_data],
+    ['Endereço', checklist.address],
+    ['Agenda', checklist.schedule],
+    ['WhatsApp', checklist.whatsapp || connected],
+    ['Notificações', checklist.notifications],
+    ['Serviços', checklist.services],
+    ['Barbeiros', checklist.barbers],
+    ['Planos', checklist.plans],
+    ['Marca visual', checklist.branding],
+  ];
+
+  return renderSectionShell(`
+    <div class="cfg-metrics-grid">
+      ${renderMetric('Prontidão', `${readiness.score || 0}%`, readinessLabel(readiness.score || 0), 'gold')}
+      ${renderMetric('Clientes', safeCount(counters.clients), 'base ativa', 'info')}
+      ${renderMetric('Serviços', safeCount(counters.services), 'catálogo publicado', 'success')}
+      ${renderMetric('WhatsApp', connected ? 'On' : 'Off', connected ? 'automação ativa' : 'configure para avisos', connected ? 'success' : 'danger')}
+    </div>
+
+    <div class="cfg-layout">
+      <main class="cfg-main">
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Checklist de operação</div>
+              <h2>Pronto para agendar, vender e avisar?</h2>
+            </div>
+            ${statusChip(`${readiness.completed || 0}/${readiness.total || 0}`, (readiness.score || 0) >= 70)}
+          </div>
+
+          <div class="cfg-checklist">
+            ${checks.map(([label, ok]) => `
+              <div class="cfg-check-item ${ok ? 'is-ok' : 'is-pending'}">
+                <span>${ok ? '✓' : '!'}</span>
+                <strong>${escapeHtml(label)}</strong>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Mapa do sistema</div>
+              <h2>Resumo dos módulos</h2>
+            </div>
+          </div>
+
+          <div class="cfg-module-grid">
+            ${[
+              ['Clientes', counters.clients, '👥'],
+              ['Barbeiros', counters.barbers, '💈'],
+              ['Serviços', counters.services, '✂️'],
+              ['Planos', counters.plans, '🏷️'],
+              ['Agenda', counters.appointments, '📅'],
+              ['Estoque', counters.products, '📦'],
+              ['Marketing', counters.campaigns, '📣'],
+              ['Avaliações', counters.reviews, '⭐'],
+            ].map(([label, value, icon]) => `
+              <div class="cfg-module-card">
+                <span>${icon}</span>
+                <strong>${safeCount(value)}</strong>
+                <small>${escapeHtml(label)}</small>
+              </div>
+            `).join('')}
+          </div>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-card cfg-card--spotlight">
+          <div class="cfg-section-title">Link público</div>
+          <p>Use o link da barbearia para cadastro e agendamento de clientes.</p>
+          ${shop.slug ? `
+            <div class="cfg-copy-box">
+              <code>${escapeHtml(buildInviteLink(shop.slug))}</code>
+              <button type="button" class="cfg-action-btn" data-copy-link="${escapeHtml(buildInviteLink(shop.slug))}" data-copy-channel="link">Copiar</button>
+            </div>
+          ` : `<div class="cfg-empty">Slug não configurado.</div>`}
+        </section>
+
+        <section class="cfg-card">
+          <div class="cfg-section-title">Convites</div>
+          <div class="cfg-invite-stats">
+            <div><strong>${safeCount(invite.sent)}</strong><span>enviados</span></div>
+            <div><strong>${safeCount(invite.converted)}</strong><span>convertidos</span></div>
+            <div><strong>${safeCount(invite.rate)}%</strong><span>taxa</span></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  `);
+}
+
+function renderBusiness() {
+  const shop = configState.shop || {};
+
+  return renderSectionShell(`
+    <div class="cfg-layout">
+      <main class="cfg-main">
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Identidade do negócio</div>
+              <h2>Dados da barbearia</h2>
+            </div>
+          </div>
+
+          <form id="cfg-business-form" class="cfg-form">
+            <div class="cfg-form-grid">
+              <label>Nome da barbearia
+                <input class="modal-input" name="name" value="${escapeHtml(shop.name || '')}" />
+              </label>
+              <label>Status operacional
+                <select class="modal-input" name="is_active">
+                  <option value="true" ${shop.is_active !== false ? 'selected' : ''}>Ativa</option>
+                  <option value="false" ${shop.is_active === false ? 'selected' : ''}>Indisponível</option>
+                </select>
+              </label>
+              <label>Telefone
+                <input class="modal-input" name="phone" value="${escapeHtml(shop.phone || '')}" placeholder="5511999990000" />
+              </label>
+              <label>WhatsApp da barbearia
+                <input class="modal-input" name="whatsapp" value="${escapeHtml(shop.whatsapp || '')}" placeholder="5511999990000" />
+              </label>
+              <label>Cidade
+                <input class="modal-input" name="city" value="${escapeHtml(shop.city || '')}" />
+              </label>
+              <label>Estado
+                <input class="modal-input" name="state" value="${escapeHtml(shop.state || '')}" maxlength="2" />
+              </label>
+              <label>CEP
+                <input class="modal-input" name="zip_code" value="${escapeHtml(shop.zip_code || '')}" />
+              </label>
+              <label>Fuso horário
+                <input class="modal-input" name="timezone" value="${escapeHtml(shop.timezone || 'America/Sao_Paulo')}" />
+              </label>
+            </div>
+
+            <label>Endereço
+              <input class="modal-input" name="address" value="${escapeHtml(shop.address || '')}" />
+            </label>
+
+            <div class="cfg-form-grid">
+              <label>Logo URL
+                <input class="modal-input" name="logo_url" value="${escapeHtml(shop.logo_url || '')}" placeholder="https://..." />
+              </label>
+              <label>Capa URL
+                <input class="modal-input" name="cover_url" value="${escapeHtml(shop.cover_url || '')}" placeholder="https://..." />
+              </label>
+            </div>
+
+            <label>Mensagem de ausência
+              <textarea class="modal-input cfg-textarea" name="absence_message">${escapeHtml(shop.absence_message || '')}</textarea>
+            </label>
+
+            <div id="cfg-business-feedback" class="cfg-feedback"></div>
+
+            <div class="cfg-form-actions">
+              <button class="btn-save" type="submit">Salvar dados</button>
+            </div>
+          </form>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-brand-preview">
+          <div class="cfg-cover-preview" style="${shop.cover_url ? `background-image:url('${escapeHtml(shop.cover_url)}')` : ''}"></div>
+          <div class="cfg-logo-preview">
+            ${shop.logo_url ? `<img src="${escapeHtml(shop.logo_url)}" alt="Logo" />` : escapeHtml(String(shop.name || 'B').charAt(0).toUpperCase())}
+          </div>
+          <strong>${escapeHtml(shop.name || 'Barbearia')}</strong>
+          <span>${escapeHtml(shop.city || 'Cidade não informada')} ${shop.state ? `· ${escapeHtml(shop.state)}` : ''}</span>
+        </section>
+
+        <section class="cfg-card">
+          <div class="cfg-section-title">Licença</div>
+          <div class="cfg-info-list">
+            <div><span>Status</span><strong>${escapeHtml(shop.plan_status || '—')}</strong></div>
+            <div><span>Vigência</span><strong>${escapeHtml(formatDate(shop.subscription_end))}</strong></div>
+            <div><span>Slug</span><strong>${escapeHtml(shop.slug || '—')}</strong></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  `);
+}
+
+function renderAgenda() {
+  const shop = configState.shop || {};
+  const hours = parseWorkingHours(configState.workingHours);
+
+  return renderSectionShell(`
+    <div class="cfg-layout">
+      <main class="cfg-main">
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Regras de agenda</div>
+              <h2>Como os clientes podem marcar horários</h2>
+            </div>
+          </div>
+
+          <form id="cfg-agenda-form" class="cfg-form">
+            <div class="cfg-form-grid">
+              <label>Abrir agenda para próximos dias
+                <input class="modal-input" name="booking_advance_days" type="number" min="1" max="365" value="${escapeHtml(shop.booking_advance_days ?? 30)}" />
+              </label>
+              <label>Antecedência para cancelamento
+                <input class="modal-input" name="cancellation_hours" type="number" min="0" max="168" value="${escapeHtml(shop.cancellation_hours ?? 2)}" />
+              </label>
+            </div>
+
+            <label>Mensagem quando a barbearia estiver indisponível
+              <textarea class="modal-input cfg-textarea" name="absence_message">${escapeHtml(shop.absence_message || '')}</textarea>
+            </label>
+
+            <div id="cfg-agenda-feedback" class="cfg-feedback"></div>
+
+            <div class="cfg-form-actions">
+              <button class="btn-save" type="submit">Salvar regras</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Horários</div>
+              <h2>Funcionamento semanal</h2>
+            </div>
+          </div>
+
+          <form id="cfg-hours-form" class="cfg-hours-list">
+            ${DAY_KEYS.map((key) => {
+              const day = hours[key];
+              return `
+                <div class="cfg-hours-row">
+                  <label class="cfg-toggle">
+                    <input type="checkbox" data-wh-day="${escapeHtml(key)}" data-wh-field="active" ${day.active ? 'checked' : ''} />
+                    <span></span>
+                  </label>
+                  <strong>${escapeHtml(DAY_LABELS[key])}</strong>
+                  <div class="cfg-hour-pair">
+                    <input class="modal-input" type="time" data-wh-day="${escapeHtml(key)}" data-wh-field="open" value="${escapeHtml(day.open)}" ${!day.active ? 'disabled' : ''} />
+                    <em>até</em>
+                    <input class="modal-input" type="time" data-wh-day="${escapeHtml(key)}" data-wh-field="close" value="${escapeHtml(day.close)}" ${!day.active ? 'disabled' : ''} />
+                  </div>
+                </div>
+              `;
+            }).join('')}
+
+            <div id="cfg-hours-feedback" class="cfg-feedback"></div>
+
+            <div class="cfg-form-actions">
+              <button class="btn-save" type="submit">Salvar horários</button>
+            </div>
+          </form>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-card cfg-card--spotlight">
+          <div class="cfg-section-title">Experiência do cliente</div>
+          <p>Essas regras protegem a operação: janela de agenda clara, cancelamento previsível e horário real de funcionamento.</p>
+        </section>
+      </aside>
+    </div>
+  `);
+}
+
+function renderWhatsapp() {
+  const shop = configState.shop || {};
+  const status = configState.whatsappStatus || {};
+  const connected = Boolean(status.connected || shop.meta_phone_id && shop.meta_access_token);
+
+  return renderSectionShell(`
+    <div class="cfg-layout">
+      <main class="cfg-main">
+        <section class="cfg-card cfg-card--${connected ? 'success' : 'warning'}">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">WhatsApp Business</div>
+              <h2>${connected ? 'Conectado' : 'Não configurado'}</h2>
+            </div>
+            ${statusChip(connected ? 'Conectado' : 'Pendente', connected)}
+          </div>
+
+          <div class="cfg-wa-status">
+            <div><span>Phone Number ID</span><strong>${escapeHtml(shop.meta_phone_id || status.phone_number_id || '—')}</strong></div>
+            <div><span>Número comercial</span><strong>${escapeHtml(status.business_phone || shop.whatsapp || '—')}</strong></div>
+            <div><span>Access Token</span><strong>${escapeHtml(maskSecret(shop.meta_access_token))}</strong></div>
+          </div>
+
+          <div id="cfg-wa-feedback" class="cfg-feedback"></div>
+
+          <div class="cfg-form-actions cfg-form-actions--split">
+            <button type="button" class="cfg-action-btn cfg-action-btn--success" id="cfg-meta-connect-btn">${connected ? 'Reconectar com Meta' : 'Conectar com Meta'}</button>
+            ${connected ? `<button type="button" class="cfg-action-btn cfg-action-btn--danger" id="cfg-wa-disconnect-btn">Desconectar</button>` : ''}
+          </div>
+        </section>
+
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Configuração manual</div>
+              <h2>Desenvolvimento ou primeiros clientes</h2>
+            </div>
+          </div>
+
+          <form id="cfg-whatsapp-form" class="cfg-form">
+            <div class="cfg-form-grid">
+              <label>Phone Number ID
+                <input class="modal-input" name="phone_number_id" value="${escapeHtml(shop.meta_phone_id || '')}" placeholder="1049280788276183" />
+              </label>
+              <label>WhatsApp exibido
+                <input class="modal-input" name="display_phone" value="${escapeHtml(shop.whatsapp || '')}" placeholder="5511999990000" />
+              </label>
+            </div>
+            <label>Access Token
+              <input class="modal-input" name="access_token" type="password" value="" placeholder="Cole um token novo para substituir" />
+            </label>
+            <div class="cfg-warning-box">Evite salvar token temporário em produção. Use token permanente da Meta para operação real.</div>
+            <div class="cfg-form-actions">
+              <button class="btn-save" type="submit">Validar e salvar manualmente</button>
+            </div>
+          </form>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-card cfg-card--spotlight">
+          <div class="cfg-section-title">Automação</div>
+          <p>Com WhatsApp conectado, o sistema libera avisos de agenda, lembretes, clientes novos, estoque e reativação.</p>
+        </section>
+      </aside>
+    </div>
+  `);
+}
+
+function renderNotifications() {
+  const s = getSettings();
+  const msg = s.reactivation_message || REACTIVATION_DEFAULT_MSG;
+
+  return renderSectionShell(`
+    <div class="cfg-layout">
+      <main class="cfg-main">
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Notificações automáticas</div>
+              <h2>O que o sistema avisa sozinho</h2>
+            </div>
+          </div>
+
+          <form id="cfg-notifications-form" class="cfg-form">
+            <div class="cfg-group-title">Agenda</div>
+            ${renderToggle('appointment_confirmed', 'Confirmação de agendamento', 'Mensagem para cliente e barbeiro ao confirmar.')}
+            ${renderToggle('appointment_cancelled', 'Cancelamento de agendamento', 'Mensagem para cliente ao cancelar.')}
+            ${renderToggle('appointment_reminder_1h', 'Lembrete 1h antes', 'Aviso automático antes do horário.')}
+
+            <div class="cfg-group-title">Financeiro</div>
+            ${renderDaysWithHour('bills_reminder_days', 'bills_reminder_hour', 'bills_reminder_enabled', 'Contas a pagar', 'Dias antes do vencimento e horário do alerta.')}
+            ${renderDaysWithHour('subscription_reminder_days', 'subscription_reminder_hour', 'subscription_reminder_enabled', 'Mensalidade do sistema', 'Dias antes do vencimento da licença/plataforma.')}
+
+            <div class="cfg-group-title">Operacional e clientes</div>
+            ${renderToggleWithHour('stock_alert_enabled', 'stock_alert_hour', 'Estoque baixo', 'Resumo diário dos produtos abaixo do mínimo.')}
+            ${renderToggle('new_client_alert', 'Novo cliente cadastrado', 'Aviso ao dono quando alguém entrar pelo link público.')}
+            ${renderToggleWithHour('reactivation_enabled', 'reactivation_hour', 'Reativação de clientes', 'Mensagem para clientes sem visita recente.')}
+
+            <div id="cfg-notifications-feedback" class="cfg-feedback"></div>
+
+            <div class="cfg-form-actions">
+              <button class="btn-save" type="submit">Salvar notificações</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Mensagem de reativação</div>
+              <h2>Cliente sumido</h2>
+            </div>
+          </div>
+
+          <form id="cfg-reactivation-form" class="cfg-form">
+            <div class="cfg-var-row">
+              ${['{nome}', '{dias}', '{link}'].map(v => `<button type="button" class="cfg-var-chip" data-var="${escapeHtml(v)}">${escapeHtml(v)}</button>`).join('')}
+            </div>
+
+            <textarea id="cfg-reactivation-message" class="modal-input cfg-textarea cfg-textarea--lg">${escapeHtml(msg)}</textarea>
+
+            <div class="cfg-preview-box" id="cfg-reactivation-preview">${escapeHtml(previewReactivationMessage(msg))}</div>
+
+            <div id="cfg-reactivation-feedback" class="cfg-feedback"></div>
+
+            <div class="cfg-form-actions">
+              <button type="button" class="cfg-action-btn" id="cfg-reactivation-reset-btn">Restaurar padrão</button>
+              <button class="btn-save" type="submit">Salvar mensagem</button>
+            </div>
+          </form>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-card cfg-card--spotlight">
+          <div class="cfg-section-title">Controle fino</div>
+          <p>As notificações ficam claras para o dono: o que envia, quando envia e para qual situação.</p>
+        </section>
+      </aside>
+    </div>
+  `);
+}
+
+function previewReactivationMessage(message) {
+  const shop = configState.shop || {};
+  const link = buildClientAgendaLink(shop.slug || 'minha-barbearia');
+
+  return String(message || REACTIVATION_DEFAULT_MSG)
+    .replace(/\{nome\}/g, 'Carlos')
+    .replace(/\{dias\}/g, '35')
+    .replace(/\{link\}/g, link);
+}
+
+function renderLinks() {
+  const shop = configState.shop || {};
+  const invite = configState.inviteStats || {};
+  const inviteLink = buildInviteLink(shop.slug);
+  const appLink = 'https://bbarberflow.com.br/app';
+
+  return renderSectionShell(`
+    <div class="cfg-layout">
+      <main class="cfg-main">
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Links públicos</div>
+              <h2>Portas de entrada da barbearia</h2>
+            </div>
+          </div>
+
+          <div class="cfg-link-list">
+            <div class="cfg-link-card">
+              <div>
+                <strong>Cadastro / agenda do cliente</strong>
+                <code>${escapeHtml(inviteLink || 'Slug não configurado')}</code>
+              </div>
+              <button type="button" class="cfg-action-btn" data-copy-link="${escapeHtml(inviteLink)}" data-copy-channel="link" ${!inviteLink ? 'disabled' : ''}>Copiar</button>
+            </div>
+
+            <div class="cfg-link-card">
+              <div>
+                <strong>Painel do dono</strong>
+                <code>${escapeHtml(appLink)}</code>
+              </div>
+              <button type="button" class="cfg-action-btn" data-copy-link="${escapeHtml(appLink)}">Copiar</button>
+            </div>
+
+            <div class="cfg-link-card">
+              <div>
+                <strong>Convite por WhatsApp</strong>
+                <code>${escapeHtml(inviteLink ? `Olá! Cadastre-se e agende seu horário: ${inviteLink}` : 'Slug não configurado')}</code>
+              </div>
+              <button type="button" class="cfg-action-btn cfg-action-btn--success" data-copy-link="${escapeHtml(inviteLink ? `Olá! Cadastre-se e agende seu horário: ${inviteLink}` : '')}" data-copy-channel="whatsapp" ${!inviteLink ? 'disabled' : ''}>Copiar texto</button>
+            </div>
+          </div>
+
+          <div id="cfg-links-feedback" class="cfg-feedback"></div>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-card">
+          <div class="cfg-section-title">Desempenho dos convites</div>
+          <div class="cfg-invite-stats cfg-invite-stats--stack">
+            <div><strong>${safeCount(invite.sent)}</strong><span>enviados</span></div>
+            <div><strong>${safeCount(invite.converted)}</strong><span>convertidos</span></div>
+            <div><strong>${safeCount(invite.rate)}%</strong><span>conversão</span></div>
+          </div>
+        </section>
+      </aside>
+    </div>
+  `);
+}
+
+function renderTests() {
+  const tests = [
+    { id: 'test-bills', icon: '💳', label: 'Conta a pagar', endpoint: '/api/test-notifications/bills' },
+    { id: 'test-stock', icon: '📦', label: 'Estoque baixo', endpoint: '/api/test-notifications/stock' },
+    { id: 'test-subscription', icon: '🔔', label: 'Mensalidade do sistema', endpoint: '/api/test-notifications/subscription' },
+    { id: 'test-appointment-confirmed', icon: '✅', label: 'Confirmação agendamento', endpoint: '/api/test-notifications/appointment-confirmed' },
+    { id: 'test-appointment-reminder', icon: '⏰', label: 'Lembrete 1h antes', endpoint: '/api/test-notifications/appointment-reminder' },
+    { id: 'test-new-client', icon: '🎉', label: 'Novo cliente cadastrado', endpoint: '/api/test-notifications/new-client' },
+    { id: 'test-reactivation', icon: '🔄', label: 'Reativação de clientes', endpoint: '/api/test-notifications/reactivation' },
+  ];
+
+  const connected = Boolean(configState.whatsappStatus?.connected || configState.shop?.meta_phone_id && configState.shop?.meta_access_token);
+
+  return renderSectionShell(`
+    <div class="cfg-layout">
+      <main class="cfg-main">
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Diagnóstico</div>
+              <h2>Testar automações</h2>
+            </div>
+            ${statusChip(connected ? 'WhatsApp pronto' : 'WhatsApp pendente', connected)}
+          </div>
+
+          <div class="cfg-test-grid">
+            ${tests.map(t => `
+              <button type="button" class="cfg-test-btn" data-test-endpoint="${escapeHtml(t.endpoint)}" ${!connected ? 'disabled' : ''}>
+                <span>${t.icon}</span>
+                <strong>${escapeHtml(t.label)}</strong>
+                <em class="cfg-test-status"></em>
+              </button>
+            `).join('')}
+          </div>
+
+          <div id="cfg-test-feedback" class="cfg-feedback"></div>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-card cfg-card--spotlight">
+          <div class="cfg-section-title">Sem chute</div>
+          <p>Teste as notificações no WhatsApp da barbearia antes de liberar a operação para clientes reais.</p>
+        </section>
+      </aside>
+    </div>
+  `);
+}
+
+function renderActiveSection() {
+  if (configState.activeTab === 'business') return renderBusiness();
+  if (configState.activeTab === 'agenda') return renderAgenda();
+  if (configState.activeTab === 'whatsapp') return renderWhatsapp();
+  if (configState.activeTab === 'notifications') return renderNotifications();
+  if (configState.activeTab === 'links') return renderLinks();
+  if (configState.activeTab === 'tests') return renderTests();
+  return renderOverview();
+}
+
+// ─── Events ───────────────────────────────────────────────────────────────────
+
+function bindConfigEvents() {
+  document.querySelectorAll('[data-cfg-tab]').forEach((btn) => {
+    btn.addEventListener('click', () => setActiveTab(btn.dataset.cfgTab));
+  });
+
+  document.getElementById('cfg-business-form')?.addEventListener('submit', saveBusinessForm);
+  document.getElementById('cfg-agenda-form')?.addEventListener('submit', saveAgendaForm);
+  document.getElementById('cfg-hours-form')?.addEventListener('submit', saveWorkingHours);
+  document.getElementById('cfg-notifications-form')?.addEventListener('submit', saveNotifications);
+  document.getElementById('cfg-reactivation-form')?.addEventListener('submit', saveReactivationMessage);
+  document.getElementById('cfg-whatsapp-form')?.addEventListener('submit', saveWhatsAppManual);
+
+  document.getElementById('cfg-meta-connect-btn')?.addEventListener('click', connectWithMeta);
+  document.getElementById('cfg-wa-disconnect-btn')?.addEventListener('click', disconnectWhatsApp);
+
+  document.querySelectorAll('[data-wh-field="active"]').forEach((checkbox) => {
     checkbox.addEventListener('change', () => {
       const day = checkbox.dataset.whDay;
-      document.querySelectorAll(
-        `[data-wh-day="${day}"][data-wh-field="open"], [data-wh-day="${day}"][data-wh-field="close"]`
-      ).forEach(input => { input.disabled = !checkbox.checked; });
+      document.querySelectorAll(`[data-wh-day="${day}"][data-wh-field="open"], [data-wh-day="${day}"][data-wh-field="close"]`)
+        .forEach((input) => { input.disabled = !checkbox.checked; });
     });
   });
-  document.getElementById('cfg-hours-save-btn')?.addEventListener('click', saveWorkingHours);
-}
 
-function bindReactivationEvents() {
-  const textarea  = document.getElementById('cfg-reactivation-msg');
-  const charCount = document.getElementById('cfg-reactivation-char');
+  document.querySelectorAll('[data-copy-link]').forEach((btn) => {
+    btn.addEventListener('click', async () => {
+      const value = btn.dataset.copyLink || '';
+      const channel = btn.dataset.copyChannel || null;
+      if (!value) return;
 
-  textarea?.addEventListener('input', () => {
-    if (charCount) charCount.textContent = `${textarea.value.length} / 1000`;
-    updateReactivationPreview();
+      await copyToClipboard(value, 'cfg-links-feedback');
+
+      if (channel) await registerInvite(channel);
+    });
   });
 
-  document.querySelectorAll('.cfg-var-chip').forEach(chip => {
-    chip.addEventListener('click', () => {
+  document.querySelectorAll('[data-test-endpoint]').forEach((btn) => {
+    btn.addEventListener('click', () => runNotificationTest(btn.dataset.testEndpoint, btn));
+  });
+
+  document.querySelectorAll('.cfg-var-chip[data-var]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const textarea = document.getElementById('cfg-reactivation-message');
       if (!textarea) return;
-      const variable = chip.dataset.var;
-      const start = textarea.selectionStart, end = textarea.selectionEnd;
-      textarea.value = textarea.value.substring(0, start) + variable + textarea.value.substring(end);
-      textarea.selectionStart = textarea.selectionEnd = start + variable.length;
+
+      const value = btn.dataset.var || '';
+      const start = textarea.selectionStart ?? textarea.value.length;
+      const end = textarea.selectionEnd ?? textarea.value.length;
+      textarea.value = textarea.value.slice(0, start) + value + textarea.value.slice(end);
       textarea.focus();
-      if (charCount) charCount.textContent = `${textarea.value.length} / 1000`;
+      textarea.selectionStart = textarea.selectionEnd = start + value.length;
       updateReactivationPreview();
     });
   });
 
-  document.querySelector('.cfg-reactivation-reset')?.addEventListener('click', () => {
+  document.getElementById('cfg-reactivation-message')?.addEventListener('input', updateReactivationPreview);
+
+  document.getElementById('cfg-reactivation-reset-btn')?.addEventListener('click', () => {
+    const textarea = document.getElementById('cfg-reactivation-message');
     if (!textarea) return;
-    if (!confirm('Restaurar a mensagem padrão? Sua mensagem atual será perdida.')) return;
     textarea.value = REACTIVATION_DEFAULT_MSG;
-    if (charCount) charCount.textContent = `${textarea.value.length} / 1000`;
     updateReactivationPreview();
   });
-
-  document.getElementById('cfg-reactivation-save-btn')?.addEventListener('click', saveReactivationSettings);
-  updateReactivationPreview();
 }
 
-function bindTestEvents() {
-  document.querySelectorAll('.cfg-test-btn[data-endpoint]').forEach(btn => {
-    btn.addEventListener('click', async () => {
-      const endpoint  = btn.dataset.endpoint;
-      const statusEl  = btn.querySelector('.cfg-test-status');
-      const feedbackEl = document.getElementById('cfg-test-feedback');
+function updateReactivationPreview() {
+  const textarea = document.getElementById('cfg-reactivation-message');
+  const preview = document.getElementById('cfg-reactivation-preview');
+  if (!textarea || !preview) return;
+  preview.textContent = previewReactivationMessage(textarea.value);
+}
 
-      btn.disabled = true;
-      if (statusEl)   { statusEl.textContent = '⏳'; statusEl.style.color = '#5a6888'; }
-      if (feedbackEl) { feedbackEl.textContent = ''; }
+function rerenderConfig() {
+  const root = document.getElementById('configuracoes-root');
+  if (!root) return;
 
-      try {
-        const result = await apiFetch(endpoint, { method: 'POST' });
-        if (statusEl)   { statusEl.textContent = '✓ Enviado'; statusEl.style.color = '#00e676'; }
-        if (feedbackEl) { feedbackEl.textContent = result?.message || 'Enviado!'; feedbackEl.style.color = '#00e676'; }
-      } catch (err) {
-        if (statusEl)   { statusEl.textContent = '✗ Erro'; statusEl.style.color = '#ff8a8a'; }
-        if (feedbackEl) { feedbackEl.textContent = err instanceof Error ? err.message : 'Erro ao enviar.'; feedbackEl.style.color = '#ff8a8a'; }
-      } finally {
-        btn.disabled = false;
-        setTimeout(() => { if (statusEl) statusEl.textContent = ''; }, 5000);
-      }
-    });
-  });
+  root.innerHTML = `
+    ${renderHero()}
+    ${renderTabs()}
+    <div class="cfg-active-section">${renderActiveSection()}</div>
+  `;
+
+  bindConfigEvents();
 }
 
 // ─── Export ───────────────────────────────────────────────────────────────────
@@ -896,60 +1262,17 @@ function bindTestEvents() {
 export function renderConfiguracoes() {
   return /* html */ `
 <section class="page-shell page--configuracoes">
-  <div class="grid-2">
-    <div>
-      <div id="cfg-shop-info">
-        <div class="card"><div class="card-header"><div class="card-title">Carregando...</div></div></div>
-      </div>
-      <div id="cfg-working-hours">
-        <div class="card"><div class="card-header"><div class="card-title">Carregando...</div></div></div>
-      </div>
-      <div id="cfg-reactivation-section">
-        <div class="card"><div class="card-header"><div class="card-title">Carregando...</div></div></div>
-      </div>
-      <div id="cfg-test-section">
-        <div class="card"><div class="card-header"><div class="card-title">Carregando...</div></div></div>
-      </div>
-    </div>
-    <div id="cfg-notification-settings">
-      ${renderNotificationSettings()}
-    </div>
+  <div id="configuracoes-root">
+    ${renderHero()}
+    ${renderTabs()}
+    <div class="cfg-active-section">${renderActiveSection()}</div>
   </div>
-
-  <style>
-    .cfg-toggle{position:relative;display:inline-flex;align-items:center;cursor:pointer;}
-    .cfg-toggle input{opacity:0;width:0;height:0;position:absolute;}
-    .cfg-toggle-track{width:36px;height:20px;background:#1e2345;border-radius:10px;transition:background .2s;position:relative;flex-shrink:0;}
-    .cfg-toggle-track::after{content:'';position:absolute;width:14px;height:14px;border-radius:50%;background:#fff;top:3px;left:3px;transition:transform .2s;}
-    .cfg-toggle input:checked + .cfg-toggle-track{background:linear-gradient(90deg,#00b4ff,#6c3fff);}
-    .cfg-toggle input:checked + .cfg-toggle-track::after{transform:translateX(16px);}
-    input[type="time"]:disabled{opacity:.35;cursor:not-allowed;}
-    @keyframes fadeInDown{from{opacity:0;transform:translateX(-50%) translateY(-10px);}to{opacity:1;transform:translateX(-50%) translateY(0);}}
-  </style>
-</section>`;
+</section>
+  `;
 }
 
 export async function initConfiguracoesPage() {
-  // Checa retorno do OAuth antes de carregar dados
   checkMetaStatusFromUrl();
-
-  await loadShopData();
-
-  const shopInfo = document.getElementById('cfg-shop-info');
-  if (shopInfo) shopInfo.innerHTML = renderShopInfo();
-
-  const workingHoursEl = document.getElementById('cfg-working-hours');
-  if (workingHoursEl) workingHoursEl.innerHTML = renderWorkingHoursForm();
-
-  const reactivationEl = document.getElementById('cfg-reactivation-section');
-  if (reactivationEl) reactivationEl.innerHTML = renderReactivationMessage();
-
-  const testEl = document.getElementById('cfg-test-section');
-  if (testEl) testEl.innerHTML = renderTestCard();
-
-  document.getElementById('cfg-save-btn')?.addEventListener('click', saveSettings);
-  bindShopInfoEvents();
-  bindWorkingHoursEvents();
-  bindReactivationEvents();
-  bindTestEvents();
+  bindConfigEvents();
+  await loadConfigData();
 }
