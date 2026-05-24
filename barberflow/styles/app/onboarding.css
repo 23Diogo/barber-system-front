@@ -297,3 +297,66 @@ body::before {
   .card        { padding: 22px 18px; }
   .card-title  { font-size: 26px; }
 }
+
+/* ─── Password strength ───────────────────────────────────────────────────── */
+.ob-password-strength-card {
+  margin-top: 8px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(79, 195, 247, 0.14);
+  background:
+    radial-gradient(circle at top left, rgba(79, 195, 247, 0.10), transparent 34%),
+    rgba(8, 12, 30, 0.64);
+}
+
+.ob-password-strength-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.ob-password-strength-top strong {
+  color: var(--text);
+  font-size: 11px;
+}
+
+.ob-password-checklist {
+  display: grid;
+  gap: 5px;
+}
+
+.ob-password-check-item {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 10.5px;
+  color: #6f7c9c;
+  line-height: 1.35;
+}
+
+.ob-password-check-item span {
+  display: inline-grid;
+  place-items: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(126, 141, 180, 0.24);
+  color: #8f9bb8;
+  font-size: 10px;
+  font-weight: 800;
+  flex: 0 0 auto;
+}
+
+.ob-password-check-item.is-ok {
+  color: #00e676;
+}
+
+.ob-password-check-item.is-ok span {
+  color: #00e676;
+  border-color: rgba(0, 230, 118, 0.35);
+  background: rgba(0, 230, 118, 0.08);
+}
