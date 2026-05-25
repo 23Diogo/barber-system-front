@@ -7,6 +7,13 @@ import {
   getClients,
   getBarbers,
   getServices,
+  getProducts,
+  getAppointmentOrderByAppointment,
+  openAppointmentOrder,
+  addAppointmentOrderItem,
+  updateAppointmentOrderItem,
+  removeAppointmentOrderItem,
+  closeAppointmentOrder,
   createAppointment,
   updateAppointmentStatus,
   getActiveSubscriptionByClient,
@@ -18,6 +25,7 @@ const agendaState = {
   cachedClients: null,
   cachedBarbers: null,
   cachedServices: null,
+  cachedProducts: null,
   currentAppointments: [],
   subscriptionLookup: {},
   subscriptionErrors: {},
@@ -173,6 +181,7 @@ function getAgendaFieldWrapper(input) {
   return (
     input.closest('.agenda-field-block') ||
     input.closest('.agenda-finalization-field') ||
+    input.closest('.agenda-order-field') ||
     input.closest('.agenda-filter-field') ||
     input.parentElement
   );
@@ -1022,6 +1031,578 @@ function getSourceLabel(source) {
   return map[source] || source || 'Não informado';
 }
 
+// ─── Comanda Inteligente V1 / UI Premium ─────────────────────────────────────
+const ORDER_PAYMENT_CHANNELS = [
+  { value: 'direct_pix', label: 'Pix direto' },
+  { value: 'cash', label: 'Dinheiro no caixa' },
+  { value: 'barbershop_card_machine', label: 'Maquininha própria' },
+  { value: 'direct_transfer', label: 'Transferência' },
+  { value: 'other', label: 'Outro' },
+];
+
+function centsToMoney(value) {
+  return Number(value || 0) / 100;
+}
+
+function formatCents(value) {
+  return formatCurrency(centsToMoney(value));
+}
+
+function getOrderItems(order) {
+  return Array.isArray(order?.appointment_order_items) ? order.appointment_order_items : [];
+}
+
+function getOrderPayments(order) {
+  return Array.isArray(order?.appointment_order_payments) ? order.appointment_order_payments : [];
+}
+
+function getOrderEvents(order) {
+  return Array.isArray(order?.appointment_order_events) ? order.appointment_order_events : [];
+}
+
+function getOrderDueCents(order) {
+  return Number(order?.amount_due_cents ?? order?.totals?.dueCents ?? 0);
+}
+
+function getOrderGrossCents(order) {
+  return Number(order?.gross_total_cents ?? order?.totals?.grossCents ?? 0);
+}
+
+function getOrderCoveredCents(order) {
+  return Number(order?.subscription_covered_cents ?? order?.totals?.subscriptionCoveredCents ?? 0);
+}
+
+function getOrderPaidCents(order) {
+  return Number(order?.amount_paid_cents ?? order?.totals?.paidCents ?? 0);
+}
+
+function getOrderItemIcon(item) {
+  const type = String(item?.item_type || '');
+  if (type === 'service') return item?.covered_by_subscription ? '💎' : '✂️';
+  if (type === 'product') return '🧴';
+  if (type === 'billiard') return '🎱';
+  if (type === 'extra') return '➕';
+  return '🧾';
+}
+
+function getOrderItemTypeLabel(item) {
+  const type = String(item?.item_type || '');
+  if (type === 'service') return item?.covered_by_subscription ? 'Serviço do plano' : 'Serviço';
+  if (type === 'product') return 'Produto';
+  if (type === 'billiard') return 'Bilhar';
+  if (type === 'extra') return 'Extra';
+  return 'Manual';
+}
+
+function isMainAppointmentServiceItem(item) {
+  return item?.metadata?.source === 'appointment_service' || item?.metadata?.created_by_system === true;
+}
+
+function productSalePrice(product) {
+  return Number(product?.sale_price || product?.price || 0);
+}
+
+function productStock(product) {
+  return Number(product?.current_stock || 0);
+}
+
+async function ensureOrderProducts({ forceReload = false } = {}) {
+  if (!forceReload && Array.isArray(agendaState.cachedProducts)) return agendaState.cachedProducts;
+
+  const products = await getProducts();
+  agendaState.cachedProducts = Array.isArray(products)
+    ? products.filter((item) => item?.is_active !== false)
+    : [];
+
+  return agendaState.cachedProducts;
+}
+
+async function loadAppointmentOrderForDetails(appointment) {
+  const isFinal = ['completed', 'cancelled', 'no_show'].includes(String(appointment?.status || ''));
+  const appointmentId = appointment?.id;
+
+  if (!appointmentId) return null;
+
+  if (isFinal) {
+    return await getAppointmentOrderByAppointment(appointmentId);
+  }
+
+  return await openAppointmentOrder(appointmentId);
+}
+
+function renderOrderItemRow(item, order) {
+  const canRemove = order?.status === 'open' && !isMainAppointmentServiceItem(item);
+  const covered = item?.covered_by_subscription === true;
+  const stockText = item?.products
+    ? ` · Estoque atual: ${escapeHtml(String(item.products.current_stock ?? '—'))}`
+    : '';
+
+  return `
+    <div class="agenda-order-item ${covered ? 'agenda-order-item--covered' : ''}">
+      <div class="agenda-order-item__icon">${escapeHtml(getOrderItemIcon(item))}</div>
+      <div class="agenda-order-item__info">
+        <strong>${escapeHtml(item.description || 'Item da comanda')}</strong>
+        <span>
+          ${escapeHtml(getOrderItemTypeLabel(item))}
+          · Qtd ${escapeHtml(String(Number(item.quantity || 0)))}
+          · Unit. ${escapeHtml(formatCents(item.unit_price_cents))}
+          ${stockText}
+        </span>
+        ${covered ? '<em>Coberto pela assinatura do cliente</em>' : ''}
+      </div>
+      <div class="agenda-order-item__side">
+        <strong>${escapeHtml(formatCents(item.net_total_cents))}</strong>
+        ${canRemove ? `<button type="button" class="agenda-order-mini-btn agenda-order-mini-btn--danger" data-order-remove="${escapeHtml(item.id)}" data-order-id="${escapeHtml(order.id)}">Remover</button>` : ''}
+      </div>
+    </div>
+  `;
+}
+
+function renderProductOptions(products) {
+  const available = (products || []).filter((product) => product?.is_active !== false);
+
+  if (!available.length) {
+    return '<option value="">Nenhum produto ativo encontrado</option>';
+  }
+
+  return '<option value="">Selecione o produto</option>' + available.map((product) => {
+    const price = productSalePrice(product);
+    const stock = productStock(product);
+    return `
+      <option value="${escapeHtml(product.id)}">
+        ${escapeHtml(product.name || 'Produto')} · ${escapeHtml(formatCurrency(price))} · Estoque ${escapeHtml(String(stock))}
+      </option>
+    `;
+  }).join('');
+}
+
+function renderOrderPayments(order) {
+  const payments = getOrderPayments(order);
+  if (!payments.length) return '';
+
+  return `
+    <div class="agenda-order-payment-list">
+      ${payments.map((payment) => `
+        <div class="agenda-order-payment">
+          <span>${escapeHtml(getPaymentMethodLabel(payment.payment_method))} · ${escapeHtml(payment.payment_channel || 'canal não informado')}</span>
+          <strong>${escapeHtml(formatCents(payment.amount_cents))}</strong>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function getPaymentMethodLabel(value) {
+  return PAYMENT_METHODS.find((method) => method.value === value)?.label || value || 'Não informado';
+}
+
+function renderOrderTimeline(order) {
+  const events = getOrderEvents(order).slice(0, 5);
+  if (!events.length) return '';
+
+  return `
+    <div class="agenda-order-history">
+      <div class="agenda-section-kicker">Histórico da comanda</div>
+      ${events.map((event) => `
+        <div class="agenda-order-event">
+          <span>${escapeHtml(event.description || event.event_type || 'Evento')}</span>
+          <small>${escapeHtml(formatDateDisplay(event.created_at))} · ${escapeHtml(formatTime(event.created_at))}</small>
+        </div>
+      `).join('')}
+    </div>
+  `;
+}
+
+function renderOrderAddProductForm(order, products) {
+  if (order?.status !== 'open') return '';
+
+  return `
+    <div class="agenda-order-form-card">
+      <div class="agenda-order-form-head">
+        <strong>Adicionar produto</strong>
+        <span>Gel, pomada, cerveja, refrigerante e itens de balcão.</span>
+      </div>
+      <div class="agenda-order-form-grid">
+        <div class="agenda-order-field agenda-order-field--wide">
+          <label>Produto</label>
+          <select id="agenda-order-product-select" class="modal-input">${renderProductOptions(products)}</select>
+        </div>
+        <div class="agenda-order-field">
+          <label>Quantidade</label>
+          <input id="agenda-order-product-qty" class="modal-input" type="number" min="1" step="1" value="1" />
+        </div>
+        <button type="button" class="agenda-order-action-btn" data-order-action="add-product" data-order-id="${escapeHtml(order.id)}">Adicionar</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderOrderAddManualForm(order) {
+  if (order?.status !== 'open') return '';
+
+  return `
+    <div class="agenda-order-form-card">
+      <div class="agenda-order-form-head">
+        <strong>Adicionar extra</strong>
+        <span>Bilhar por hora, ficha, taxa, cortesia cobrada ou qualquer item sem estoque.</span>
+      </div>
+      <div class="agenda-order-form-grid agenda-order-form-grid--manual">
+        <div class="agenda-order-field">
+          <label>Tipo</label>
+          <select id="agenda-order-manual-type" class="modal-input">
+            <option value="billiard">Bilhar</option>
+            <option value="extra">Extra</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div class="agenda-order-field agenda-order-field--wide">
+          <label>Descrição</label>
+          <input id="agenda-order-manual-description" class="modal-input" type="text" placeholder="Ex: Mesa de bilhar - 1 hora" />
+        </div>
+        <div class="agenda-order-field">
+          <label>Qtd</label>
+          <input id="agenda-order-manual-qty" class="modal-input" type="number" min="1" step="1" value="1" />
+        </div>
+        <div class="agenda-order-field">
+          <label>Valor unitário</label>
+          <input id="agenda-order-manual-price" class="modal-input" type="number" min="0" step="0.01" placeholder="0,00" />
+        </div>
+        <button type="button" class="agenda-order-action-btn" data-order-action="add-manual" data-order-id="${escapeHtml(order.id)}">Adicionar extra</button>
+      </div>
+    </div>
+  `;
+}
+
+function renderOrderCloseForm(order, appointment) {
+  if (order?.status !== 'open') {
+    return renderOrderPayments(order);
+  }
+
+  const dueCents = getOrderDueCents(order);
+  const zeroDue = dueCents <= 0;
+  const paymentOptions = PAYMENT_METHODS
+    .map((method) => `<option value="${escapeHtml(method.value)}">${escapeHtml(method.label)}</option>`)
+    .join('');
+
+  return `
+    <div class="agenda-order-close-card">
+      <div class="agenda-order-close-top">
+        <div>
+          <div class="agenda-section-kicker">Fechamento</div>
+          <strong>${zeroDue ? 'Comanda sem valor a pagar' : 'Receber e fechar comanda'}</strong>
+          <span>${zeroDue ? 'O atendimento pode estar coberto integralmente pelo plano.' : 'O caixa precisa estar aberto para pagamentos presenciais.'}</span>
+        </div>
+        <div class="agenda-order-due-chip">${escapeHtml(formatCents(dueCents))}</div>
+      </div>
+
+      ${zeroDue ? '' : `
+        <div class="agenda-order-form-grid">
+          <div class="agenda-order-field">
+            <label>Forma de pagamento *</label>
+            <select id="agenda-order-payment-method" class="modal-input" data-agenda-required="true">
+              <option value="">Selecione</option>
+              ${paymentOptions}
+            </select>
+          </div>
+          <div class="agenda-order-field">
+            <label>Canal</label>
+            <select id="agenda-order-payment-channel" class="modal-input">
+              ${ORDER_PAYMENT_CHANNELS.map((channel) => `<option value="${escapeHtml(channel.value)}">${escapeHtml(channel.label)}</option>`).join('')}
+            </select>
+          </div>
+          <div class="agenda-order-field">
+            <label>Parcelas</label>
+            <input id="agenda-order-payment-installments" class="modal-input" type="number" min="1" step="1" value="1" />
+          </div>
+        </div>
+      `}
+
+      <button
+        type="button"
+        id="agenda-order-close-btn"
+        class="agenda-order-close-btn"
+        data-order-action="close-order"
+        data-order-id="${escapeHtml(order.id)}"
+        data-appointment-id="${escapeHtml(appointment.id)}"
+      >
+        ${zeroDue ? '✓ Fechar comanda coberta pelo plano' : '✓ Receber e fechar comanda'}
+      </button>
+    </div>
+  `;
+}
+
+function renderOrderPanel(order, appointment, products = []) {
+  if (!order) {
+    return `
+      <div class="agenda-order-panel agenda-order-panel--empty">
+        <div class="agenda-section-kicker">Comanda inteligente</div>
+        <strong>Comanda ainda não aberta</strong>
+        <span>Abra o atendimento para lançar produtos, extras, bilhar e finalizar o recebimento.</span>
+      </div>
+    `;
+  }
+
+  const items = getOrderItems(order);
+  const gross = getOrderGrossCents(order);
+  const covered = getOrderCoveredCents(order);
+  const due = getOrderDueCents(order);
+  const paid = getOrderPaidCents(order);
+  const isClosed = order.status === 'closed';
+
+  return `
+    <div class="agenda-order-panel agenda-order-panel--${escapeHtml(order.status || 'open')}">
+      <div class="agenda-order-hero">
+        <div>
+          <div class="agenda-section-kicker">Comanda inteligente</div>
+          <strong>${isClosed ? 'Comanda fechada' : 'Comanda aberta'}</strong>
+          <span>${isClosed ? 'Atendimento finalizado com rastreio financeiro.' : 'Lance produtos, extras e feche o atendimento em um único fluxo.'}</span>
+        </div>
+        <div class="agenda-order-status-chip">${escapeHtml(isClosed ? 'FECHADA' : 'ABERTA')}</div>
+      </div>
+
+      <div class="agenda-order-metrics">
+        <div>
+          <span>Total bruto</span>
+          <strong>${escapeHtml(formatCents(gross))}</strong>
+        </div>
+        <div>
+          <span>Coberto pelo plano</span>
+          <strong class="is-success">${escapeHtml(formatCents(covered))}</strong>
+        </div>
+        <div>
+          <span>A pagar</span>
+          <strong class="is-info">${escapeHtml(formatCents(due))}</strong>
+        </div>
+        <div>
+          <span>Pago</span>
+          <strong>${escapeHtml(formatCents(paid))}</strong>
+        </div>
+      </div>
+
+      <div class="agenda-order-items">
+        <div class="agenda-order-section-title">Itens da comanda</div>
+        ${items.length ? items.map((item) => renderOrderItemRow(item, order)).join('') : `
+          <div class="agenda-order-empty">Nenhum item lançado nesta comanda.</div>
+        `}
+      </div>
+
+      ${renderOrderAddProductForm(order, products)}
+      ${renderOrderAddManualForm(order)}
+      ${renderOrderCloseForm(order, appointment)}
+      ${renderOrderTimeline(order)}
+    </div>
+  `;
+}
+
+async function refreshAppointmentDetails(appointmentId) {
+  await loadAgendaForDate(agendaState.currentDate);
+  await openAppointmentDetails(appointmentId);
+}
+
+function validateAddProductForm() {
+  clearAgendaValidation(document.getElementById('agenda-details-modal') || document);
+
+  const productEl = document.getElementById('agenda-order-product-select');
+  const qtyEl = document.getElementById('agenda-order-product-qty');
+  const qty = Number(qtyEl?.value || 0);
+
+  const errors = [];
+  if (!productEl?.value) errors.push(['agenda-order-product-select', 'Selecione o produto.']);
+  if (!Number.isFinite(qty) || qty <= 0) errors.push(['agenda-order-product-qty', 'Informe uma quantidade maior que zero.']);
+
+  if (!errors.length) return true;
+
+  errors.forEach(([id, message]) => setAgendaFieldError(id, message));
+  focusFirstAgendaError(document.getElementById('agenda-details-modal') || document);
+  showAgendaToast('Revise os dados do produto.', 'warning');
+  return false;
+}
+
+function validateAddManualForm() {
+  clearAgendaValidation(document.getElementById('agenda-details-modal') || document);
+
+  const descEl = document.getElementById('agenda-order-manual-description');
+  const qtyEl = document.getElementById('agenda-order-manual-qty');
+  const priceEl = document.getElementById('agenda-order-manual-price');
+
+  const description = descEl?.value?.trim() || '';
+  const qty = Number(qtyEl?.value || 0);
+  const price = Number(priceEl?.value || 0);
+
+  const errors = [];
+  if (!description) errors.push(['agenda-order-manual-description', 'Informe a descrição do item.']);
+  if (!Number.isFinite(qty) || qty <= 0) errors.push(['agenda-order-manual-qty', 'Informe uma quantidade maior que zero.']);
+  if (!Number.isFinite(price) || price <= 0) errors.push(['agenda-order-manual-price', 'Informe o valor unitário.']);
+
+  if (!errors.length) return true;
+
+  errors.forEach(([id, message]) => setAgendaFieldError(id, message));
+  focusFirstAgendaError(document.getElementById('agenda-details-modal') || document);
+  showAgendaToast('Revise os dados do extra.', 'warning');
+  return false;
+}
+
+function validateCloseOrderForm(order) {
+  clearAgendaValidation(document.getElementById('agenda-details-modal') || document);
+
+  if (getOrderDueCents(order) <= 0) return true;
+
+  const paymentEl = document.getElementById('agenda-order-payment-method');
+
+  if (!paymentEl?.value) {
+    setAgendaFieldError('agenda-order-payment-method', 'Selecione a forma de pagamento.');
+    focusFirstAgendaError(document.getElementById('agenda-details-modal') || document);
+    showAgendaToast('Selecione a forma de pagamento para fechar a comanda.', 'warning');
+    return false;
+  }
+
+  return true;
+}
+
+async function handleAddOrderProduct(orderId, appointmentId) {
+  if (!validateAddProductForm()) return;
+
+  const btn = document.querySelector('[data-order-action="add-product"]');
+  const productId = document.getElementById('agenda-order-product-select')?.value;
+  const quantity = Number(document.getElementById('agenda-order-product-qty')?.value || 1);
+
+  try {
+    btn?.setAttribute('disabled', 'disabled');
+    setAppointmentDetailsFeedback('Adicionando produto à comanda...', 'neutral');
+
+    await addAppointmentOrderItem(orderId, {
+      itemType: 'product',
+      productId,
+      quantity,
+    });
+
+    showAgendaToast('Produto adicionado à comanda.', 'success');
+    await refreshAppointmentDetails(appointmentId);
+  } catch (error) {
+    const message = normalizeAgendaError(error);
+    setAppointmentDetailsFeedback(message, 'error');
+    showAgendaToast(message, 'error');
+  } finally {
+    btn?.removeAttribute('disabled');
+  }
+}
+
+async function handleAddOrderManual(orderId, appointmentId) {
+  if (!validateAddManualForm()) return;
+
+  const btn = document.querySelector('[data-order-action="add-manual"]');
+  const itemType = document.getElementById('agenda-order-manual-type')?.value || 'manual';
+  const description = document.getElementById('agenda-order-manual-description')?.value?.trim();
+  const quantity = Number(document.getElementById('agenda-order-manual-qty')?.value || 1);
+  const unitPrice = Number(document.getElementById('agenda-order-manual-price')?.value || 0);
+
+  try {
+    btn?.setAttribute('disabled', 'disabled');
+    setAppointmentDetailsFeedback('Adicionando item à comanda...', 'neutral');
+
+    await addAppointmentOrderItem(orderId, {
+      itemType,
+      description,
+      quantity,
+      unitPrice,
+    });
+
+    showAgendaToast('Item adicionado à comanda.', 'success');
+    await refreshAppointmentDetails(appointmentId);
+  } catch (error) {
+    const message = normalizeAgendaError(error);
+    setAppointmentDetailsFeedback(message, 'error');
+    showAgendaToast(message, 'error');
+  } finally {
+    btn?.removeAttribute('disabled');
+  }
+}
+
+async function handleRemoveOrderItem(orderId, itemId, appointmentId) {
+  const btn = Array.from(document.querySelectorAll('[data-order-remove]')).find((item) => String(item.dataset.orderRemove) === String(itemId));
+
+  try {
+    btn?.setAttribute('disabled', 'disabled');
+    setAppointmentDetailsFeedback('Removendo item da comanda...', 'neutral');
+
+    await removeAppointmentOrderItem(orderId, itemId);
+
+    showAgendaToast('Item removido da comanda.', 'success');
+    await refreshAppointmentDetails(appointmentId);
+  } catch (error) {
+    const message = normalizeAgendaError(error);
+    setAppointmentDetailsFeedback(message, 'error');
+    showAgendaToast(message, 'error');
+  } finally {
+    btn?.removeAttribute('disabled');
+  }
+}
+
+async function handleCloseOrder(order, appointmentId) {
+  if (!validateCloseOrderForm(order)) return;
+
+  const btn = document.getElementById('agenda-order-close-btn');
+  const dueCents = getOrderDueCents(order);
+  const payload = {};
+
+  if (dueCents > 0) {
+    payload.paymentMethod = document.getElementById('agenda-order-payment-method')?.value;
+    payload.paymentChannel = document.getElementById('agenda-order-payment-channel')?.value;
+    payload.paymentInstallments = Number(document.getElementById('agenda-order-payment-installments')?.value || 1);
+  }
+
+  try {
+    btn?.setAttribute('disabled', 'disabled');
+    if (btn) btn.textContent = 'Fechando comanda...';
+    setAppointmentDetailsFeedback('Fechando comanda...', 'neutral');
+
+    await closeAppointmentOrder(order.id, payload);
+
+    showAgendaToast('Comanda fechada com sucesso.', 'success');
+    closeAppointmentDetails();
+    await loadAgendaForDate(agendaState.currentDate);
+  } catch (error) {
+    const message = normalizeAgendaError(error);
+    setAppointmentDetailsFeedback(message, 'error');
+    showAgendaToast(message, 'error');
+
+    if (btn) {
+      btn.removeAttribute('disabled');
+      btn.textContent = dueCents > 0 ? '✓ Receber e fechar comanda' : '✓ Fechar comanda coberta pelo plano';
+    }
+  }
+}
+
+function bindOrderPanelEvents(order, appointment) {
+  if (!order) return;
+
+  document.querySelector('[data-order-action="add-product"]')?.addEventListener('click', () => {
+    handleAddOrderProduct(order.id, appointment.id);
+  });
+
+  document.querySelector('[data-order-action="add-manual"]')?.addEventListener('click', () => {
+    handleAddOrderManual(order.id, appointment.id);
+  });
+
+  document.querySelector('[data-order-action="close-order"]')?.addEventListener('click', () => {
+    handleCloseOrder(order, appointment.id);
+  });
+
+  document.querySelectorAll('[data-order-remove]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const itemId = button.dataset.orderRemove;
+      const orderId = button.dataset.orderId || order.id;
+      if (itemId) handleRemoveOrderItem(orderId, itemId, appointment.id);
+    });
+  });
+
+  document.querySelectorAll('#agenda-order-product-select,#agenda-order-product-qty,#agenda-order-manual-description,#agenda-order-manual-qty,#agenda-order-manual-price,#agenda-order-payment-method').forEach((el) => {
+    el.addEventListener('input', (event) => clearAgendaFieldError(event.target));
+    el.addEventListener('change', (event) => clearAgendaFieldError(event.target));
+  });
+}
+
+
 // ─── Painel de finalização (comanda) ─────────────────────────────────────────
 function renderFinalizationPanel(appointment) {
   const actions = getAvailableStatusActions(appointment.status);
@@ -1249,7 +1830,7 @@ function renderSubscriptionPanel(subscription, appointment) {
   `;
 }
 
-function renderAppointmentDetails(appointment, subscription = null) {
+function renderAppointmentDetails(appointment, subscription = null, order = null, products = []) {
   const meta = getStatusMeta(appointment.status);
   const ui = getAppointmentUiContext(appointment);
   const billing = getAppointmentBillingContext(appointment, subscription);
@@ -1298,7 +1879,7 @@ function renderAppointmentDetails(appointment, subscription = null) {
         ${renderSubscriptionPanel(subscription, appointment)}
       </div>
 
-      ${!isFinalStatus ? renderFinalizationPanel(appointment) : ''}
+      ${renderOrderPanel(order, appointment, products)}
 
       <div class="agenda-other-actions">
         <div class="agenda-section-kicker">Outras ações</div>
@@ -1412,7 +1993,7 @@ async function openAppointmentDetails(appointmentId) {
   modal.style.display = 'flex';
   modal.classList.add('open');
 
-  const bindModalEvents = () => {
+  const bindModalEvents = (orderForEvents = null) => {
     document.getElementById('agenda-details-close')?.addEventListener('click', closeAppointmentDetails);
 
     // Status rápido (não inclui completed)
@@ -1470,17 +2051,30 @@ async function openAppointmentDetails(appointmentId) {
         if (apptId) handleFinalizeAppointment(apptId, basePrice);
       });
     }
+
+    bindOrderPanelEvents(orderForEvents, appointment);
   };
 
   try {
-    const subscription = await getAppointmentSubscription(appointment);
-    content.innerHTML  = renderAppointmentDetails(appointment, subscription);
-    bindModalEvents();
+    const [subscription, order, products] = await Promise.all([
+      getAppointmentSubscription(appointment),
+      loadAppointmentOrderForDetails(appointment),
+      ensureOrderProducts({ forceReload: false }),
+    ]);
+
+    content.innerHTML = renderAppointmentDetails(appointment, subscription, order, products);
+    bindModalEvents(order);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Não foi possível carregar o plano do cliente.';
-    content.innerHTML = renderAppointmentDetails(appointment, null);
+    const message = error instanceof Error ? error.message : 'Não foi possível carregar a comanda do atendimento.';
+
+    let products = [];
+    try {
+      products = await ensureOrderProducts({ forceReload: false });
+    } catch {}
+
+    content.innerHTML = renderAppointmentDetails(appointment, null, null, products);
     setTimeout(() => setAppointmentDetailsFeedback(message, 'error'), 0);
-    bindModalEvents();
+    bindModalEvents(null);
   }
 }
 
