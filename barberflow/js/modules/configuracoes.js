@@ -265,6 +265,186 @@ function showToast(message, variant = 'neutral') {
   window.__cfgToastTest = () => showToast('Toast funcionando.', 'success');
 }
 
+function normalizeApiErrorMessage(error) {
+  const raw = String(error?.message || error || '').trim();
+
+  if (!raw) return 'Não foi possível salvar. Verifique os campos e tente novamente.';
+
+  const lower = raw.toLowerCase();
+
+  if (
+    lower.includes('null value in column "name"') ||
+    lower.includes("null value in column 'name'") ||
+    lower.includes('barbershops_name') ||
+    lower.includes('violates not-null constraint')
+  ) {
+    return 'Informe o nome da barbearia.';
+  }
+
+  if (lower.includes('invalid input syntax')) {
+    return 'Algum campo está em formato inválido. Revise as informações e tente novamente.';
+  }
+
+  if (lower.includes('duplicate key') || lower.includes('unique constraint')) {
+    return 'Já existe um cadastro com essas informações.';
+  }
+
+  if (lower.includes('failed to fetch') || lower.includes('network')) {
+    return 'Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.';
+  }
+
+  return raw;
+}
+
+function getFieldElement(form, fieldName) {
+  if (!form) return null;
+  const field = form.elements?.[fieldName];
+  if (!field) return null;
+
+  if (field instanceof RadioNodeList) {
+    return field[0] || null;
+  }
+
+  return field;
+}
+
+function clearFormValidation(form) {
+  if (!form) return;
+
+  form.querySelectorAll('.is-invalid').forEach((el) => {
+    el.classList.remove('is-invalid');
+    el.removeAttribute('aria-invalid');
+  });
+
+  form.querySelectorAll('.cfg-field--invalid').forEach((el) => {
+    el.classList.remove('cfg-field--invalid');
+  });
+
+  form.querySelectorAll('.cfg-field-error').forEach((el) => el.remove());
+}
+
+function setFieldError(form, fieldName, message) {
+  const field = getFieldElement(form, fieldName);
+  if (!field) return;
+
+  field.classList.add('is-invalid');
+  field.setAttribute('aria-invalid', 'true');
+
+  const wrapper = field.closest('label') || field.parentElement;
+  if (wrapper) {
+    wrapper.classList.add('cfg-field--invalid');
+
+    const error = document.createElement('div');
+    error.className = 'cfg-field-error';
+    error.dataset.field = fieldName;
+    error.textContent = message;
+
+    wrapper.appendChild(error);
+  }
+}
+
+function focusFirstInvalidField(form) {
+  const first = form?.querySelector?.('.is-invalid');
+  if (!first) return;
+
+  first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+
+  window.setTimeout(() => {
+    try {
+      first.focus({ preventScroll: true });
+    } catch {
+      first.focus();
+    }
+  }, 280);
+}
+
+function digitsOnly(value) {
+  return String(value || '').replace(/\D/g, '');
+}
+
+function isValidHttpUrl(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return true;
+
+  try {
+    const url = new URL(raw);
+    return ['http:', 'https:'].includes(url.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function validatePhoneIfFilled(value) {
+  const digits = digitsOnly(value);
+  if (!digits) return true;
+
+  return digits.length >= 10 && digits.length <= 13;
+}
+
+function validateBusinessForm(form, data) {
+  clearFormValidation(form);
+
+  const errors = [];
+
+  const name = String(data.get('name') || '').trim();
+  const phone = String(data.get('phone') || '').trim();
+  const whatsapp = String(data.get('whatsapp') || '').trim();
+  const state = String(data.get('state') || '').trim();
+  const zipCode = String(data.get('zip_code') || '').trim();
+  const logoUrl = String(data.get('logo_url') || '').trim();
+  const coverUrl = String(data.get('cover_url') || '').trim();
+  const timezone = String(data.get('timezone') || '').trim();
+
+  if (!name) {
+    errors.push(['name', 'Informe o nome da barbearia.']);
+  }
+
+  if (phone && !validatePhoneIfFilled(phone)) {
+    errors.push(['phone', 'Informe um telefone válido com DDD.']);
+  }
+
+  if (whatsapp && !validatePhoneIfFilled(whatsapp)) {
+    errors.push(['whatsapp', 'Informe um WhatsApp válido com DDD.']);
+  }
+
+  if (state && !/^[a-zA-Z]{2}$/.test(state)) {
+    errors.push(['state', 'Informe o estado com 2 letras. Ex: SP.']);
+  }
+
+  if (zipCode) {
+    const zipDigits = digitsOnly(zipCode);
+    if (zipDigits.length !== 8) {
+      errors.push(['zip_code', 'Informe um CEP válido com 8 números.']);
+    }
+  }
+
+  if (logoUrl && !isValidHttpUrl(logoUrl)) {
+    errors.push(['logo_url', 'Informe uma URL válida para a logo.']);
+  }
+
+  if (coverUrl && !isValidHttpUrl(coverUrl)) {
+    errors.push(['cover_url', 'Informe uma URL válida para a capa.']);
+  }
+
+  if (!timezone) {
+    errors.push(['timezone', 'Informe o fuso horário.']);
+  }
+
+  errors.forEach(([field, message]) => setFieldError(form, field, message));
+
+  if (errors.length) {
+    const firstMessage = errors[0][1];
+
+    setFeedback('cfg-business-feedback', firstMessage, 'error');
+    showToast('Revise os campos obrigatórios antes de salvar.', 'warning');
+    focusFirstInvalidField(form);
+
+    return false;
+  }
+
+  return true;
+}
+
 function getSettings() {
   return { ...NOTIF_DEFAULTS, ...(configState.settings || {}) };
 }
@@ -432,7 +612,7 @@ async function patchShopSettings(payload, feedbackId, successMessage = 'Configur
     await loadConfigData();
     return data;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro ao salvar.';
+    const message = normalizeApiErrorMessage(error);
 
     setFeedback(feedbackId, message, 'error');
     showToast(message, 'error');
@@ -473,8 +653,15 @@ function checkMetaStatusFromUrl() {
 
 async function saveBusinessForm(event) {
   event.preventDefault();
+
   const form = document.getElementById('cfg-business-form');
+  if (!form) return;
+
   const data = new FormData(form);
+
+  if (!validateBusinessForm(form, data)) {
+    return;
+  }
 
   await patchShopSettings({
     name: String(data.get('name') || '').trim(),
@@ -482,11 +669,11 @@ async function saveBusinessForm(event) {
     whatsapp: normalizePhone(data.get('whatsapp')),
     address: String(data.get('address') || '').trim(),
     city: String(data.get('city') || '').trim(),
-    state: String(data.get('state') || '').trim(),
-    zip_code: String(data.get('zip_code') || '').trim(),
+    state: String(data.get('state') || '').trim().toUpperCase(),
+    zip_code: digitsOnly(data.get('zip_code')),
     logo_url: String(data.get('logo_url') || '').trim(),
     cover_url: String(data.get('cover_url') || '').trim(),
-    timezone: String(data.get('timezone') || 'America/Sao_Paulo'),
+    timezone: String(data.get('timezone') || 'America/Sao_Paulo').trim(),
     is_active: String(data.get('is_active')) === 'true',
     absence_message: String(data.get('absence_message') || '').trim(),
   }, 'cfg-business-feedback', 'Dados do negócio salvos.');
@@ -908,8 +1095,8 @@ function renderBusiness() {
 
           <form id="cfg-business-form" class="cfg-form">
             <div class="cfg-form-grid">
-              <label>Nome da barbearia
-                <input class="modal-input" name="name" value="${escapeHtml(shop.name || '')}" />
+              <label data-field-name="name">Nome da barbearia <span class="cfg-required">*</span>
+                <input class="modal-input" name="name" value="${escapeHtml(shop.name || '')}" required aria-required="true" />
               </label>
               <label>Status operacional
                 <select class="modal-input" name="is_active">
@@ -927,7 +1114,7 @@ function renderBusiness() {
                 <input class="modal-input" name="city" value="${escapeHtml(shop.city || '')}" />
               </label>
               <label>Estado
-                <input class="modal-input" name="state" value="${escapeHtml(shop.state || '')}" maxlength="2" />
+                <input class="modal-input" name="state" value="${escapeHtml(shop.state || '')}" maxlength="2" placeholder="SP" />
               </label>
               <label>CEP
                 <input class="modal-input" name="zip_code" value="${escapeHtml(shop.zip_code || '')}" />
