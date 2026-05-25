@@ -31,13 +31,15 @@ const agendaState = {
 
 // ─── Formas de pagamento disponíveis ─────────────────────────────────────────
 const PAYMENT_METHODS = [
-  { value: 'pix',        label: 'Pix' },
-  { value: 'dinheiro',   label: 'Dinheiro' },
-  { value: 'debito',     label: 'Débito' },
-  { value: 'credito',    label: 'Crédito' },
-  { value: 'pix_cartao', label: 'Pix + Cartão' },
-  { value: 'cortesia',   label: 'Cortesia' },
+  { value: 'pix',         label: 'Pix' },
+  { value: 'cash',        label: 'Dinheiro' },
+  { value: 'debit_card',  label: 'Débito' },
+  { value: 'credit_card', label: 'Crédito' },
+  { value: 'transfer',    label: 'Transferência' },
+  { value: 'other',       label: 'Outro / Pix + Cartão' },
 ];
+
+const AGENDA_TOAST_DURATION_MS = 4200;
 
 // ─── API: finalizar atendimento ───────────────────────────────────────────────
 async function apiCompleteAppointment(appointmentId, { paymentMethod, finalPrice }) {
@@ -55,7 +57,7 @@ async function apiCompleteAppointment(appointmentId, { paymentMethod, finalPrice
 
   if (!response.ok) {
     const err = await response.json().catch(() => ({}));
-    throw new Error(err.error || err.message || 'Erro ao finalizar atendimento.');
+    throw new Error(normalizeAgendaError(err.error || err.message || 'Erro ao finalizar atendimento.'));
   }
 
   return response.json();
@@ -68,6 +70,247 @@ function escapeHtml(value) {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#039;');
+}
+
+function getAgendaToastContainer() {
+  let container = document.getElementById('agenda-toast-container');
+
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'agenda-toast-container';
+    container.className = 'agenda-toast-container';
+    container.setAttribute('aria-live', 'polite');
+    container.setAttribute('aria-atomic', 'false');
+    document.body.appendChild(container);
+  }
+
+  return container;
+}
+
+function getAgendaToastMeta(variant) {
+  const map = {
+    success: { icon: '✓', title: 'Sucesso' },
+    error:   { icon: '!', title: 'Erro' },
+    warning: { icon: '!', title: 'Atenção' },
+    info:    { icon: 'i', title: 'Informação' },
+    neutral: { icon: '•', title: 'Agenda' },
+  };
+
+  return map[variant] || map.neutral;
+}
+
+function showAgendaToast(message, variant = 'neutral') {
+  if (!message) return;
+
+  const container = getAgendaToastContainer();
+  const meta = getAgendaToastMeta(variant);
+  const toast = document.createElement('div');
+
+  toast.className = `agenda-toast agenda-toast--${variant}`;
+  toast.setAttribute('role', variant === 'error' ? 'alert' : 'status');
+
+  toast.innerHTML = `
+    <div class="agenda-toast__icon">${escapeHtml(meta.icon)}</div>
+    <div class="agenda-toast__content">
+      <strong>${escapeHtml(meta.title)}</strong>
+      <span>${escapeHtml(message)}</span>
+    </div>
+    <button type="button" class="agenda-toast__close" aria-label="Fechar aviso">×</button>
+  `;
+
+  toast.querySelector('.agenda-toast__close')?.addEventListener('click', () => {
+    toast.classList.add('is-leaving');
+    window.setTimeout(() => toast.remove(), 220);
+  });
+
+  container.appendChild(toast);
+
+  requestAnimationFrame(() => toast.classList.add('is-visible'));
+
+  window.setTimeout(() => {
+    toast.classList.add('is-leaving');
+    window.setTimeout(() => toast.remove(), 220);
+  }, AGENDA_TOAST_DURATION_MS);
+
+  window.__agendaToastTest = () => showAgendaToast('Toast da agenda funcionando.', 'success');
+}
+
+function normalizeAgendaError(error) {
+  const raw = error instanceof Error ? error.message : String(error || '');
+  const message = raw || 'Não foi possível concluir a ação.';
+
+  const lower = message.toLowerCase();
+
+  if (lower.includes('invalid input syntax for type uuid')) {
+    return 'Selecione uma opção válida antes de continuar.';
+  }
+
+  if (lower.includes('violates not-null constraint') || lower.includes('null value in column')) {
+    return 'Preencha os campos obrigatórios antes de salvar.';
+  }
+
+  if (lower.includes('foreign key') || lower.includes('violates foreign key constraint')) {
+    return 'Um dos registros selecionados não foi encontrado. Atualize a tela e tente novamente.';
+  }
+
+  if (lower.includes('payment_method') || lower.includes('invalid input value for enum payment_method')) {
+    return 'Selecione uma forma de pagamento válida.';
+  }
+
+  if (lower.includes('appointment_status') || lower.includes('invalid input value for enum appointment_status')) {
+    return 'Selecione um status válido para o atendimento.';
+  }
+
+  if (lower.includes('failed to fetch') || lower.includes('networkerror')) {
+    return 'Não foi possível conectar com a API. Verifique sua conexão e tente novamente.';
+  }
+
+  return message;
+}
+
+function getAgendaFieldWrapper(input) {
+  if (!input) return null;
+  return (
+    input.closest('.agenda-field-block') ||
+    input.closest('.agenda-finalization-field') ||
+    input.closest('.agenda-filter-field') ||
+    input.parentElement
+  );
+}
+
+function clearAgendaFieldError(input) {
+  if (!input) return;
+  const wrapper = getAgendaFieldWrapper(input);
+
+  input.classList.remove('agenda-input-invalid');
+  input.removeAttribute('aria-invalid');
+
+  if (wrapper) {
+    wrapper.classList.remove('has-error');
+    wrapper.querySelectorAll(`.agenda-field-error[data-for="${input.id}"]`).forEach((el) => el.remove());
+  }
+}
+
+function clearAgendaValidation(scope = document) {
+  scope.querySelectorAll('.agenda-input-invalid').forEach(clearAgendaFieldError);
+  scope.querySelectorAll('.agenda-field-error').forEach((el) => el.remove());
+  scope.querySelectorAll('.has-error').forEach((el) => el.classList.remove('has-error'));
+}
+
+function setAgendaFieldError(inputId, message) {
+  const input = document.getElementById(inputId);
+  if (!input) return;
+
+  const wrapper = getAgendaFieldWrapper(input);
+
+  input.classList.add('agenda-input-invalid');
+  input.setAttribute('aria-invalid', 'true');
+
+  if (wrapper) {
+    wrapper.classList.add('has-error');
+
+    let feedback = wrapper.querySelector(`.agenda-field-error[data-for="${input.id}"]`);
+    if (!feedback) {
+      feedback = document.createElement('div');
+      feedback.className = 'agenda-field-error';
+      feedback.dataset.for = input.id;
+      wrapper.appendChild(feedback);
+    }
+
+    feedback.textContent = message;
+  }
+}
+
+function focusFirstAgendaError(scope = document) {
+  const first = scope.querySelector('.agenda-input-invalid');
+
+  if (first) {
+    first.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    window.setTimeout(() => first.focus?.(), 180);
+  }
+}
+
+function getLocalDateTime(dateValue, timeValue) {
+  if (!dateValue || !timeValue) return null;
+
+  const date = new Date(`${dateValue}T${timeValue}:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function validateCreateAppointmentForm() {
+  const modal = document.getElementById('agenda-create-modal') || document;
+  clearAgendaValidation(modal);
+
+  const clientId  = document.getElementById('agenda-create-client')?.value || '';
+  const barberId  = document.getElementById('agenda-create-barber')?.value || '';
+  const serviceId = document.getElementById('agenda-create-service')?.value || '';
+  const dateValue = document.getElementById('agenda-create-date')?.value || '';
+  const timeValue = document.getElementById('agenda-create-time')?.value || '';
+
+  const errors = [];
+
+  if (!clientId)  errors.push(['agenda-create-client', 'Selecione o cliente.']);
+  if (!barberId)  errors.push(['agenda-create-barber', 'Selecione o barbeiro.']);
+  if (!serviceId) errors.push(['agenda-create-service', 'Selecione o serviço.']);
+  if (!dateValue) errors.push(['agenda-create-date', 'Informe a data do atendimento.']);
+  if (!timeValue) errors.push(['agenda-create-time', 'Informe o horário do atendimento.']);
+
+  const scheduledAt = getLocalDateTime(dateValue, timeValue);
+
+  if (dateValue && timeValue && !scheduledAt) {
+    errors.push(['agenda-create-time', 'Informe uma data e horário válidos.']);
+  }
+
+  if (scheduledAt && scheduledAt.getTime() <= Date.now()) {
+    errors.push(['agenda-create-time', 'Escolha um horário futuro.']);
+  }
+
+  if (!errors.length) return true;
+
+  errors.forEach(([id, message]) => setAgendaFieldError(id, message));
+  setCreateFeedback('Revise os campos obrigatórios antes de salvar.', 'error');
+  showAgendaToast('Revise os campos obrigatórios do agendamento.', 'warning');
+  focusFirstAgendaError(modal);
+
+  return false;
+}
+
+function validateFinalizeAppointmentForm() {
+  const panel = document.getElementById('agenda-finalization-panel') || document;
+  clearAgendaValidation(panel);
+
+  const paymentMethodEl = document.getElementById('agenda-payment-method');
+  const discountEl = document.getElementById('agenda-discount-input');
+  const paymentMethod = paymentMethodEl?.value || '';
+  const discountRaw = String(discountEl?.value || '').trim();
+
+  const errors = [];
+
+  if (!paymentMethod) {
+    errors.push(['agenda-payment-method', 'Selecione a forma de pagamento.']);
+  }
+
+  if (discountRaw && Number.isNaN(Number(discountRaw))) {
+    errors.push(['agenda-discount-input', 'Informe um desconto válido.']);
+  }
+
+  if (!errors.length) return true;
+
+  errors.forEach(([id, message]) => setAgendaFieldError(id, message));
+  setAppointmentDetailsFeedback('Revise os campos obrigatórios antes de finalizar.', 'error');
+  showAgendaToast('Revise os dados de finalização do atendimento.', 'warning');
+  focusFirstAgendaError(panel);
+
+  return false;
+}
+
+function markFieldFromApiError(message) {
+  const lower = String(message || '').toLowerCase();
+
+  if (lower.includes('cliente')) setAgendaFieldError('agenda-create-client', message);
+  else if (lower.includes('barbeiro') || lower.includes('profissional')) setAgendaFieldError('agenda-create-barber', message);
+  else if (lower.includes('serviço') || lower.includes('servico')) setAgendaFieldError('agenda-create-service', message);
+  else if (lower.includes('data') || lower.includes('horário') || lower.includes('horario')) setAgendaFieldError('agenda-create-time', message);
 }
 
 function formatAgendaHeader(dateValue) {
@@ -809,15 +1052,15 @@ function renderFinalizationPanel(appointment) {
       </div>
 
       <div class="agenda-finalization-grid">
-        <div>
+        <div class="agenda-finalization-field">
           <div class="agenda-input-label">Forma de pagamento *</div>
-          <select id="agenda-payment-method" class="modal-input" style="margin:0;">
+          <select id="agenda-payment-method" class="modal-input" style="margin:0;" data-agenda-required="true">
             <option value="">Selecione a forma de pagamento</option>
             ${paymentOptions}
           </select>
         </div>
 
-        <div>
+        <div class="agenda-finalization-field">
           <div class="agenda-input-label">Desconto (R$)</div>
           <input
             id="agenda-discount-input"
@@ -834,7 +1077,7 @@ function renderFinalizationPanel(appointment) {
           />
         </div>
 
-        <div>
+        <div class="agenda-finalization-field">
           <div class="agenda-input-label">${isSubscription ? 'Valor coberto' : 'Valor final'}</div>
           <div id="agenda-final-price-display" class="agenda-final-price">
             ${escapeHtml(formatCurrency(isSubscription ? 0 : basePrice))}
@@ -1116,14 +1359,12 @@ async function handleFinalizeAppointment(appointmentId, basePrice) {
   const discountEl      = document.getElementById('agenda-discount-input');
   const paymentMethod   = paymentMethodEl?.value || '';
 
-  if (!paymentMethod) {
-    setAppointmentDetailsFeedback('Selecione a forma de pagamento antes de finalizar.', 'error');
-    return;
-  }
+  if (!validateFinalizeAppointmentForm()) return;
 
+  const isSubscription = paymentMethod === 'subscription';
   const discountRaw = parseFloat(discountEl?.value || '0');
-  const discount    = isNaN(discountRaw) || discountRaw < 0 ? 0 : Math.min(discountRaw, basePrice);
-  const finalPrice  = Math.max(basePrice - discount, 0);
+  const discount    = isSubscription ? 0 : (isNaN(discountRaw) || discountRaw < 0 ? 0 : Math.min(discountRaw, basePrice));
+  const finalPrice  = isSubscription ? 0 : Math.max(basePrice - discount, 0);
 
   const btn = document.getElementById('agenda-finalize-btn');
 
@@ -1134,14 +1375,16 @@ async function handleFinalizeAppointment(appointmentId, basePrice) {
     await apiCompleteAppointment(appointmentId, { paymentMethod, finalPrice });
 
     setAppointmentDetailsFeedback('Atendimento finalizado com sucesso!', 'success');
+    showAgendaToast('Atendimento finalizado com sucesso.', 'success');
 
     setTimeout(async () => {
       closeAppointmentDetails();
       await loadAgendaForDate(agendaState.currentDate);
     }, 500);
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro ao finalizar atendimento.';
+    const message = normalizeAgendaError(error);
     setAppointmentDetailsFeedback(message, 'error');
+    showAgendaToast(message, 'error');
     if (btn) {
       btn.removeAttribute('disabled');
       btn.textContent = '✓ Confirmar e finalizar atendimento';
@@ -1210,6 +1453,14 @@ async function openAppointmentDetails(appointmentId) {
       });
     }
 
+    document.getElementById('agenda-payment-method')?.addEventListener('change', (event) => {
+      clearAgendaFieldError(event.target);
+    });
+
+    document.getElementById('agenda-discount-input')?.addEventListener('input', (event) => {
+      clearAgendaFieldError(event.target);
+    });
+
     if (finalizeBtn) {
       finalizeBtn.addEventListener('mouseenter', () => { if (!finalizeBtn.disabled) finalizeBtn.style.opacity = '.88'; });
       finalizeBtn.addEventListener('mouseleave', () => { finalizeBtn.style.opacity = '1'; });
@@ -1245,6 +1496,8 @@ function closeAppointmentDetails() {
 function openCreateModal() {
   const modal = document.getElementById('agenda-create-modal');
   if (!modal) return;
+  clearAgendaValidation(modal);
+  setCreateFeedback('', 'neutral');
   modal.classList.add('open');
   modal.style.display = 'flex';
 }
@@ -1301,12 +1554,16 @@ async function populateCreateModal() {
     if (serviceSelect) serviceSelect.innerHTML = '<option value="">Selecione o serviço</option>'  + renderModalSelectOptions(services, (i) => i.id, (i) => `${i.name || 'Serviço'} · ${formatCurrency(i.price)}`);
     setCreateFeedback('', 'neutral');
   } catch (error) {
-    setCreateFeedback(error instanceof Error ? error.message : 'Não foi possível carregar as opções.', 'error');
+    const message = normalizeAgendaError(error instanceof Error ? error.message : 'Não foi possível carregar as opções.');
+    setCreateFeedback(message, 'error');
+    showAgendaToast(message, 'error');
   }
 }
 
 async function handleCreateAppointment(event) {
   event.preventDefault();
+
+  const form = document.getElementById('agenda-create-form');
   const submitBtn   = document.getElementById('agenda-create-submit');
   const clientId    = document.getElementById('agenda-create-client')?.value;
   const barberId    = document.getElementById('agenda-create-barber')?.value;
@@ -1315,18 +1572,22 @@ async function handleCreateAppointment(event) {
   const timeValue   = document.getElementById('agenda-create-time')?.value;
   const sourceValue = document.getElementById('agenda-create-source')?.value || 'dashboard';
 
-  if (!clientId || !barberId || !serviceId || !dateValue || !timeValue) {
-    setCreateFeedback('Preencha cliente, barbeiro, serviço, data e horário.', 'error');
-    return;
-  }
+  if (!validateCreateAppointmentForm()) return;
 
   try {
     submitBtn?.setAttribute('disabled', 'disabled');
     if (submitBtn) submitBtn.textContent = 'Salvando...';
 
-    await createAppointment({ clientId, barberId, serviceId, scheduledAt: toScheduledAtIso(dateValue, timeValue), source: sourceValue });
+    await createAppointment({
+      clientId,
+      barberId,
+      serviceId,
+      scheduledAt: toScheduledAtIso(dateValue, timeValue),
+      source: sourceValue,
+    });
 
     setCreateFeedback('Agendamento criado com sucesso.', 'success');
+    showAgendaToast('Agendamento criado com sucesso.', 'success');
     agendaState.currentDate = dateValue;
 
     const pageDateInput = document.getElementById('agenda-date-input');
@@ -1337,13 +1598,16 @@ async function handleCreateAppointment(event) {
     setTimeout(() => {
       closeCreateModal();
       setCreateFeedback('', 'neutral');
-      const form = document.getElementById('agenda-create-form');
+      clearAgendaValidation(form || document);
       if (form) form.reset();
       const modalDateInput = document.getElementById('agenda-create-date');
       if (modalDateInput) modalDateInput.value = agendaState.currentDate;
     }, 350);
   } catch (error) {
-    setCreateFeedback(error instanceof Error ? error.message : 'Não foi possível criar o agendamento.', 'error');
+    const message = normalizeAgendaError(error);
+    setCreateFeedback(message, 'error');
+    markFieldFromApiError(message);
+    showAgendaToast(message, 'error');
   } finally {
     submitBtn?.removeAttribute('disabled');
     if (submitBtn) submitBtn.textContent = 'Salvar agendamento';
@@ -1369,10 +1633,13 @@ async function handleConsumeSubscriptionBenefit(subscriptionId, appointmentId, c
     if (appointment) clearCachedSubscriptionByClient(getClientId(appointment));
 
     setAppointmentDetailsFeedback('Benefício consumido com sucesso.', 'success');
+    showAgendaToast('Benefício do plano consumido com sucesso.', 'success');
     await loadAgendaForDate(agendaState.currentDate);
     await openAppointmentDetails(appointmentId);
   } catch (error) {
-    setAppointmentDetailsFeedback(error instanceof Error ? error.message : 'Não foi possível consumir o benefício.', 'error');
+    const message = normalizeAgendaError(error instanceof Error ? error.message : 'Não foi possível consumir o benefício.');
+    setAppointmentDetailsFeedback(message, 'error');
+    showAgendaToast(message, 'error');
   } finally {
     buttons.forEach((button) => button.removeAttribute('disabled'));
   }
@@ -1385,10 +1652,13 @@ async function handleAppointmentStatusChange(appointmentId, status) {
     setAppointmentDetailsFeedback('Atualizando status...', 'neutral');
     await updateAppointmentStatus(appointmentId, status);
     setAppointmentDetailsFeedback('Status atualizado com sucesso.', 'success');
+    showAgendaToast('Status do atendimento atualizado.', 'success');
     closeAppointmentDetails();
     await loadAgendaForDate(agendaState.currentDate);
   } catch (error) {
-    setAppointmentDetailsFeedback(error instanceof Error ? error.message : 'Não foi possível atualizar o status.', 'error');
+    const message = normalizeAgendaError(error instanceof Error ? error.message : 'Não foi possível atualizar o status.');
+    setAppointmentDetailsFeedback(message, 'error');
+    showAgendaToast(message, 'error');
   } finally {
     buttons.forEach((button) => button.removeAttribute('disabled'));
   }
@@ -1593,9 +1863,10 @@ async function loadAgendaForDate(dateValue) {
     renderAgendaData();
   } catch (error) {
     agendaState.currentAppointments = [];
-    const message = error instanceof Error ? error.message : 'Não foi possível carregar a agenda.';
+    const message = normalizeAgendaError(error instanceof Error ? error.message : 'Não foi possível carregar a agenda.');
     listContainer.innerHTML    = renderConfigHint('Erro ao consultar a agenda', message, true);
     summaryContainer.innerHTML = renderEmptyState('Sem resumo disponível.');
+    showAgendaToast(message, 'error');
   }
 }
 
@@ -1638,23 +1909,23 @@ export function renderAgenda() {
         <div class="agenda-create-grid">
           <div class="agenda-field-block agenda-field-block--full">
             <label>Cliente</label>
-            <select id="agenda-create-client" class="modal-input"><option value="">Selecione o cliente</option></select>
+            <select id="agenda-create-client" class="modal-input" data-agenda-required="true"><option value="">Selecione o cliente</option></select>
           </div>
           <div class="agenda-field-block">
             <label>Barbeiro</label>
-            <select id="agenda-create-barber" class="modal-input"><option value="">Selecione o barbeiro</option></select>
+            <select id="agenda-create-barber" class="modal-input" data-agenda-required="true"><option value="">Selecione o barbeiro</option></select>
           </div>
           <div class="agenda-field-block">
             <label>Serviço</label>
-            <select id="agenda-create-service" class="modal-input"><option value="">Selecione o serviço</option></select>
+            <select id="agenda-create-service" class="modal-input" data-agenda-required="true"><option value="">Selecione o serviço</option></select>
           </div>
           <div class="agenda-field-block">
             <label>Data</label>
-            <input id="agenda-create-date" class="modal-input" type="date" value="${today}" />
+            <input id="agenda-create-date" class="modal-input" type="date" value="${today}" data-agenda-required="true" />
           </div>
           <div class="agenda-field-block">
             <label>Horário</label>
-            <input id="agenda-create-time" class="modal-input" type="time" value="14:30" step="1800" />
+            <input id="agenda-create-time" class="modal-input" type="time" value="14:30" step="1800" data-agenda-required="true" />
           </div>
           <div class="agenda-field-block agenda-field-block--full">
             <label>Origem</label>
@@ -1726,6 +1997,8 @@ export function initAgendaPage() {
   nextButton?.addEventListener('click', () => moveDate(1));
   createButton?.addEventListener('click', handleOpenCreateModal);
   createForm?.addEventListener('submit', handleCreateAppointment);
+  createForm?.addEventListener('input', (event) => clearAgendaFieldError(event.target));
+  createForm?.addEventListener('change', (event) => clearAgendaFieldError(event.target));
   createCancel?.addEventListener('click', closeCreateModal);
 
   modal?.addEventListener('click', (event) => { if (event.target === modal) closeCreateModal(); });
