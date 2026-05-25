@@ -1527,18 +1527,34 @@ function toScheduledAtIso(dateValue, timeValue) {
   return localDate.toISOString();
 }
 
-async function ensureCreateDependencies() {
-  if (!agendaState.cachedClients)  agendaState.cachedClients  = await getClients();
-  if (!agendaState.cachedBarbers)  agendaState.cachedBarbers  = await getBarbers();
-  if (!agendaState.cachedServices) agendaState.cachedServices = await getServices();
+async function ensureCreateDependencies({ forceReload = false } = {}) {
+  // Importante:
+  // A agenda antes mantinha clients/barbers/services em cache permanente.
+  // Se o dono abrisse a agenda sem clientes, o cache virava [] e continuava vazio
+  // mesmo depois de cadastrar clientes em outro módulo.
+  // Para criação de agendamento, sempre que abrir o modal usamos forceReload=true.
+  const mustLoadClients  = forceReload || !Array.isArray(agendaState.cachedClients);
+  const mustLoadBarbers  = forceReload || !Array.isArray(agendaState.cachedBarbers);
+  const mustLoadServices = forceReload || !Array.isArray(agendaState.cachedServices);
+
+  const [clients, barbers, services] = await Promise.all([
+    mustLoadClients  ? getClients()  : Promise.resolve(agendaState.cachedClients),
+    mustLoadBarbers  ? getBarbers()  : Promise.resolve(agendaState.cachedBarbers),
+    mustLoadServices ? getServices() : Promise.resolve(agendaState.cachedServices),
+  ]);
+
+  agendaState.cachedClients  = Array.isArray(clients)  ? clients  : [];
+  agendaState.cachedBarbers  = Array.isArray(barbers)  ? barbers  : [];
+  agendaState.cachedServices = Array.isArray(services) ? services : [];
+
   return {
-    clients:  Array.isArray(agendaState.cachedClients)  ? agendaState.cachedClients  : [],
-    barbers:  Array.isArray(agendaState.cachedBarbers)  ? agendaState.cachedBarbers  : [],
-    services: Array.isArray(agendaState.cachedServices) ? agendaState.cachedServices : [],
+    clients:  agendaState.cachedClients,
+    barbers:  agendaState.cachedBarbers,
+    services: agendaState.cachedServices,
   };
 }
 
-async function populateCreateModal() {
+async function populateCreateModal({ forceReload = true } = {}) {
   const clientSelect  = document.getElementById('agenda-create-client');
   const barberSelect  = document.getElementById('agenda-create-barber');
   const serviceSelect = document.getElementById('agenda-create-service');
@@ -1548,10 +1564,50 @@ async function populateCreateModal() {
   setCreateFeedback('Carregando opções...', 'neutral');
 
   try {
-    const { clients, barbers, services } = await ensureCreateDependencies();
-    if (clientSelect)  clientSelect.innerHTML  = '<option value="">Selecione o cliente</option>'  + renderModalSelectOptions(clients,  (i) => i.id, (i) => i.name || 'Cliente');
-    if (barberSelect)  barberSelect.innerHTML  = '<option value="">Selecione o barbeiro</option>' + renderModalSelectOptions(barbers,  (i) => i.id, (i) => i?.users?.name || 'Barbeiro');
-    if (serviceSelect) serviceSelect.innerHTML = '<option value="">Selecione o serviço</option>'  + renderModalSelectOptions(services, (i) => i.id, (i) => `${i.name || 'Serviço'} · ${formatCurrency(i.price)}`);
+    const { clients, barbers, services } = await ensureCreateDependencies({ forceReload });
+
+    if (clientSelect) {
+      clientSelect.innerHTML =
+        '<option value="">Selecione o cliente</option>' +
+        renderModalSelectOptions(clients, (i) => i.id, (i) => i.name || 'Cliente');
+
+      if (!clients.length) {
+        clientSelect.innerHTML = '<option value="">Nenhum cliente ativo encontrado</option>';
+      }
+    }
+
+    if (barberSelect) {
+      barberSelect.innerHTML =
+        '<option value="">Selecione o barbeiro</option>' +
+        renderModalSelectOptions(barbers, (i) => i.id, (i) => i?.users?.name || 'Barbeiro');
+
+      if (!barbers.length) {
+        barberSelect.innerHTML = '<option value="">Nenhum barbeiro ativo encontrado</option>';
+      }
+    }
+
+    if (serviceSelect) {
+      serviceSelect.innerHTML =
+        '<option value="">Selecione o serviço</option>' +
+        renderModalSelectOptions(services, (i) => i.id, (i) => `${i.name || 'Serviço'} · ${formatCurrency(i.price)}`);
+
+      if (!services.length) {
+        serviceSelect.innerHTML = '<option value="">Nenhum serviço ativo encontrado</option>';
+      }
+    }
+
+    const missing = [];
+    if (!clients.length) missing.push('clientes');
+    if (!barbers.length) missing.push('barbeiros');
+    if (!services.length) missing.push('serviços');
+
+    if (missing.length) {
+      const message = `Não encontrei ${missing.join(', ')} ativos para criar o agendamento.`;
+      setCreateFeedback(message, 'error');
+      showAgendaToast(message, 'warning');
+      return;
+    }
+
     setCreateFeedback('', 'neutral');
   } catch (error) {
     const message = normalizeAgendaError(error instanceof Error ? error.message : 'Não foi possível carregar as opções.');
@@ -1666,7 +1722,10 @@ async function handleAppointmentStatusChange(appointmentId, status) {
 
 async function handleOpenCreateModal() {
   openCreateModal();
-  await populateCreateModal();
+
+  // Sempre recarrega dependências ao abrir o modal.
+  // Evita dropdown antigo/vazio após cadastrar cliente, barbeiro ou serviço em outro módulo.
+  await populateCreateModal({ forceReload: true });
 }
 
 function getBarberFilterOptions(appointments) {
