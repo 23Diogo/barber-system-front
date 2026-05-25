@@ -131,42 +131,138 @@ function getToastIcon(variant) {
   return map[variant] || map.neutral;
 }
 
-function showToast(message, variant = 'neutral', options = {}) {
-  const text = String(message || '').trim();
-  if (!text) return null;
+function showToast(message, variant = 'neutral') {
+  const old = document.getElementById('cfg-toast');
+  if (old) old.remove();
 
-  const container = getToastContainer();
-  const toast = document.createElement('div');
-  const safeVariant = ['success', 'error', 'warning', 'info', 'neutral'].includes(variant)
-    ? variant
-    : 'neutral';
-
-  toast.className = `cfg-toast cfg-toast--${safeVariant}`;
-  toast.setAttribute('role', safeVariant === 'error' ? 'alert' : 'status');
-
-  toast.innerHTML = `
-    <span class="cfg-toast__icon">${getToastIcon(safeVariant)}</span>
-    <span class="cfg-toast__message"></span>
-    <button type="button" class="cfg-toast__close" aria-label="Fechar aviso">×</button>
-  `;
-
-  toast.querySelector('.cfg-toast__message').textContent = text;
-
-  const close = () => {
-    toast.classList.add('is-leaving');
-    window.setTimeout(() => toast.remove(), 180);
+  const palette = {
+    success: {
+      icon: '✓',
+      title: 'Sucesso',
+      bg: 'rgba(0, 230, 118, 0.12)',
+      border: 'rgba(0, 230, 118, 0.35)',
+      color: '#00e676',
+      shadow: 'rgba(0, 230, 118, 0.18)',
+    },
+    error: {
+      icon: '!',
+      title: 'Erro',
+      bg: 'rgba(255, 23, 68, 0.12)',
+      border: 'rgba(255, 23, 68, 0.35)',
+      color: '#ff7b91',
+      shadow: 'rgba(255, 23, 68, 0.18)',
+    },
+    warning: {
+      icon: '!',
+      title: 'Atenção',
+      bg: 'rgba(249, 115, 22, 0.12)',
+      border: 'rgba(249, 115, 22, 0.35)',
+      color: '#f97316',
+      shadow: 'rgba(249, 115, 22, 0.18)',
+    },
+    neutral: {
+      icon: 'i',
+      title: 'Informação',
+      bg: 'rgba(79, 195, 247, 0.12)',
+      border: 'rgba(79, 195, 247, 0.32)',
+      color: '#4fc3f7',
+      shadow: 'rgba(79, 195, 247, 0.16)',
+    },
   };
 
-  toast.querySelector('.cfg-toast__close')?.addEventListener('click', close);
+  const theme = palette[variant] || palette.neutral;
 
-  container.appendChild(toast);
+  const toast = document.createElement('div');
+  toast.id = 'cfg-toast';
+  toast.setAttribute('role', 'status');
+  toast.setAttribute('aria-live', 'polite');
 
-  const duration = Number(options.durationMs || (safeVariant === 'error' ? 6500 : 3800));
-  if (duration > 0) {
-    window.setTimeout(close, duration);
-  }
+  toast.style.cssText = `
+    position: fixed;
+    top: 22px;
+    right: 22px;
+    z-index: 999999;
+    width: min(380px, calc(100vw - 28px));
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 13px 14px;
+    border-radius: 16px;
+    border: 1px solid ${theme.border};
+    background:
+      radial-gradient(circle at top left, ${theme.bg}, transparent 42%),
+      rgba(10, 12, 26, 0.96);
+    color: #e8f0fe;
+    box-shadow: 0 18px 44px rgba(0,0,0,.35), 0 0 28px ${theme.shadow};
+    backdrop-filter: blur(14px);
+    font-family: 'DM Sans', sans-serif;
+    transform: translateY(-8px);
+    opacity: 0;
+    transition: transform .22s ease, opacity .22s ease;
+  `;
 
-  return toast;
+  toast.innerHTML = `
+    <div style="
+      width:34px;
+      height:34px;
+      display:grid;
+      place-items:center;
+      border-radius:12px;
+      border:1px solid ${theme.border};
+      background:${theme.bg};
+      color:${theme.color};
+      font-weight:900;
+      flex-shrink:0;
+    ">${theme.icon}</div>
+
+    <div style="min-width:0;">
+      <div style="
+        color:${theme.color};
+        font-size:10px;
+        font-weight:900;
+        letter-spacing:.10em;
+        text-transform:uppercase;
+        margin-bottom:3px;
+      ">${theme.title}</div>
+      <div style="
+        color:#e8f0fe;
+        font-size:12px;
+        font-weight:700;
+        line-height:1.4;
+        overflow-wrap:anywhere;
+      ">${String(message || '')}</div>
+    </div>
+
+    <button type="button" aria-label="Fechar aviso" style="
+      width:28px;
+      height:28px;
+      border:0;
+      border-radius:10px;
+      background:rgba(255,255,255,.05);
+      color:#8ea0c2;
+      cursor:pointer;
+      font-size:16px;
+      line-height:1;
+    ">×</button>
+  `;
+
+  toast.querySelector('button')?.addEventListener('click', () => toast.remove());
+
+  document.body.appendChild(toast);
+
+  requestAnimationFrame(() => {
+    toast.style.transform = 'translateY(0)';
+    toast.style.opacity = '1';
+  });
+
+  window.setTimeout(() => {
+    toast.style.transform = 'translateY(-8px)';
+    toast.style.opacity = '0';
+    window.setTimeout(() => toast.remove(), 240);
+  }, 4200);
+
+  window.__cfgToastTest = () => showToast('Toast funcionando.', 'success');
 }
 
 function getSettings() {
@@ -312,7 +408,11 @@ async function loadConfigData() {
 }
 
 async function patchShopSettings(payload, feedbackId, successMessage = 'Configuração salva.') {
-  if (configState.isSaving) return null;
+  if (configState.isSaving) {
+    showToast('Já existe um salvamento em andamento.', 'warning');
+    return null;
+  }
+
   configState.isSaving = true;
   setFeedback(feedbackId, 'Salvando...', 'neutral');
 
@@ -328,12 +428,15 @@ async function patchShopSettings(payload, feedbackId, successMessage = 'Configur
 
     setFeedback(feedbackId, successMessage, 'success');
     showToast(successMessage, 'success');
+
     await loadConfigData();
     return data;
   } catch (error) {
     const message = error instanceof Error ? error.message : 'Erro ao salvar.';
+
     setFeedback(feedbackId, message, 'error');
     showToast(message, 'error');
+
     return null;
   } finally {
     configState.isSaving = false;
