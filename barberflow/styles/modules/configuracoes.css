@@ -832,6 +832,55 @@
     background: rgba(255,82,82,.14);
   }
 
+
+  /* ─── Form validation / required fields ─────────────────────────────────── */
+
+  .cfg-required {
+    color: #ff7b91;
+    font-weight: 900;
+    margin-left: 3px;
+  }
+
+  .cfg-field--invalid {
+    color: #ff9aaa !important;
+  }
+
+  .cfg-field--invalid .modal-input,
+  .modal-input.is-invalid {
+    border-color: rgba(255, 23, 68, .72) !important;
+    background:
+      radial-gradient(circle at top left, rgba(255, 23, 68, .08), transparent 42%),
+      #0e1022 !important;
+    box-shadow:
+      0 0 0 3px rgba(255, 23, 68, .08),
+      0 0 20px rgba(255, 23, 68, .12) !important;
+  }
+
+  .cfg-field-error {
+    margin-top: -2px;
+    color: #ff8fa3;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1.35;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .cfg-field--invalid .cfg-field-error {
+    animation: cfg-field-error-in .18s ease both;
+  }
+
+  @keyframes cfg-field-error-in {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   @keyframes cfg-shimmer {
     0% { background-position: 100% 0; }
     100% { background-position: -100% 0; }
