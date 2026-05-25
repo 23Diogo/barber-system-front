@@ -346,6 +346,51 @@ export async function getServices() {
   return apiFetch('/api/services');
 }
 
+export async function getProducts(filters = {}) {
+  return apiFetch(`/api/stock${buildQueryString(filters)}`);
+}
+
+export async function getAppointmentOrderByAppointment(appointmentId) {
+  return apiFetch(`/api/appointment-orders/appointment/${appointmentId}`);
+}
+
+export async function openAppointmentOrder(appointmentId) {
+  return apiFetch(`/api/appointment-orders/appointment/${appointmentId}/open`, {
+    method: 'POST',
+  });
+}
+
+export async function getAppointmentOrder(orderId) {
+  return apiFetch(`/api/appointment-orders/${orderId}`);
+}
+
+export async function addAppointmentOrderItem(orderId, payload) {
+  return apiFetch(`/api/appointment-orders/${orderId}/items`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function updateAppointmentOrderItem(orderId, itemId, payload) {
+  return apiFetch(`/api/appointment-orders/${orderId}/items/${itemId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function removeAppointmentOrderItem(orderId, itemId) {
+  return apiFetch(`/api/appointment-orders/${orderId}/items/${itemId}`, {
+    method: 'DELETE',
+  });
+}
+
+export async function closeAppointmentOrder(orderId, payload = {}) {
+  return apiFetch(`/api/appointment-orders/${orderId}/close`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function createAppointment(payload) {
   return apiFetch('/api/appointments', {
     method: 'POST',
@@ -463,21 +508,6 @@ export async function cancelSubscription(subscriptionId) {
   });
 }
 
-
-export async function markSubscriptionManualPayment(subscriptionId, payload = {}) {
-  return apiFetch(`/api/subscriptions/${subscriptionId}/manual-payment`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function retrySubscriptionCharge(subscriptionId, payload = {}) {
-  return apiFetch(`/api/subscriptions/${subscriptionId}/retry-charge`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
 export async function generateNextSubscriptionCycle(subscriptionId, payload = {}) {
   return apiFetch(`/api/subscriptions/${subscriptionId}/generate-next-cycle`, {
     method: 'POST',
@@ -551,114 +581,12 @@ export async function markClubCommissionPeriodPaid(periodId) {
   });
 }
 
-export async function getClubCommissionSettings() {
-  return apiFetch('/api/club-commissions/settings');
-}
-
-export async function updateClubCommissionSettings(payload) {
-  return apiFetch('/api/club-commissions/settings', {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function getClubCommissionServicePoints() {
-  return apiFetch('/api/club-commissions/service-points');
-}
-
-export async function updateClubCommissionServicePoint(pointId, payload) {
-  return apiFetch(`/api/club-commissions/service-points/${pointId}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function getClubCommissionPlanRules() {
-  return apiFetch('/api/club-commissions/plan-rules');
-}
-
-export async function updateClubCommissionPlanRule(ruleId, payload) {
-  return apiFetch(`/api/club-commissions/plan-rules/${ruleId}`, {
-    method: 'PUT',
-    body: JSON.stringify(payload),
-  });
-}
-
 /* =========================
    MERCADO PAGO
 ========================= */
 
 export async function createMercadoPagoPreference(payload) {
   return apiFetch('/api/mercadopago/create-preference', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-
-/* =========================
-   TAXAS E REPASSE TRANSPARENTE
-========================= */
-
-export async function getTransparentBillingSettings() {
-  return apiFetch('/api/transparent-billing/settings');
-}
-
-export async function updateTransparentBillingSettings(payload) {
-  return apiFetch('/api/transparent-billing/settings', {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function getTransparentBillingPaymentRules(filters = {}) {
-  return apiFetch(`/api/transparent-billing/payment-rules${buildQueryString(filters)}`);
-}
-
-export async function createTransparentBillingPaymentRule(payload) {
-  return apiFetch('/api/transparent-billing/payment-rules', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function updateTransparentBillingPaymentRule(ruleId, payload) {
-  return apiFetch(`/api/transparent-billing/payment-rules/${ruleId}`, {
-    method: 'PATCH',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function deleteTransparentBillingPaymentRule(ruleId) {
-  return apiFetch(`/api/transparent-billing/payment-rules/${ruleId}`, {
-    method: 'DELETE',
-  });
-}
-
-export async function simulateTransparentBilling(payload) {
-  return apiFetch('/api/transparent-billing/simulate', {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function getTransparentBillingLedger(filters = {}) {
-  return apiFetch(`/api/transparent-billing/ledger${buildQueryString(filters)}`);
-}
-
-export async function getTransparentBillingDashboard(filters = {}) {
-  return apiFetch(`/api/transparent-billing/dashboard${buildQueryString(filters)}`);
-}
-
-export async function recalculateAppointmentTransparentBilling(appointmentId, payload = {}) {
-  return apiFetch(`/api/transparent-billing/appointments/${appointmentId}/recalculate`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  });
-}
-
-export async function recalculateSubscriptionInvoiceTransparentBilling(invoiceId, payload = {}) {
-  return apiFetch(`/api/transparent-billing/subscription-invoices/${invoiceId}/recalculate`, {
     method: 'POST',
     body: JSON.stringify(payload),
   });
@@ -685,6 +613,14 @@ window.BarberFlowApi = {
   updateClient,
   getBarbers,
   getServices,
+  getProducts,
+  getAppointmentOrderByAppointment,
+  openAppointmentOrder,
+  getAppointmentOrder,
+  addAppointmentOrderItem,
+  updateAppointmentOrderItem,
+  removeAppointmentOrderItem,
+  closeAppointmentOrder,
   createAppointment,
   updateAppointmentStatus,
   getPaymentLink,
@@ -701,8 +637,6 @@ window.BarberFlowApi = {
   pauseSubscription,
   reactivateSubscription,
   cancelSubscription,
-  markSubscriptionManualPayment,
-  retrySubscriptionCharge,
   generateNextSubscriptionCycle,
   consumeSubscriptionBenefit,
   getSubscriptionInvoices,
@@ -715,38 +649,5 @@ window.BarberFlowApi = {
   getClubCommissionEntries,
   getClubCommissionConsumptions,
   markClubCommissionPeriodPaid,
-  getClubCommissionSettings,
-  updateClubCommissionSettings,
-  getClubCommissionServicePoints,
-  updateClubCommissionServicePoint,
-  getClubCommissionPlanRules,
-  updateClubCommissionPlanRule,
   createMercadoPagoPreference,
-  getTransparentBillingSettings,
-  updateTransparentBillingSettings,
-  getTransparentBillingPaymentRules,
-  createTransparentBillingPaymentRule,
-  updateTransparentBillingPaymentRule,
-  deleteTransparentBillingPaymentRule,
-  simulateTransparentBilling,
-  getTransparentBillingLedger,
-  getTransparentBillingDashboard,
-  recalculateAppointmentTransparentBilling,
-  recalculateSubscriptionInvoiceTransparentBilling,
 };
-
-/* =========================
-   CLIENTES PREMIUM
-========================= */
-
-export async function getClientsPremium(filters = {}) {
-  return apiFetch(`/api/clients/insights/list${buildQueryString(filters)}`);
-}
-
-export async function getClientsPremiumDashboard() {
-  return apiFetch('/api/clients/insights/dashboard');
-}
-
-export async function getClientPremiumById(clientId) {
-  return apiFetch(`/api/clients/insights/${clientId}`);
-}
