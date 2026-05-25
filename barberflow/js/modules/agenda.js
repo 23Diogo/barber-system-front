@@ -1106,12 +1106,19 @@ function productStock(product) {
   return Number(product?.current_stock || 0);
 }
 
+function productIsSellable(product) {
+  return product?.is_active !== false &&
+    product?.is_for_sale === true &&
+    productSalePrice(product) > 0 &&
+    productStock(product) > 0;
+}
+
 async function ensureOrderProducts({ forceReload = false } = {}) {
   if (!forceReload && Array.isArray(agendaState.cachedProducts)) return agendaState.cachedProducts;
 
-  const products = await getProducts();
+  const products = await getProducts({ sellable: true });
   agendaState.cachedProducts = Array.isArray(products)
-    ? products.filter((item) => item?.is_active !== false)
+    ? products.filter(productIsSellable)
     : [];
 
   return agendaState.cachedProducts;
@@ -1159,10 +1166,10 @@ function renderOrderItemRow(item, order) {
 }
 
 function renderProductOptions(products) {
-  const available = (products || []).filter((product) => product?.is_active !== false);
+  const available = (products || []).filter(productIsSellable);
 
   if (!available.length) {
-    return '<option value="">Nenhum produto ativo encontrado</option>';
+    return '<option value="">Nenhum produto disponível para venda</option>';
   }
 
   return '<option value="">Selecione o produto</option>' + available.map((product) => {
@@ -1407,7 +1414,14 @@ function validateAddProductForm() {
   const qty = Number(qtyEl?.value || 0);
 
   const errors = [];
-  if (!productEl?.value) errors.push(['agenda-order-product-select', 'Selecione o produto.']);
+  if (!productEl?.value) {
+    errors.push(['agenda-order-product-select', 'Selecione o produto.']);
+  } else {
+    const selected = (agendaState.cachedProducts || []).find((product) => String(product.id) === String(productEl.value));
+    if (!selected || !productIsSellable(selected)) {
+      errors.push(['agenda-order-product-select', 'Este produto não está disponível para venda na comanda.']);
+    }
+  }
   if (!Number.isFinite(qty) || qty <= 0) errors.push(['agenda-order-product-qty', 'Informe uma quantidade maior que zero.']);
 
   if (!errors.length) return true;
