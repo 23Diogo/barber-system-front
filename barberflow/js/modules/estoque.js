@@ -238,7 +238,7 @@ function buildFallbackDashboard(items) {
     total: safe.length,
     active: safe.filter(item => item.is_active !== false).length,
     inactive: safe.filter(item => item.is_active === false).length,
-    forSale: safe.filter(item => item.is_for_sale === true || Number(item.sale_price || 0) > 0).length,
+    forSale: safe.filter(item => item.is_for_sale === true).length,
     lowStock: safe.filter(item => ['zero', 'critical', 'low'].includes(item.health?.code)).length,
     zeroStock: safe.filter(item => item.health?.code === 'zero').length,
     overstock: safe.filter(item => item.health?.code === 'overstock').length,
@@ -302,7 +302,7 @@ function renderProductCard(product) {
   const healthPct = Number(product.health?.pct ?? getLegacyHealth(product).pct ?? 0);
   const chips = [
     renderChip(healthMeta.label, healthMeta.className, healthMeta.icon),
-    product.is_for_sale === true || Number(product.sale_price || 0) > 0 ? renderChip('Venda', 'stock-chip--info', 'R$') : renderChip('Uso interno', 'stock-chip--purple', '✦'),
+    product.is_for_sale === true ? renderChip('Venda', 'stock-chip--info', 'R$') : renderChip('Uso interno', 'stock-chip--purple', '✦'),
     product.category ? renderChip(product.category, 'stock-chip--neutral', '•') : '',
     product.primary_alert ? renderAlertChip(product.primary_alert) : '',
   ].filter(Boolean);
@@ -579,11 +579,15 @@ function renderProductForm(mode, product = null) {
             </div>
             <div><div class="color-section-label">Estoque mínimo</div><input class="modal-input" name="min_stock" type="number" min="0" step="0.1" value="${escapeHtml(p.min_stock ?? 0)}" /></div>
             <div><div class="color-section-label">Custo unitário (R$)</div><input class="modal-input" name="cost_price" type="number" min="0" step="0.01" value="${escapeHtml(p.cost_price ?? 0)}" /></div>
-            <div><div class="color-section-label">Preço de venda (R$)</div><input class="modal-input" name="sale_price" type="number" min="0" step="0.01" value="${escapeHtml(p.sale_price ?? 0)}" /></div>
+            <div>
+              <div class="color-section-label">Preço de venda (R$)</div>
+              <input class="modal-input" name="sale_price" type="number" min="0" step="0.01" value="${escapeHtml(p.sale_price ?? 0)}" />
+              <small class="stock-field-hint">Obrigatório apenas para produto vendido ao cliente.</small>
+            </div>
             <div>
               <div class="color-section-label">Produto vendido?</div>
               <select class="modal-input" name="is_for_sale">
-                <option value="false" ${p.is_for_sale === false ? 'selected' : ''}>Não, uso interno</option>
+                <option value="false" ${p.is_for_sale !== true ? 'selected' : ''}>Não, uso interno</option>
                 <option value="true" ${p.is_for_sale === true ? 'selected' : ''}>Sim, venda ao cliente</option>
               </select>
             </div>
@@ -828,6 +832,7 @@ function validateProductPayload(payload) {
   if (!payload.name) return 'Informe o nome do produto.';
   if (payload.cost_price < 0) return 'Custo não pode ser negativo.';
   if (payload.sale_price < 0) return 'Preço de venda não pode ser negativo.';
+  if (payload.is_for_sale && payload.sale_price <= 0) return 'Produto vendido ao cliente precisa ter preço de venda maior que zero.';
   if (payload.min_stock < 0) return 'Estoque mínimo não pode ser negativo.';
   return '';
 }
