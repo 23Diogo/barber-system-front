@@ -104,16 +104,69 @@ function setFeedback(id, message, variant = 'neutral') {
   el.style.color = variant === 'error' ? '#ff8a8a' : variant === 'success' ? '#00e676' : '#5a6888';
 }
 
-function showToast(message, variant = 'neutral') {
-  const old = document.getElementById('cfg-toast');
-  if (old) old.remove();
+function getToastContainer() {
+  let container = document.getElementById('cfg-toast-container');
 
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'cfg-toast-container';
+    container.className = 'cfg-toast-container';
+    container.setAttribute('aria-live', 'polite');
+    container.setAttribute('aria-atomic', 'false');
+    document.body.appendChild(container);
+  }
+
+  return container;
+}
+
+function getToastIcon(variant) {
+  const map = {
+    success: '✓',
+    error: '!',
+    warning: '!',
+    info: 'i',
+    neutral: '•',
+  };
+
+  return map[variant] || map.neutral;
+}
+
+function showToast(message, variant = 'neutral', options = {}) {
+  const text = String(message || '').trim();
+  if (!text) return null;
+
+  const container = getToastContainer();
   const toast = document.createElement('div');
-  toast.id = 'cfg-toast';
-  toast.className = `cfg-toast cfg-toast--${variant}`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-  window.setTimeout(() => toast.remove(), 4200);
+  const safeVariant = ['success', 'error', 'warning', 'info', 'neutral'].includes(variant)
+    ? variant
+    : 'neutral';
+
+  toast.className = `cfg-toast cfg-toast--${safeVariant}`;
+  toast.setAttribute('role', safeVariant === 'error' ? 'alert' : 'status');
+
+  toast.innerHTML = `
+    <span class="cfg-toast__icon">${getToastIcon(safeVariant)}</span>
+    <span class="cfg-toast__message"></span>
+    <button type="button" class="cfg-toast__close" aria-label="Fechar aviso">×</button>
+  `;
+
+  toast.querySelector('.cfg-toast__message').textContent = text;
+
+  const close = () => {
+    toast.classList.add('is-leaving');
+    window.setTimeout(() => toast.remove(), 180);
+  };
+
+  toast.querySelector('.cfg-toast__close')?.addEventListener('click', close);
+
+  container.appendChild(toast);
+
+  const duration = Number(options.durationMs || (safeVariant === 'error' ? 6500 : 3800));
+  if (duration > 0) {
+    window.setTimeout(close, duration);
+  }
+
+  return toast;
 }
 
 function getSettings() {
@@ -212,10 +265,10 @@ async function copyToClipboard(value, feedbackId = null) {
       ta.remove();
     }
     if (feedbackId) setFeedback(feedbackId, 'Link copiado.', 'success');
-    else showToast('Copiado.', 'success');
+    showToast('Link copiado com sucesso.', 'success');
   } catch {
     if (feedbackId) setFeedback(feedbackId, 'Não foi possível copiar.', 'error');
-    else showToast('Não foi possível copiar.', 'error');
+    showToast('Não foi possível copiar.', 'error');
   }
 }
 
@@ -274,10 +327,13 @@ async function patchShopSettings(payload, feedbackId, successMessage = 'Configur
     configState.workingHours = data?.working_hours || configState.workingHours;
 
     setFeedback(feedbackId, successMessage, 'success');
+    showToast(successMessage, 'success');
     await loadConfigData();
     return data;
   } catch (error) {
-    setFeedback(feedbackId, error instanceof Error ? error.message : 'Erro ao salvar.', 'error');
+    const message = error instanceof Error ? error.message : 'Erro ao salvar.';
+    setFeedback(feedbackId, message, 'error');
+    showToast(message, 'error');
     return null;
   } finally {
     configState.isSaving = false;
@@ -294,7 +350,9 @@ async function connectWithMeta() {
     if (!data?.url) throw new Error('URL de autorização não retornada.');
     window.location.href = data.url;
   } catch (error) {
-    setFeedback('cfg-wa-feedback', error instanceof Error ? error.message : 'Erro ao conectar.', 'error');
+    const message = error instanceof Error ? error.message : 'Erro ao conectar.';
+    setFeedback('cfg-wa-feedback', message, 'error');
+    showToast(message, 'error');
     configState.isConnectingMeta = false;
   }
 }
@@ -417,7 +475,9 @@ async function saveWhatsAppManual(event) {
   const displayPhone = normalizePhone(data.get('display_phone'));
 
   if (!phoneNumberId || !accessToken) {
-    setFeedback('cfg-wa-feedback', 'Informe Phone Number ID e Access Token.', 'error');
+    const message = 'Informe Phone Number ID e Access Token.';
+    setFeedback('cfg-wa-feedback', message, 'error');
+    showToast(message, 'warning');
     return;
   }
 
@@ -434,9 +494,12 @@ async function saveWhatsAppManual(event) {
     });
 
     setFeedback('cfg-wa-feedback', 'WhatsApp conectado.', 'success');
+    showToast('WhatsApp conectado com sucesso.', 'success');
     await loadConfigData();
   } catch (error) {
-    setFeedback('cfg-wa-feedback', error instanceof Error ? error.message : 'Erro ao conectar WhatsApp.', 'error');
+    const message = error instanceof Error ? error.message : 'Erro ao conectar WhatsApp.';
+    setFeedback('cfg-wa-feedback', message, 'error');
+    showToast(message, 'error');
   }
 }
 
@@ -449,9 +512,12 @@ async function disconnectWhatsApp() {
   try {
     await apiFetch('/api/whatsapp/disconnect', { method: 'DELETE' });
     setFeedback('cfg-wa-feedback', 'WhatsApp desconectado.', 'success');
+    showToast('WhatsApp desconectado com sucesso.', 'success');
     await loadConfigData();
   } catch (error) {
-    setFeedback('cfg-wa-feedback', error instanceof Error ? error.message : 'Erro ao desconectar.', 'error');
+    const message = error instanceof Error ? error.message : 'Erro ao desconectar.';
+    setFeedback('cfg-wa-feedback', message, 'error');
+    showToast(message, 'error');
   }
 }
 
@@ -477,9 +543,12 @@ async function runNotificationTest(endpoint, btn) {
     await apiFetch(endpoint, { method: 'POST', body: JSON.stringify({}) });
     if (status) status.textContent = 'ok';
     setFeedback('cfg-test-feedback', 'Mensagem de teste enviada.', 'success');
+    showToast('Mensagem de teste enviada com sucesso.', 'success');
   } catch (error) {
     if (status) status.textContent = 'erro';
-    setFeedback('cfg-test-feedback', error instanceof Error ? error.message : 'Erro ao testar.', 'error');
+    const message = error instanceof Error ? error.message : 'Erro ao testar.';
+    setFeedback('cfg-test-feedback', message, 'error');
+    showToast(message, 'error');
   } finally {
     btn.disabled = false;
     setTimeout(() => { if (status) status.textContent = ''; }, 4000);
