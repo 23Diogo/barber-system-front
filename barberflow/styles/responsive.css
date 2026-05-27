@@ -301,21 +301,60 @@
 }
 
 /* ═══════════════════════════════════════════
-   HOTFIX DONO 01 — Dashboard mobile + widgets
-   - Não usa display no #hero/#pages.
-   - Faz o #hero ocupar fluxo no mobile para os widgets aparecerem.
-   - Mantém restaurar widgets acessível no celular.
+   HOTFIX DONO 01 V2 — widgets limpos, X funcional e mobile
+   Mantém o dashboard em resumo e remove controles avançados do topo.
 ═══════════════════════════════════════════ */
-@media (max-width: 768px) {
+.dashboard-widget.widget-hidden {
+  display: none !important;
+}
+
+.widget-view-tools,
+.widget-resize-edge,
+.widget-resize-handle {
+  display: none !important;
+}
+
+.widget-actions {
+  flex-wrap: nowrap !important;
+  align-items: center !important;
+  justify-content: flex-end !important;
+  max-width: none !important;
+  gap: 8px !important;
+}
+
+.widget-open {
+  padding-top: 0 !important;
+  white-space: nowrap !important;
+}
+
+.widget-close {
+  flex: 0 0 auto !important;
+  width: 26px !important;
+  height: 26px !important;
+  min-width: 26px !important;
+  min-height: 26px !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  line-height: 1 !important;
+  font-size: 16px !important;
+  font-weight: 900 !important;
+  z-index: 20 !important;
+}
+
+.dashboard-widget > div[id^="dashboard"][id$="Content"] {
+  overflow-x: hidden;
+}
+
+@media (max-width: 900px) {
   #hero {
     position: relative !important;
     inset: auto !important;
-    width: 100% !important;
     min-height: calc(100dvh - 78px) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
     padding: 12px 10px 34px !important;
-    box-sizing: border-box !important;
   }
 
   #dashboardWidgetLayer.dashboard-widget-layer {
@@ -324,6 +363,7 @@
     left: auto !important;
     right: auto !important;
     width: 100% !important;
+    display: grid !important;
     grid-template-columns: 1fr !important;
     gap: 12px !important;
     padding: 0 0 32px !important;
@@ -337,6 +377,7 @@
     left: auto !important;
     right: auto !important;
     bottom: auto !important;
+    transform: none !important;
     width: 100% !important;
     min-width: 0 !important;
     max-width: none !important;
@@ -344,7 +385,6 @@
     height: auto !important;
     max-height: none !important;
     margin: 0 !important;
-    transform: none !important;
     visibility: visible !important;
     opacity: 1 !important;
   }
@@ -368,20 +408,18 @@
     top: auto !important;
     right: auto !important;
     z-index: 9 !important;
+    display: flex !important;
     justify-content: flex-end !important;
     margin: 0 0 12px !important;
   }
 
   .restore-widgets-btn {
+    display: inline-flex !important;
     align-items: center !important;
     justify-content: center !important;
     min-height: 38px !important;
     padding: 8px 13px !important;
     font-size: 10px !important;
-  }
-
-  .restore-widgets-btn:disabled {
-    opacity: .42 !important;
   }
 }
 
