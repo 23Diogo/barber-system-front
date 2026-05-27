@@ -716,6 +716,7 @@ function getWidgetPrefs(widgetId) {
     size: all?.[widgetId]?.size || 'm',
     height: toNumber(all?.[widgetId]?.height, DASHBOARD_WIDGET_DEFAULT_HEIGHT),
     span: toNumber(all?.[widgetId]?.span, 1),
+    hidden: Boolean(all?.[widgetId]?.hidden),
   };
 }
 
@@ -798,6 +799,16 @@ function normalizeDashboardWidgetNavigationTargets() {
   });
 }
 
+function updateRestoreWidgetsButtonState() {
+  const restoreButton = document.getElementById('restoreWidgetsBtn');
+  if (!(restoreButton instanceof HTMLButtonElement)) return;
+
+  const hasHiddenWidgets = DASHBOARD_WIDGET_ORDER.some(widgetId => getWidgetPrefs(widgetId).hidden);
+
+  restoreButton.disabled = !hasHiddenWidgets;
+  restoreButton.textContent = hasHiddenWidgets ? 'Restaurar widgets' : 'Widgets ativos';
+}
+
 function updateWidgetChrome(widget) {
   if (!(widget instanceof HTMLElement)) return;
   const widgetId = widget.dataset.widgetId;
@@ -807,6 +818,10 @@ function updateWidgetChrome(widget) {
   widget.dataset.widgetMode = prefs.mode;
   widget.dataset.widgetChart = prefs.chart;
   widget.dataset.widgetSize = prefs.size;
+
+  widget.classList.toggle('widget-hidden', prefs.hidden === true);
+  widget.setAttribute('aria-hidden', prefs.hidden === true ? 'true' : 'false');
+
   widget.classList.toggle('widget-span-2', prefs.span === 2);
 
   const height = clamp(toNumber(prefs.height, DASHBOARD_WIDGET_DEFAULT_HEIGHT), 300, 760);
@@ -825,6 +840,8 @@ function updateWidgetChrome(widget) {
     const active = key === prefs.size || (key === 'wide' && prefs.span === 2);
     btn.classList.toggle('is-active', active);
   });
+
+  updateRestoreWidgetsButtonState();
 }
 
 function enhanceDashboardWidgets() {
@@ -839,6 +856,13 @@ function enhanceDashboardWidgets() {
     const actions = widget.querySelector('.widget-actions');
 
     if (!widgetId || !topbar || !actions) return;
+
+    if (!actions.querySelector('[data-widget-close]')) {
+      actions.insertAdjacentHTML(
+        'beforeend',
+        '<button aria-label="Fechar widget" class="widget-close" data-widget-close type="button">×</button>'
+      );
+    }
 
     if (!actions.querySelector('[data-widget-tools]')) {
       actions.insertAdjacentHTML('afterbegin', `
@@ -1207,6 +1231,26 @@ function bindDashboardWidgetControls() {
     const target = event.target;
     if (!(target instanceof Element)) return;
 
+    const closeButton = target.closest('[data-widget-close]');
+    if (!(closeButton instanceof HTMLElement)) return;
+
+    const widget = closeButton.closest('.dashboard-widget');
+    if (!(widget instanceof HTMLElement)) return;
+
+    const widgetId = widget.dataset.widgetId;
+    if (!widgetId) return;
+
+    event.preventDefault();
+    event.stopPropagation();
+
+    updateWidgetPrefs(widgetId, { hidden: true });
+    updateWidgetChrome(widget);
+  });
+
+  document.addEventListener('click', event => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+
     const control = target.closest('[data-widget-mode], [data-widget-chart], [data-widget-size]');
     if (!(control instanceof HTMLElement)) return;
 
@@ -1271,10 +1315,12 @@ function bindDashboardWidgetControls() {
       document.querySelectorAll('.dashboard-widget[data-widget-id]').forEach(widget => {
         if (widget instanceof HTMLElement) {
           widget.style.removeProperty('--widget-custom-height');
-          widget.classList.remove('widget-span-2');
+          widget.classList.remove('widget-span-2', 'widget-hidden');
+          widget.setAttribute('aria-hidden', 'false');
         }
       });
       renderAllDashboardWidgets();
+      updateRestoreWidgetsButtonState();
     });
   }
 }
