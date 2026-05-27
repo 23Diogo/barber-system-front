@@ -8,7 +8,7 @@ import {
 } from '../services/api.js';
 
 const DASHBOARD_REFRESH_INTERVAL_MS = 60000;
-const DASHBOARD_WIDGET_PREFS_STORAGE_KEY = 'barberflow.dashboard.widgetPrefs.v24.clean';
+const DASHBOARD_WIDGET_PREFS_STORAGE_KEY = 'barberflow.dashboard.widgetPrefs.v25.controls';
 const DASHBOARD_WIDGET_DEFAULT_HEIGHT = 380;
 
 const DASHBOARD_WIDGETS = {
@@ -710,15 +710,13 @@ function writeDashboardWidgetPrefs(prefs) {
 function getWidgetPrefs(widgetId) {
   const all = readDashboardWidgetPrefs();
   const meta = DASHBOARD_WIDGETS[widgetId] || {};
-  const saved = all?.[widgetId] || {};
-
   return {
-    mode: saved.mode || 'summary',
-    chart: saved.chart || meta.defaultChart || 'bar',
-    size: saved.size || 'm',
-    height: toNumber(saved.height, DASHBOARD_WIDGET_DEFAULT_HEIGHT),
-    span: toNumber(saved.span, 1),
-    hidden: Boolean(saved.hidden),
+    mode: all?.[widgetId]?.mode || 'summary',
+    chart: all?.[widgetId]?.chart || meta.defaultChart || 'bar',
+    size: all?.[widgetId]?.size || 'm',
+    height: toNumber(all?.[widgetId]?.height, DASHBOARD_WIDGET_DEFAULT_HEIGHT),
+    span: toNumber(all?.[widgetId]?.span, 1),
+    hidden: Boolean(all?.[widgetId]?.hidden),
   };
 }
 
@@ -820,7 +818,6 @@ function updateWidgetChrome(widget) {
   widget.dataset.widgetMode = prefs.mode;
   widget.dataset.widgetChart = prefs.chart;
   widget.dataset.widgetSize = prefs.size;
-
   widget.classList.toggle('widget-hidden', prefs.hidden === true);
   widget.setAttribute('aria-hidden', prefs.hidden === true ? 'true' : 'false');
   widget.classList.toggle('widget-span-2', prefs.span === 2);
@@ -853,14 +850,10 @@ function enhanceDashboardWidgets() {
     if (!(widget instanceof HTMLElement)) return;
 
     const widgetId = widget.dataset.widgetId;
+    const topbar = widget.querySelector('.widget-topbar');
     const actions = widget.querySelector('.widget-actions');
 
-    if (!widgetId || !actions) return;
-
-    // Remove controles avançados antigos que estavam poluindo o topo do card.
-    actions.querySelector('[data-widget-tools]')?.remove();
-    widget.querySelector('[data-widget-resize-handle]')?.remove();
-    widget.querySelector('[data-widget-resize-edge]')?.remove();
+    if (!widgetId || !topbar || !actions) return;
 
     if (!actions.querySelector('[data-widget-close]')) {
       actions.insertAdjacentHTML(
@@ -869,12 +862,42 @@ function enhanceDashboardWidgets() {
       );
     }
 
+    if (!actions.querySelector('[data-widget-tools]')) {
+      actions.insertAdjacentHTML('afterbegin', `
+        <div class="widget-view-tools" data-widget-tools>
+          <button type="button" class="widget-tool-btn" data-widget-mode="summary" title="Ver resumo operacional">Resumo</button>
+          <button type="button" class="widget-tool-btn" data-widget-mode="chart" title="Ver como gráfico">Gráfico</button>
+          <span class="widget-tool-sep"></span>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-chart="bar" title="Gráfico de barras">▥</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-chart="pie" title="Gráfico de pizza/donut">◔</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-chart="trend" title="Linha de tendência">⌁</button>
+          <span class="widget-tool-sep"></span>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="m" title="Altura média">M</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="g" title="Altura grande">G</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="gg" title="Altura extra grande">GG</button>
+          <button type="button" class="widget-tool-btn widget-tool-btn--icon" data-widget-size="wide" title="Ocupar 2 colunas">↔</button>
+        </div>
+      `);
+    }
+
+    if (!widget.querySelector('[data-widget-resize-handle]')) {
+      widget.insertAdjacentHTML('beforeend', `
+        <button type="button" class="widget-resize-edge" data-widget-resize-edge aria-label="Ajustar altura do widget" title="Arraste para ajustar a altura"></button>
+        <button type="button" class="widget-resize-handle" data-widget-resize-handle aria-label="Redimensionar widget" title="Arraste para redimensionar"></button>
+      `);
+    }
+
     updateWidgetChrome(widget);
   });
 }
 
 function renderDashboardWidgetContent(widgetId) {
+  const prefs = getWidgetPrefs(widgetId);
   const state = dashboardLastPayload || {};
+
+  if (prefs.mode === 'chart') {
+    return renderWidgetChart(widgetId, prefs.chart, state);
+  }
 
   switch (widgetId) {
     case 'widget-fin': return renderFinWidget(state.dashData);
@@ -1207,24 +1230,20 @@ function bindDashboardWidgetControls() {
     if (!(target instanceof Element)) return;
 
     const closeButton = target.closest('[data-widget-close]');
-    if (!(closeButton instanceof HTMLElement)) return;
+    if (closeButton instanceof HTMLElement) {
+      const widget = closeButton.closest('.dashboard-widget');
+      if (!(widget instanceof HTMLElement)) return;
 
-    const widget = closeButton.closest('.dashboard-widget');
-    if (!(widget instanceof HTMLElement)) return;
+      const widgetId = widget.dataset.widgetId;
+      if (!widgetId) return;
 
-    const widgetId = widget.dataset.widgetId;
-    if (!widgetId) return;
+      event.preventDefault();
+      event.stopPropagation();
 
-    event.preventDefault();
-    event.stopPropagation();
-
-    updateWidgetPrefs(widgetId, { hidden: true });
-    updateWidgetChrome(widget);
-  });
-
-  document.addEventListener('click', event => {
-    const target = event.target;
-    if (!(target instanceof Element)) return;
+      updateWidgetPrefs(widgetId, { hidden: true });
+      updateWidgetChrome(widget);
+      return;
+    }
 
     const control = target.closest('[data-widget-mode], [data-widget-chart], [data-widget-size]');
     if (!(control instanceof HTMLElement)) return;
@@ -1298,8 +1317,6 @@ function bindDashboardWidgetControls() {
       updateRestoreWidgetsButtonState();
     });
   }
-
-  updateRestoreWidgetsButtonState();
 }
 
 // ─── Loading / Error states ───────────────────────────────────────────────────
@@ -1408,12 +1425,6 @@ function bindDashboardActions() {
 // ─── Export ───────────────────────────────────────────────────────────────────
 
 export function initDashboard() {
-  try {
-    localStorage.removeItem('barberflow.dashboard.widgetPrefs.v23');
-  } catch {
-    // noop
-  }
-
   ensureDashboardWidgets();
 
   if (!dashboardBootstrapped) {
