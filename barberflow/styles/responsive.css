@@ -299,3 +299,89 @@
   #hero { padding-bottom: 24px !important; }
   #hero::after { content: ''; display: block; height: 32px; flex-shrink: 0; }
 }
+
+/* ═══════════════════════════════════════════
+   HOTFIX DONO 01 — Dashboard mobile + widgets
+   - Não usa display no #hero/#pages.
+   - Faz o #hero ocupar fluxo no mobile para os widgets aparecerem.
+   - Mantém restaurar widgets acessível no celular.
+═══════════════════════════════════════════ */
+@media (max-width: 768px) {
+  #hero {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    min-height: calc(100dvh - 78px) !important;
+    overflow-y: auto !important;
+    overflow-x: hidden !important;
+    padding: 12px 10px 34px !important;
+    box-sizing: border-box !important;
+  }
+
+  #dashboardWidgetLayer.dashboard-widget-layer {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    grid-template-columns: 1fr !important;
+    gap: 12px !important;
+    padding: 0 0 32px !important;
+    z-index: 7 !important;
+  }
+
+  #dashboardWidgetLayer .analytics-card.dashboard-widget,
+  #dashboardWidgetLayer .dashboard-widget {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  #dashboardWidgetLayer .dashboard-widget:not(.widget-hidden) {
+    display: flex !important;
+  }
+
+  #dashboardWidgetLayer .dashboard-widget.widget-hidden {
+    display: none !important;
+  }
+
+  #dashboardWidgetLayer .dashboard-widget > div[id^="dashboard"][id$="Content"] {
+    overflow: visible !important;
+    padding-right: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .hero-actions {
+    position: relative !important;
+    top: auto !important;
+    right: auto !important;
+    z-index: 9 !important;
+    justify-content: flex-end !important;
+    margin: 0 0 12px !important;
+  }
+
+  .restore-widgets-btn {
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 38px !important;
+    padding: 8px 13px !important;
+    font-size: 10px !important;
+  }
+
+  .restore-widgets-btn:disabled {
+    opacity: .42 !important;
+  }
+}
+
