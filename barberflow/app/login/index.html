@@ -20,14 +20,14 @@
     </section>
 
     <section class="login-card">
-      <h1 class="card-title">Entrar</h1>
-      <p class="card-subtitle">Acesse o painel para gerenciar sua barbearia.</p>
+      <h1 class="card-title" id="app-auth-title">Entrar</h1>
+      <p class="card-subtitle" id="app-auth-subtitle">Acesse o painel para gerenciar sua barbearia.</p>
 
       <div id="app-feedback" class="ob-feedback"></div>
 
-      <form id="app-login-form" class="ob-form">
+      <form id="app-login-form" class="ob-form" data-auth-view="login">
         <div class="ob-field">
-          <label class="ob-label">E-mail</label>
+          <label class="ob-label" for="app-login-email">E-mail</label>
           <input
             class="ob-input"
             id="app-login-email"
@@ -38,7 +38,7 @@
         </div>
 
         <div class="ob-field">
-          <label class="ob-label">Senha</label>
+          <label class="ob-label" for="app-login-password">Senha</label>
           <input
             class="ob-input"
             id="app-login-password"
@@ -48,6 +48,17 @@
           />
         </div>
 
+        <div class="ob-links" style="justify-content:flex-end;margin-top:-4px;">
+          <button
+            type="button"
+            id="app-forgot-password-link"
+            class="ob-link-btn"
+            style="border:0;background:transparent;cursor:pointer;padding:0;"
+          >
+            Esqueci minha senha
+          </button>
+        </div>
+
         <button type="submit" class="ob-primary-btn">Entrar no painel</button>
 
         <div class="ob-links">
@@ -55,6 +66,194 @@
           <a class="ob-link-btn" href="/cadastro/">Criar barbearia</a>
         </div>
       </form>
+
+      <form id="app-forgot-password-form" class="ob-form" data-auth-view="forgot" hidden>
+        <div
+          style="
+            border:1px solid rgba(79,195,247,.16);
+            background:rgba(79,195,247,.05);
+            border-radius:16px;
+            padding:14px;
+            color:#8fa3c7;
+            font-size:13px;
+            line-height:1.55;
+          "
+        >
+          Informe o e-mail usado no cadastro do dono. Se encontrarmos a conta, enviaremos um link seguro para criar uma nova senha.
+        </div>
+
+        <div class="ob-field">
+          <label class="ob-label" for="app-forgot-email">E-mail de acesso</label>
+          <input
+            class="ob-input"
+            id="app-forgot-email"
+            type="email"
+            placeholder="seu@email.com"
+            autocomplete="email"
+          />
+        </div>
+
+        <button type="submit" class="ob-primary-btn">Enviar instruções</button>
+
+        <div class="ob-links">
+          <button
+            type="button"
+            id="app-forgot-back"
+            class="ob-link-btn"
+            style="border:0;background:transparent;cursor:pointer;padding:0;"
+          >
+            Voltar para login
+          </button>
+        </div>
+      </form>
+
+      <div id="app-forgot-sent" class="ob-form" data-auth-view="sent" hidden>
+        <div
+          style="
+            display:grid;
+            place-items:center;
+            width:58px;
+            height:58px;
+            border-radius:20px;
+            background:rgba(0,230,118,.10);
+            border:1px solid rgba(0,230,118,.24);
+            color:#00e676;
+            font-size:28px;
+            font-weight:900;
+            margin:0 auto 4px;
+          "
+        >
+          ✓
+        </div>
+
+        <div
+          style="
+            border:1px solid rgba(79,195,247,.16);
+            background:rgba(79,195,247,.05);
+            border-radius:16px;
+            padding:14px;
+            color:#dce8ff;
+            font-size:13px;
+            line-height:1.6;
+            text-align:center;
+            overflow-wrap:anywhere;
+          "
+        >
+          Enviamos as instruções para:
+          <br />
+          <strong id="app-forgot-sent-email" style="color:#7dd3fc;"></strong>
+        </div>
+
+        <p
+          style="
+            color:#8fa3c7;
+            font-size:13px;
+            line-height:1.6;
+            text-align:center;
+            margin:0;
+          "
+        >
+          Abra o e-mail recebido e clique no link seguro. Ele levará para a tela de criação de nova senha.
+        </p>
+
+        <button type="button" id="app-sent-back-login" class="ob-primary-btn">Voltar para login</button>
+
+        <div class="ob-links">
+          <button
+            type="button"
+            id="app-sent-resend"
+            class="ob-link-btn"
+            style="border:0;background:transparent;cursor:pointer;padding:0;"
+          >
+            Enviar novamente
+          </button>
+        </div>
+      </div>
+
+      <form id="app-reset-password-form" class="ob-form" data-auth-view="reset" hidden>
+        <div
+          style="
+            border:1px solid rgba(79,195,247,.16);
+            background:rgba(79,195,247,.05);
+            border-radius:16px;
+            padding:14px;
+            color:#8fa3c7;
+            font-size:13px;
+            line-height:1.55;
+          "
+        >
+          Use pelo menos 8 caracteres, misturando letras e números. Evite nome, telefone ou sequências óbvias.
+        </div>
+
+        <div class="ob-field">
+          <label class="ob-label" for="app-reset-password">Nova senha</label>
+          <input
+            class="ob-input"
+            id="app-reset-password"
+            type="password"
+            placeholder="Mínimo 8 caracteres"
+            autocomplete="new-password"
+          />
+        </div>
+
+        <div class="ob-field">
+          <label class="ob-label" for="app-reset-password-confirm">Confirmar nova senha</label>
+          <input
+            class="ob-input"
+            id="app-reset-password-confirm"
+            type="password"
+            placeholder="Repita sua nova senha"
+            autocomplete="new-password"
+          />
+        </div>
+
+        <button type="submit" class="ob-primary-btn">Redefinir senha</button>
+
+        <div class="ob-links">
+          <button
+            type="button"
+            id="app-reset-back"
+            class="ob-link-btn"
+            style="border:0;background:transparent;cursor:pointer;padding:0;"
+          >
+            Voltar para login
+          </button>
+        </div>
+      </form>
+
+      <div id="app-reset-success" class="ob-form" data-auth-view="reset-success" hidden>
+        <div
+          style="
+            display:grid;
+            place-items:center;
+            width:58px;
+            height:58px;
+            border-radius:20px;
+            background:rgba(0,230,118,.10);
+            border:1px solid rgba(0,230,118,.24);
+            color:#00e676;
+            font-size:28px;
+            font-weight:900;
+            margin:0 auto 4px;
+          "
+        >
+          ✓
+        </div>
+
+        <p
+          style="
+            color:#8fa3c7;
+            font-size:13px;
+            line-height:1.6;
+            text-align:center;
+            margin:0;
+          "
+        >
+          Sua nova senha foi salva com sucesso. Agora você já pode acessar o painel do dono.
+        </p>
+
+        <button type="button" id="app-reset-success-login" class="ob-primary-btn">Ir para login</button>
+      </div>
     </section>
 
   </div>
