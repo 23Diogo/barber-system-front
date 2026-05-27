@@ -4,7 +4,7 @@ const APP_LOGIN_PATH = '/app/login';
 const APP_HOME_PATH = '/app';
 const APP_SUBSCRIPTION_PATH = '/app/assinatura';
 
-console.info('[BBarberFlow] owner login recovery loaded v4');
+console.info('[BBarberFlow] owner login recovery loaded v5');
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('app-feedback');
@@ -248,7 +248,9 @@ function bindEvents() {
   document.getElementById('app-forgot-password-form')?.addEventListener('submit', handleForgotPasswordSubmit);
   document.getElementById('app-reset-password-form')?.addEventListener('submit', handleResetPasswordSubmit);
 
-  document.getElementById('app-forgot-password-link')?.addEventListener('click', () => {
+  document.getElementById('app-forgot-password-link')?.addEventListener('click', (event) => {
+    event.preventDefault();
+
     const loginEmail = document.getElementById('app-login-email')?.value?.trim() || '';
     const forgotEmail = document.getElementById('app-forgot-email');
 
@@ -259,7 +261,8 @@ function bindEvents() {
     showView('forgot');
   });
 
-  document.getElementById('app-forgot-back')?.addEventListener('click', () => {
+  document.getElementById('app-forgot-back')?.addEventListener('click', (event) => {
+    event.preventDefault();
     showView('login');
   });
 
@@ -267,11 +270,13 @@ function bindEvents() {
     showView('login');
   });
 
-  document.getElementById('app-sent-resend')?.addEventListener('click', () => {
+  document.getElementById('app-sent-resend')?.addEventListener('click', (event) => {
+    event.preventDefault();
     showView('forgot');
   });
 
-  document.getElementById('app-reset-back')?.addEventListener('click', () => {
+  document.getElementById('app-reset-back')?.addEventListener('click', (event) => {
+    event.preventDefault();
     window.location.href = APP_LOGIN_PATH;
   });
 
