@@ -18,6 +18,8 @@ function formatNextAppointment(appointment) {
   }
 
   const rawDate =
+    appointment.scheduled_at ||
+    appointment.scheduledAt ||
     appointment.date ||
     appointment.start_at ||
     appointment.startAt ||
@@ -35,16 +37,31 @@ function formatNextAppointment(appointment) {
   const dateLabel = date.toLocaleDateString('pt-BR', {
     day: '2-digit',
     month: '2-digit',
+    timeZone: 'America/Sao_Paulo',
   });
 
   const timeLabel = date.toLocaleTimeString('pt-BR', {
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'America/Sao_Paulo',
   });
+
+  const serviceName =
+    appointment.services?.name ||
+    appointment.service_name ||
+    appointment.service ||
+    'Serviço agendado';
+
+  const barberName =
+    appointment.barber_profiles?.users?.name ||
+    appointment.barber_profiles?.user?.name ||
+    appointment.barber?.name ||
+    appointment.barber_name ||
+    '';
 
   return {
     title: `${dateLabel} • ${timeLabel}`,
-    subtitle: appointment.service_name || appointment.service || 'Serviço agendado',
+    subtitle: barberName ? `${serviceName} com ${barberName}` : serviceName,
   };
 }
 
@@ -52,7 +69,8 @@ function getActiveBarbershop(profile) {
   const shops = Array.isArray(profile?.barbershops) ? profile.barbershops : [];
 
   return (
-    shops.find((item) => item?.is_active || item?.is_selected) ||
+    shops.find((item) => item?.is_selected === true) ||
+    shops.find((item) => item?.is_active === true) ||
     shops[0] ||
     null
   );
@@ -75,6 +93,7 @@ function buildBarbershopSummary(profile) {
 function getPlanSummary(profile) {
   const planName =
     profile?.subscription?.plan_name ||
+    profile?.subscription?.planName ||
     profile?.plan?.name ||
     'Sem plano ativo';
 
