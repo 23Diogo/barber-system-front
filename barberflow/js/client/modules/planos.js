@@ -8,7 +8,7 @@ import {
 const state = {
   context: null,
   plans: [],
-  subscription: null,
+  subscriptionPayload: null,
 };
 
 function escapeHtml(value) {
@@ -22,6 +22,7 @@ function escapeHtml(value) {
 
 function formatCurrency(value) {
   const amount = Number(value || 0);
+
   return new Intl.NumberFormat('pt-BR', {
     style: 'currency',
     currency: 'BRL',
@@ -30,17 +31,81 @@ function formatCurrency(value) {
 
 function formatInterval(plan) {
   const count = Number(plan?.billing_interval_count || 1);
-  const interval = String(plan?.billing_interval || 'month');
+  const interval = String(plan?.billing_interval || 'month').toLowerCase();
 
   if (interval === 'year') {
     return count > 1 ? `A cada ${count} anos` : 'Anual';
   }
 
+  if (interval === 'week') {
+    return count > 1 ? `A cada ${count} semanas` : 'Semanal';
+  }
+
+  if (interval === 'day') {
+    return count > 1 ? `A cada ${count} dias` : 'Diário';
+  }
+
   return count > 1 ? `A cada ${count} meses` : 'Mensal';
+}
+
+function translateStatus(status) {
+  const map = {
+    active: 'Ativo',
+    trialing: 'Em teste',
+    pending_activation: 'Aguardando pagamento',
+    pending: 'Pendente',
+    past_due: 'Pagamento pendente',
+    paused: 'Pausado',
+    canceled: 'Cancelado',
+    cancelled: 'Cancelado',
+    expired: 'Expirado',
+  };
+
+  return map[String(status || '').toLowerCase()] || status || '-';
+}
+
+function getCurrentSubscription() {
+  return state.subscriptionPayload?.subscription || null;
+}
+
+function getCurrentPlanId() {
+  return getCurrentSubscription()?.plan_id || getCurrentSubscription()?.plans?.id || '';
+}
+
+function hasBlockingSubscription() {
+  const status = String(getCurrentSubscription()?.status || '').toLowerCase();
+
+  return [
+    'active',
+    'trialing',
+    'pending_activation',
+    'pending',
+    'past_due',
+    'paused',
+  ].includes(status);
+}
+
+function resolveCheckoutUrl(result) {
+  return (
+    result?.checkout?.paymentUrl ||
+    result?.checkout?.payment_url ||
+    result?.checkout?.initPoint ||
+    result?.checkout?.init_point ||
+    result?.checkout?.sandboxInitPoint ||
+    result?.checkout?.sandbox_init_point ||
+    result?.paymentUrl ||
+    result?.payment_url ||
+    result?.initPoint ||
+    result?.init_point ||
+    result?.sandboxInitPoint ||
+    result?.sandbox_init_point ||
+    ''
+  );
 }
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-planos-feedback');
+
   if (!el) return;
 
   el.textContent = message || '';
@@ -52,6 +117,19 @@ function setFeedback(message, variant = 'neutral') {
         : '#8fa3c7';
 }
 
+function goToClientRoute(route) {
+  const path = `/client/${route}`;
+
+  window.history.pushState({ clientRoute: route }, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+function getPlanPrice(plan) {
+  if (plan?.price != null) return Number(plan.price || 0);
+  if (plan?.price_cents != null) return Number(plan.price_cents || 0) / 100;
+  return 0;
+}
+
 function renderPlanBenefits(plan) {
   const entitlements = Array.isArray(plan?.plan_service_entitlements)
     ? plan.plan_service_entitlements
@@ -60,37 +138,42 @@ function renderPlanBenefits(plan) {
   const rows = [];
 
   if (Number(plan?.included_haircuts || 0) > 0) {
-    rows.push(`<li style="overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(String(plan.included_haircuts))} corte(s) incluído(s)</li>`);
+    rows.push(`${Number(plan.included_haircuts || 0)} corte(s) incluído(s)`);
   }
 
   if (Number(plan?.included_beards || 0) > 0) {
-    rows.push(`<li style="overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(String(plan.included_beards))} barba(s) incluída(s)</li>`);
+    rows.push(`${Number(plan.included_beards || 0)} barba(s) incluída(s)`);
   }
 
   entitlements.forEach((item) => {
     const service = Array.isArray(item?.services) ? item.services[0] : item?.services;
-    rows.push(
-      `<li style="overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(String(item?.included_quantity || 0))}x ${escapeHtml(service?.name || 'Serviço')}</li>`
-    );
+    rows.push(`${Number(item?.included_quantity || 0)}x ${service?.name || 'Serviço'}`);
   });
 
   if (!rows.length) {
-    rows.push('<li style="overflow-wrap:anywhere;word-break:break-word;">Plano sem benefícios configurados.</li>');
+    rows.push('Plano sem benefícios configurados.');
   }
 
-  return rows.join('');
+  return rows
+    .map((row) => `<li style="overflow-wrap:anywhere;word-break:break-word;">${escapeHtml(row)}</li>`)
+    .join('');
 }
 
 function renderPlanCard(plan) {
-  const hasSubscription = Boolean(state.subscription?.subscription);
-  const isCurrentPlan = Boolean(plan?.isCurrentPlan);
+  const currentSubscription = getCurrentSubscription();
+  const currentPlanId = getCurrentPlanId();
+  const isCurrentPlan = Boolean(plan?.id && currentPlanId && plan.id === currentPlanId);
+  const hasSubscription = hasBlockingSubscription();
 
   const disabled = hasSubscription || isCurrentPlan;
+
   const btnLabel = isCurrentPlan
     ? 'Plano atual'
     : hasSubscription
-      ? 'Já existe um plano'
+      ? 'Você já possui um plano'
       : 'Contratar plano';
+
+  const status = String(currentSubscription?.status || '').toLowerCase();
 
   return `
     <div
@@ -149,8 +232,9 @@ function renderPlanCard(plan) {
             word-break:break-word;
           "
         >
-          ${escapeHtml(formatCurrency(plan?.price))}
+          ${escapeHtml(formatCurrency(getPlanPrice(plan)))}
         </div>
+
         <div style="color:#8fa3c7;padding-bottom:4px;flex-shrink:0;">
           ${escapeHtml(formatInterval(plan))}
         </div>
@@ -193,36 +277,82 @@ function renderPlanCard(plan) {
           : ''
       }
 
+      ${
+        disabled && hasSubscription && !isCurrentPlan
+          ? `
+            <div
+              style="
+                border:1px solid rgba(255,193,7,.16);
+                background:rgba(255,193,7,.06);
+                color:#ffd166;
+                border-radius:14px;
+                padding:10px 12px;
+                font-size:13px;
+                line-height:1.5;
+              "
+            >
+              Sua assinatura atual está como ${escapeHtml(translateStatus(status))}. Para contratar outro plano, primeiro acompanhe ou regularize sua assinatura atual.
+            </div>
+          `
+          : ''
+      }
+
       <div style="margin-top:auto;display:flex;">
-        <button
-          type="button"
-          data-plan-checkout-id="${escapeHtml(plan?.id)}"
-          ${disabled ? 'disabled' : ''}
-          style="
-            width:100%;
-            min-height:50px;
-            border-radius:14px;
-            border:${disabled ? '1px solid rgba(255,255,255,.10)' : '0'};
-            background:${disabled ? 'rgba(255,255,255,.05)' : 'linear-gradient(135deg,#5dc8ff 0%,#2f8cff 55%,#1468ff 100%)'};
-            color:${disabled ? '#8fa3c7' : '#fff'};
-            font:inherit;
-            font-weight:800;
-            cursor:${disabled ? 'not-allowed' : 'pointer'};
-          "
-        >
-          ${escapeHtml(btnLabel)}
-        </button>
+        ${
+          disabled && hasSubscription
+            ? `
+              <button
+                type="button"
+                data-go-current-subscription="true"
+                style="
+                  width:100%;
+                  min-height:50px;
+                  border-radius:14px;
+                  border:1px solid rgba(79,195,247,.20);
+                  background:rgba(79,195,247,.08);
+                  color:#7dd3fc;
+                  font:inherit;
+                  font-weight:800;
+                  cursor:pointer;
+                "
+              >
+                Ver meu plano
+              </button>
+            `
+            : `
+              <button
+                type="button"
+                data-plan-checkout-id="${escapeHtml(plan?.id)}"
+                ${disabled ? 'disabled' : ''}
+                style="
+                  width:100%;
+                  min-height:50px;
+                  border-radius:14px;
+                  border:${disabled ? '1px solid rgba(255,255,255,.10)' : '0'};
+                  background:${disabled ? 'rgba(255,255,255,.05)' : 'linear-gradient(135deg,#5dc8ff 0%,#2f8cff 55%,#1468ff 100%)'};
+                  color:${disabled ? '#8fa3c7' : '#fff'};
+                  font:inherit;
+                  font-weight:800;
+                  cursor:${disabled ? 'not-allowed' : 'pointer'};
+                "
+              >
+                ${escapeHtml(btnLabel)}
+              </button>
+            `
+        }
       </div>
     </div>
   `;
 }
+
 function renderHeader() {
   const meta = document.getElementById('client-planos-meta');
+
   if (!meta) return;
 
-  const activePlanName =
-    state.subscription?.subscription?.plans?.name ||
-    'Nenhum plano ativo';
+  const subscription = getCurrentSubscription();
+  const activePlanName = subscription?.plans?.name || 'Nenhum plano ativo';
+  const activeStatus = subscription?.status ? translateStatus(subscription.status) : 'Livre para contratar';
 
   meta.innerHTML = `
     <div class="metric-card">
@@ -234,7 +364,7 @@ function renderHeader() {
     <div class="metric-card">
       <div class="metric-label">Plano atual</div>
       <div class="metric-value" style="font-size:18px;">${escapeHtml(activePlanName)}</div>
-      <div class="metric-sub color-nt">Cliente</div>
+      <div class="metric-sub color-nt">${escapeHtml(activeStatus)}</div>
     </div>
 
     <div class="metric-card">
@@ -247,6 +377,7 @@ function renderHeader() {
 
 function renderPlans() {
   const list = document.getElementById('client-planos-list');
+
   if (!list) return;
 
   if (!state.plans.length) {
@@ -275,41 +406,51 @@ function renderPlans() {
     </div>
   `;
 
+  list.querySelectorAll('[data-go-current-subscription]').forEach((button) => {
+    button.addEventListener('click', () => {
+      goToClientRoute('assinatura');
+    });
+  });
+
   list.querySelectorAll('[data-plan-checkout-id]').forEach((button) => {
     button.addEventListener('click', async () => {
       const planId = button.getAttribute('data-plan-checkout-id');
+
       if (!planId) return;
 
       try {
         button.disabled = true;
+        button.textContent = 'Criando contratação...';
+
         setFeedback('Criando sua contratação...', 'neutral');
 
         const result = await createClientPortalSubscriptionCheckout({ planId });
-        const paymentUrl = result?.checkout?.paymentUrl || '';
+        const checkoutUrl = resolveCheckoutUrl(result);
 
-        if (paymentUrl) {
-          setFeedback('Redirecionando para o pagamento...', 'success');
-          window.location.href = paymentUrl;
+        if (checkoutUrl) {
+          setFeedback('Redirecionando para o Mercado Pago...', 'success');
+          window.location.href = checkoutUrl;
           return;
         }
 
-        setFeedback('Plano criado com sucesso. Vamos abrir sua área do plano.', 'success');
+        setFeedback('Plano criado. Vamos abrir sua área do plano.', 'success');
 
         setTimeout(() => {
-          window.history.pushState({ clientRoute: 'assinatura' }, '', '/client/assinatura');
-          window.dispatchEvent(new PopStateEvent('popstate'));
+          goToClientRoute('assinatura');
         }, 700);
       } catch (error) {
         setFeedback(
           error instanceof Error ? error.message : 'Não foi possível contratar o plano.',
           'error'
         );
-      } finally {
+
         button.disabled = false;
+        button.textContent = 'Contratar plano';
       }
     });
   });
 }
+
 export function renderClientPlanos() {
   return `
     <div id="pages" style="display:block">
@@ -350,13 +491,21 @@ export function initClientPlanosPage() {
       ]);
 
       state.context = context || null;
-      state.plans = Array.isArray(plansPayload?.items) ? plansPayload.items : [];
-      state.subscription = subscriptionPayload || null;
+      state.plans = Array.isArray(plansPayload?.items)
+        ? plansPayload.items
+        : Array.isArray(plansPayload)
+          ? plansPayload
+          : [];
+      state.subscriptionPayload = subscriptionPayload || null;
 
       renderHeader();
       renderPlans();
 
-      setFeedback('Escolha o plano ideal para continuar.', 'neutral');
+      if (hasBlockingSubscription()) {
+        setFeedback('Você já possui uma assinatura nesta barbearia. Acompanhe em Meu Plano.', 'neutral');
+      } else {
+        setFeedback('Escolha o plano ideal para continuar.', 'neutral');
+      }
     } catch (error) {
       setFeedback(
         error instanceof Error ? error.message : 'Não foi possível carregar os planos.',
