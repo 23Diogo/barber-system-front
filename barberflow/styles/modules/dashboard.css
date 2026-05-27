@@ -1950,114 +1950,100 @@ body.light .widget-chart-legend-row{
 }
 
 /* ═══════════════════════════════════════════
-   HOTFIX DONO 01 V2 — widgets limpos, X funcional e mobile
-   Mantém o dashboard em resumo e remove controles avançados do topo.
+   HOTFIX DONO 01 V3 — Widgets com controles preservados
+   Mantém Resumo / Gráfico / M / G / GG / ↔.
+   Corrige somente fechar, restaurar e mobile.
 ═══════════════════════════════════════════ */
 .dashboard-widget.widget-hidden {
   display: none !important;
 }
 
-.widget-view-tools,
-.widget-resize-edge,
-.widget-resize-handle {
-  display: none !important;
+.dashboard-widget .widget-topbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
 }
 
-.widget-actions {
-  flex-wrap: nowrap !important;
-  align-items: center !important;
-  justify-content: flex-end !important;
-  max-width: none !important;
-  gap: 8px !important;
+.dashboard-widget .widget-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  flex-wrap: wrap;
+  min-width: 0;
+  max-width: min(78%, 720px);
 }
 
-.widget-open {
-  padding-top: 0 !important;
-  white-space: nowrap !important;
+.dashboard-widget .widget-open {
+  flex: 0 0 auto;
 }
 
-.widget-close {
-  flex: 0 0 auto !important;
-  width: 26px !important;
-  height: 26px !important;
-  min-width: 26px !important;
-  min-height: 26px !important;
-  border-radius: 999px !important;
-  display: inline-flex !important;
-  align-items: center !important;
-  justify-content: center !important;
-  line-height: 1 !important;
-  font-size: 16px !important;
-  font-weight: 900 !important;
-  z-index: 20 !important;
+.dashboard-widget .widget-close {
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  font-size: 16px;
+  line-height: 1;
+  z-index: 40;
 }
 
-.dashboard-widget > div[id^="dashboard"][id$="Content"] {
-  overflow-x: hidden;
+.dashboard-widget .widget-view-tools {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
+}
+
+.restore-widgets-btn:disabled {
+  opacity: .54;
+  cursor: default;
 }
 
 @media (max-width: 900px) {
   #hero {
     position: relative !important;
     inset: auto !important;
-    min-height: calc(100dvh - 78px) !important;
+    width: 100% !important;
+    min-height: calc(100dvh - 70px) !important;
     overflow-y: auto !important;
     overflow-x: hidden !important;
-    padding: 12px 10px 34px !important;
+    padding: 96px 12px 34px !important;
+    box-sizing: border-box !important;
   }
 
-  #dashboardWidgetLayer.dashboard-widget-layer {
-    position: relative !important;
-    top: auto !important;
-    left: auto !important;
-    right: auto !important;
-    width: 100% !important;
-    display: grid !important;
-    grid-template-columns: 1fr !important;
-    gap: 12px !important;
-    padding: 0 0 32px !important;
-    z-index: 7 !important;
-  }
-
-  #dashboardWidgetLayer .analytics-card.dashboard-widget,
-  #dashboardWidgetLayer .dashboard-widget {
-    position: relative !important;
-    top: auto !important;
-    left: auto !important;
-    right: auto !important;
-    bottom: auto !important;
-    transform: none !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    max-width: none !important;
-    min-height: auto !important;
-    height: auto !important;
-    max-height: none !important;
-    margin: 0 !important;
-    visibility: visible !important;
-    opacity: 1 !important;
-  }
-
-  #dashboardWidgetLayer .dashboard-widget:not(.widget-hidden) {
+  .hero-logo {
     display: flex !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    transform: none !important;
+    justify-content: center !important;
+    margin: 6px auto 16px !important;
+    width: 100% !important;
+    z-index: 5 !important;
   }
 
-  #dashboardWidgetLayer .dashboard-widget.widget-hidden {
-    display: none !important;
+  .hero-B {
+    font-size: 38px !important;
   }
 
-  #dashboardWidgetLayer .dashboard-widget > div[id^="dashboard"][id$="Content"] {
-    overflow: visible !important;
-    padding-right: 0 !important;
-    margin-right: 0 !important;
+  .hero-name {
+    font-size: 28px !important;
   }
 
   .hero-actions {
+    display: flex !important;
     position: relative !important;
     top: auto !important;
     right: auto !important;
-    z-index: 9 !important;
-    display: flex !important;
+    z-index: 8 !important;
     justify-content: flex-end !important;
     margin: 0 0 12px !important;
   }
@@ -2070,5 +2056,84 @@ body.light .widget-chart-legend-row{
     padding: 8px 13px !important;
     font-size: 10px !important;
   }
-}
 
+  #dashboardWidgetLayer.dashboard-widget-layer,
+  .dashboard-widget-layer {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    width: 100% !important;
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+    gap: 14px !important;
+    padding: 0 0 32px !important;
+    z-index: 7 !important;
+  }
+
+  #dashboardWidgetLayer .analytics-card.dashboard-widget,
+  #dashboardWidgetLayer .dashboard-widget,
+  .analytics-card.dashboard-widget {
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    min-height: auto !important;
+    height: auto !important;
+    max-height: none !important;
+    margin: 0 !important;
+    transform: none !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+  }
+
+  #dashboardWidgetLayer .dashboard-widget:not(.widget-hidden),
+  .analytics-card.dashboard-widget:not(.widget-hidden) {
+    display: flex !important;
+  }
+
+  #dashboardWidgetLayer .dashboard-widget.widget-hidden,
+  .analytics-card.dashboard-widget.widget-hidden {
+    display: none !important;
+  }
+
+  .dashboard-widget .widget-topbar {
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+
+  .dashboard-widget .widget-actions {
+    width: 100% !important;
+    max-width: none !important;
+    justify-content: flex-start !important;
+    gap: 6px !important;
+  }
+
+  .dashboard-widget .widget-view-tools {
+    order: 3;
+    width: 100% !important;
+    flex: 1 1 100% !important;
+    justify-content: flex-start !important;
+    overflow-x: auto !important;
+    padding: 4px !important;
+  }
+
+  .dashboard-widget .widget-tool-btn {
+    min-height: 26px !important;
+    padding: 5px 8px !important;
+    font-size: 8px !important;
+  }
+
+  .dashboard-widget .widget-close {
+    margin-left: auto !important;
+  }
+
+  .widget-resize-edge,
+  .widget-resize-handle {
+    display: none !important;
+  }
+}
