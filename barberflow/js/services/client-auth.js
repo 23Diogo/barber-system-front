@@ -3,9 +3,16 @@ import { initPWABanner } from '../pwa-install.js';
 
 const CLIENT_TOKEN_STORAGE_KEY = 'barberflow.clientToken';
 const CLIENT_PROFILE_STORAGE_KEY = 'barberflow.clientProfile';
+const CLIENT_FLASH_STORAGE_KEY = 'barberflow.clientFlash';
+
+const CLIENT_LICENSE_ERRORS = ['license_suspended', 'license_cancelled'];
+
+const SESSION_EXPIRED_MESSAGE = 'Sua sessão expirou. Faça login novamente.';
+const CLIENT_LICENSE_MESSAGE =
+  'Esta barbearia está temporariamente indisponível. Entre em contato com a barbearia para mais informações.';
 
 function sanitizeBaseUrl(url) {
-  return String(url || '').trim().replace(/\/$/, '');
+  return String(url || '').trim().replace(/\/+$/, '');
 }
 
 function getClientApiBaseUrl() {
@@ -24,24 +31,105 @@ function buildQueryString(params = {}) {
   return query ? `?${query}` : '';
 }
 
+function safeGetLocalStorageItem(key) {
+  try {
+    return localStorage.getItem(key) || '';
+  } catch {
+    return '';
+  }
+}
+
+function safeSetLocalStorageItem(key, value) {
+  try {
+    if (value) {
+      localStorage.setItem(key, value);
+    } else {
+      localStorage.removeItem(key);
+    }
+  } catch {
+    // noop
+  }
+}
+
+function safeRemoveLocalStorageItem(key) {
+  try {
+    localStorage.removeItem(key);
+  } catch {
+    // noop
+  }
+}
+
+function safeSetSessionStorageItem(key, value) {
+  try {
+    if (value) {
+      sessionStorage.setItem(key, value);
+    } else {
+      sessionStorage.removeItem(key);
+    }
+  } catch {
+    // noop
+  }
+}
+
+function normalizeErrorCode(payload) {
+  return String(payload?.error || payload?.code || '').trim().toLowerCase();
+}
+
+function normalizeErrorMessage(payload, response) {
+  if (payload && typeof payload === 'object') {
+    return String(payload.message || payload.error || payload.code || '').trim();
+  }
+
+  if (typeof payload === 'string') {
+    return payload.trim();
+  }
+
+  return `Erro HTTP ${response.status}`;
+}
+
+function isClientLicenseErrorCode(code) {
+  return CLIENT_LICENSE_ERRORS.includes(String(code || '').toLowerCase());
+}
+
+function redirectToClientLogin() {
+  const path = window.location.pathname;
+
+  if (path === '/client/login') return;
+
+  window.location.replace('/client/login');
+}
+
+export class ClientHttpError extends Error {
+  constructor(message, { status = 0, code = '', payload = null } = {}) {
+    super(message);
+    this.name = 'ClientHttpError';
+    this.status = status;
+    this.code = code;
+    this.payload = payload;
+  }
+}
+
+export function isClientLicenseUnavailableError(error) {
+  return (
+    isClientLicenseErrorCode(error?.code) ||
+    CLIENT_LICENSE_ERRORS.some((code) =>
+      String(error?.message || '').toLowerCase().includes(code)
+    )
+  );
+}
+
 export function getClientToken() {
-  return String(localStorage.getItem(CLIENT_TOKEN_STORAGE_KEY) || '').trim();
+  return String(safeGetLocalStorageItem(CLIENT_TOKEN_STORAGE_KEY) || '').trim();
 }
 
 export function setClientToken(token) {
   const value = String(token || '').trim();
-
-  if (value) {
-    localStorage.setItem(CLIENT_TOKEN_STORAGE_KEY, value);
-  } else {
-    localStorage.removeItem(CLIENT_TOKEN_STORAGE_KEY);
-  }
-
+  safeSetLocalStorageItem(CLIENT_TOKEN_STORAGE_KEY, value);
   return value;
 }
 
 export function clearClientToken() {
-  localStorage.removeItem(CLIENT_TOKEN_STORAGE_KEY);
+  safeRemoveLocalStorageItem(CLIENT_TOKEN_STORAGE_KEY);
 }
 
 export function hasClientToken() {
@@ -59,19 +147,36 @@ export function getClientProfile() {
 
 export function setClientProfile(profile) {
   if (profile) {
-    localStorage.setItem(CLIENT_PROFILE_STORAGE_KEY, JSON.stringify(profile));
+    safeSetLocalStorageItem(CLIENT_PROFILE_STORAGE_KEY, JSON.stringify(profile));
   } else {
-    localStorage.removeItem(CLIENT_PROFILE_STORAGE_KEY);
+    safeRemoveLocalStorageItem(CLIENT_PROFILE_STORAGE_KEY);
   }
 }
 
 export function clearClientProfile() {
-  localStorage.removeItem(CLIENT_PROFILE_STORAGE_KEY);
+  safeRemoveLocalStorageItem(CLIENT_PROFILE_STORAGE_KEY);
 }
 
 export function logoutClient() {
   clearClientToken();
   clearClientProfile();
+}
+
+export function getClientFlash() {
+  try {
+    const raw = sessionStorage.getItem(CLIENT_FLASH_STORAGE_KEY);
+    sessionStorage.removeItem(CLIENT_FLASH_STORAGE_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setClientFlash(message, variant = 'neutral') {
+  safeSetSessionStorageItem(
+    CLIENT_FLASH_STORAGE_KEY,
+    JSON.stringify({ message, variant })
+  );
 }
 
 async function clientFetch(path, options = {}, requireAuth = false) {
@@ -82,11 +187,13 @@ async function clientFetch(path, options = {}, requireAuth = false) {
   }
 
   const headers = new Headers(options.headers || {});
+
   if (!headers.has('Accept')) {
     headers.set('Accept', 'application/json');
   }
 
   const hasBody = options.body !== undefined && options.body !== null;
+
   if (hasBody && !headers.has('Content-Type')) {
     headers.set('Content-Type', 'application/json');
   }
@@ -95,16 +202,25 @@ async function clientFetch(path, options = {}, requireAuth = false) {
     const token = getClientToken();
 
     if (!token) {
-      throw new Error('Sessão do cliente não encontrada.');
+      throw new ClientHttpError('Sessão do cliente não encontrada.', {
+        status: 401,
+        code: 'client_session_missing',
+      });
     }
 
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(`${baseUrl}${path}`, {
-    ...options,
-    headers,
-  });
+  let response;
+
+  try {
+    response = await fetch(`${baseUrl}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw new Error('Não foi possível conectar ao servidor. Verifique sua internet e tente novamente.');
+  }
 
   const text = await response.text();
   let payload = null;
@@ -118,12 +234,34 @@ async function clientFetch(path, options = {}, requireAuth = false) {
   }
 
   if (!response.ok) {
-    const message =
-      payload?.error ||
-      payload?.message ||
-      `Erro HTTP ${response.status}`;
+    const code = normalizeErrorCode(payload);
+    const rawMessage = normalizeErrorMessage(payload, response);
 
-    throw new Error(message);
+    if (response.status === 401 && requireAuth) {
+      logoutClient();
+      setClientFlash(SESSION_EXPIRED_MESSAGE, 'error');
+      redirectToClientLogin();
+
+      throw new ClientHttpError(SESSION_EXPIRED_MESSAGE, {
+        status: response.status,
+        code: code || 'client_session_expired',
+        payload,
+      });
+    }
+
+    if (response.status === 403 && isClientLicenseErrorCode(code)) {
+      throw new ClientHttpError(rawMessage || CLIENT_LICENSE_MESSAGE, {
+        status: response.status,
+        code,
+        payload,
+      });
+    }
+
+    throw new ClientHttpError(rawMessage || `Erro HTTP ${response.status}`, {
+      status: response.status,
+      code,
+      payload,
+    });
   }
 
   return payload;
@@ -160,7 +298,6 @@ export async function loginClient(payload) {
     setClientProfile(data.client);
   }
 
-  // Banner PWA aparece 3s após login bem-sucedido
   initPWABanner();
 
   return data;
@@ -173,7 +310,6 @@ export async function meClient() {
     setClientProfile(data.client);
   }
 
-  // Banner PWA para quem já estava logado (retorna ao sistema)
   initPWABanner();
 
   return data;
@@ -192,10 +328,6 @@ export async function resetPasswordClient(payload) {
     body: JSON.stringify(payload),
   });
 }
-
-/* =========================
-   CLIENT PORTAL
-========================= */
 
 export async function getClientPortalContext() {
   return clientFetch('/api/client-portal/context', { method: 'GET' }, true);
@@ -239,6 +371,13 @@ export async function cancelClientPortalAppointment(appointmentId, reason = '') 
   }, true);
 }
 
+export async function rateClientPortalAppointment(appointmentId, payload) {
+  return clientFetch(`/api/client-portal/appointments/${appointmentId}/rate`, {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  }, true);
+}
+
 export async function getClientPortalPlans() {
   return clientFetch('/api/client-portal/plans', { method: 'GET' }, true);
 }
@@ -279,15 +418,10 @@ export async function changeClientPortalPassword(payload) {
   }, true);
 }
 
-/* aliases temporários */
+/**
+ * Aliases temporários para manter compatibilidade com imports antigos.
+ */
 export const clientRegister = registerClient;
 export const clientLogin = loginClient;
 export const getClientMe = meClient;
 export const requestClientPasswordReset = forgotPasswordClient;
-
-export async function rateClientPortalAppointment(appointmentId, payload) {
-  return clientFetch(`/api/client-portal/appointments/${appointmentId}/rate`, {
-    method: 'POST',
-    body: JSON.stringify(payload),
-  }, true);
-}
