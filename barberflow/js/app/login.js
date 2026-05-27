@@ -4,6 +4,8 @@ const APP_LOGIN_PATH = '/app/login';
 const APP_HOME_PATH = '/app';
 const APP_SUBSCRIPTION_PATH = '/app/assinatura';
 
+console.info('[BBarberFlow] owner login recovery loaded v2');
+
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('app-feedback');
   if (!el) return;
@@ -82,53 +84,6 @@ function validatePassword(password) {
   return '';
 }
 
-function ensureForgotPasswordLink() {
-  const form = getLoginForm();
-
-  if (!form || document.getElementById('app-forgot-password-link')) return;
-
-  const wrapper = document.createElement('div');
-  wrapper.className = 'app-auth-extra-actions';
-  wrapper.style.cssText = [
-    'display:flex',
-    'justify-content:flex-end',
-    'align-items:center',
-    'margin-top:10px',
-  ].join(';');
-
-  wrapper.innerHTML = `
-    <button
-      type="button"
-      id="app-forgot-password-link"
-      style="
-        border:0;
-        background:transparent;
-        color:#4fc3f7;
-        font:inherit;
-        font-size:13px;
-        font-weight:700;
-        cursor:pointer;
-        padding:6px 0;
-      "
-    >
-      Esqueci minha senha
-    </button>
-  `;
-
-  const submitButton = getSubmitButton(form);
-  const submitParent = submitButton?.parentElement;
-
-  if (submitParent && submitParent.parentElement === form) {
-    submitParent.insertAdjacentElement('afterend', wrapper);
-  } else {
-    form.appendChild(wrapper);
-  }
-
-  document.getElementById('app-forgot-password-link')?.addEventListener('click', () => {
-    renderForgotPasswordScreen();
-  });
-}
-
 function ensureAuthShell() {
   let shell = document.getElementById('app-auth-flow');
 
@@ -175,6 +130,68 @@ function getEmailForRecovery() {
   return getLoginEmailInput()?.value?.trim() || '';
 }
 
+function ensureForgotPasswordLink() {
+  const form = getLoginForm();
+
+  if (!form) {
+    console.warn('[BBarberFlow] app-login-form não encontrado para inserir Esqueci minha senha.');
+    return false;
+  }
+
+  if (document.getElementById('app-forgot-password-link')) {
+    return true;
+  }
+
+  const wrapper = document.createElement('div');
+  wrapper.id = 'app-forgot-password-row';
+  wrapper.style.cssText = [
+    'display:flex',
+    'justify-content:flex-end',
+    'align-items:center',
+    'width:100%',
+    'margin:10px 0 8px',
+  ].join(';');
+
+  wrapper.innerHTML = `
+    <button
+      type="button"
+      id="app-forgot-password-link"
+      style="
+        appearance:none;
+        border:0;
+        background:transparent;
+        color:#4fc3f7;
+        font:inherit;
+        font-size:13px;
+        font-weight:800;
+        cursor:pointer;
+        padding:6px 0;
+        text-align:right;
+      "
+    >
+      Esqueci minha senha
+    </button>
+  `;
+
+  const submitButton = getSubmitButton(form);
+  const existingFooter = form.querySelector('.client-form-footer, .ob-form-footer, [data-auth-footer]');
+
+  if (existingFooter) {
+    existingFooter.insertAdjacentElement('beforebegin', wrapper);
+  } else if (submitButton) {
+    submitButton.insertAdjacentElement('afterend', wrapper);
+  } else {
+    form.appendChild(wrapper);
+  }
+
+  document.getElementById('app-forgot-password-link')?.addEventListener('click', () => {
+    renderForgotPasswordScreen();
+  });
+
+  console.info('[BBarberFlow] Esqueci minha senha inserido no login do dono.');
+  return true;
+}
+
 function renderForgotPasswordScreen() {
   hideLoginForm();
 
@@ -182,7 +199,7 @@ function renderForgotPasswordScreen() {
   const email = getEmailForRecovery();
 
   shell.innerHTML = `
-    <form id="app-forgot-password-form" class="client-form" style="display:grid;gap:16px;">
+    <form id="app-forgot-password-form" style="display:grid;gap:16px;">
       <div style="display:grid;gap:6px;">
         <div style="font-size:22px;font-weight:900;color:#e8f0fe;">Recuperar senha</div>
         <div style="color:#8fa3c7;font-size:14px;line-height:1.55;">
@@ -190,15 +207,26 @@ function renderForgotPasswordScreen() {
         </div>
       </div>
 
-      <div class="ob-field" style="display:grid;gap:8px;">
-        <label for="app-forgot-email" style="font-size:12px;font-weight:800;color:#8fa3c7;">E-mail</label>
+      <div style="display:grid;gap:8px;">
+        <label for="app-forgot-email" style="font-size:12px;font-weight:800;color:#8fa3c7;letter-spacing:.08em;text-transform:uppercase;">E-mail</label>
         <input
           id="app-forgot-email"
-          class="modal-input"
           type="email"
           placeholder="seu-email@dominio.com"
           autocomplete="email"
           value="${escapeHtml(email)}"
+          style="
+            width:100%;
+            min-height:50px;
+            border-radius:14px;
+            border:1px solid rgba(79,195,247,.18);
+            background:rgba(7,12,28,.72);
+            color:#e8f0fe;
+            padding:0 16px;
+            font:inherit;
+            box-sizing:border-box;
+            outline:none;
+          "
         />
       </div>
 
@@ -206,14 +234,34 @@ function renderForgotPasswordScreen() {
         <button
           type="button"
           id="app-forgot-back"
-          class="btn-cancel"
+          style="
+            min-height:44px;
+            padding:0 16px;
+            border-radius:12px;
+            border:1px solid rgba(255,255,255,.12);
+            background:rgba(255,255,255,.04);
+            color:#8fa3c7;
+            font:inherit;
+            font-weight:800;
+            cursor:pointer;
+          "
         >
           Voltar para login
         </button>
 
         <button
           type="submit"
-          class="btn-save"
+          style="
+            min-height:44px;
+            padding:0 16px;
+            border-radius:12px;
+            border:0;
+            background:linear-gradient(135deg,#5dc8ff 0%,#2f8cff 55%,#1468ff 100%);
+            color:#fff;
+            font:inherit;
+            font-weight:900;
+            cursor:pointer;
+          "
         >
           Enviar instruções
         </button>
@@ -272,7 +320,7 @@ function renderResetPasswordScreen() {
   const shell = ensureAuthShell();
 
   shell.innerHTML = `
-    <form id="app-reset-password-form" class="client-form" style="display:grid;gap:16px;">
+    <form id="app-reset-password-form" style="display:grid;gap:16px;">
       <div style="display:grid;gap:6px;">
         <div style="font-size:22px;font-weight:900;color:#e8f0fe;">Criar nova senha</div>
         <div style="color:#8fa3c7;font-size:14px;line-height:1.55;">
@@ -280,30 +328,51 @@ function renderResetPasswordScreen() {
         </div>
       </div>
 
-      <div class="ob-field" style="display:grid;gap:8px;">
-        <label for="app-reset-password" style="font-size:12px;font-weight:800;color:#8fa3c7;">Nova senha</label>
+      <div style="display:grid;gap:8px;">
+        <label for="app-reset-password" style="font-size:12px;font-weight:800;color:#8fa3c7;letter-spacing:.08em;text-transform:uppercase;">Nova senha</label>
         <input
           id="app-reset-password"
-          class="modal-input"
           type="password"
           placeholder="Mínimo 8 caracteres, letras e números"
           autocomplete="new-password"
+          style="
+            width:100%;
+            min-height:50px;
+            border-radius:14px;
+            border:1px solid rgba(79,195,247,.18);
+            background:rgba(7,12,28,.72);
+            color:#e8f0fe;
+            padding:0 16px;
+            font:inherit;
+            box-sizing:border-box;
+            outline:none;
+          "
         />
       </div>
 
-      <div class="ob-field" style="display:grid;gap:8px;">
-        <label for="app-reset-password-confirm" style="font-size:12px;font-weight:800;color:#8fa3c7;">Confirmar nova senha</label>
+      <div style="display:grid;gap:8px;">
+        <label for="app-reset-password-confirm" style="font-size:12px;font-weight:800;color:#8fa3c7;letter-spacing:.08em;text-transform:uppercase;">Confirmar nova senha</label>
         <input
           id="app-reset-password-confirm"
-          class="modal-input"
           type="password"
           placeholder="Repita a nova senha"
           autocomplete="new-password"
+          style="
+            width:100%;
+            min-height:50px;
+            border-radius:14px;
+            border:1px solid rgba(79,195,247,.18);
+            background:rgba(7,12,28,.72);
+            color:#e8f0fe;
+            padding:0 16px;
+            font:inherit;
+            box-sizing:border-box;
+            outline:none;
+          "
         />
       </div>
 
       <div
-        id="app-reset-password-hint"
         style="
           border:1px solid rgba(79,195,247,.16);
           border-radius:14px;
@@ -321,14 +390,34 @@ function renderResetPasswordScreen() {
         <button
           type="button"
           id="app-reset-back"
-          class="btn-cancel"
+          style="
+            min-height:44px;
+            padding:0 16px;
+            border-radius:12px;
+            border:1px solid rgba(255,255,255,.12);
+            background:rgba(255,255,255,.04);
+            color:#8fa3c7;
+            font:inherit;
+            font-weight:800;
+            cursor:pointer;
+          "
         >
           Voltar para login
         </button>
 
         <button
           type="submit"
-          class="btn-save"
+          style="
+            min-height:44px;
+            padding:0 16px;
+            border-radius:12px;
+            border:0;
+            background:linear-gradient(135deg,#5dc8ff 0%,#2f8cff 55%,#1468ff 100%);
+            color:#fff;
+            font:inherit;
+            font-weight:900;
+            cursor:pointer;
+          "
         >
           Redefinir senha
         </button>
@@ -456,19 +545,50 @@ async function handleLoginSubmit(event) {
   }
 }
 
+function bindLoginSubmitOnce() {
+  const form = getLoginForm();
+
+  if (!form || form.dataset.ownerLoginBound === 'true') return false;
+
+  form.dataset.ownerLoginBound = 'true';
+  form.addEventListener('submit', handleLoginSubmit);
+
+  return true;
+}
+
 function initOwnerLoginRecovery() {
   if (isResetPasswordRoute()) {
     renderResetPasswordScreen();
-    return;
+    return true;
   }
 
   const form = getLoginForm();
 
-  if (!form) return;
+  if (!form) return false;
 
+  bindLoginSubmitOnce();
   ensureForgotPasswordLink();
 
-  form.addEventListener('submit', handleLoginSubmit);
+  return true;
 }
 
-initOwnerLoginRecovery();
+function bootstrapOwnerLoginRecovery() {
+  if (initOwnerLoginRecovery()) return;
+
+  let attempts = 0;
+  const maxAttempts = 50;
+
+  const timer = window.setInterval(() => {
+    attempts += 1;
+
+    if (initOwnerLoginRecovery() || attempts >= maxAttempts) {
+      window.clearInterval(timer);
+    }
+  }, 100);
+}
+
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrapOwnerLoginRecovery);
+} else {
+  bootstrapOwnerLoginRecovery();
+}
