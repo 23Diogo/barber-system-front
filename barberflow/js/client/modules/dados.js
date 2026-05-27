@@ -3,6 +3,10 @@ import {
   updateClientPortalProfile,
   changeClientPortalPassword,
 } from '../../services/client-auth.js';
+import {
+  renderClientPasswordChecklist,
+  validateStrongPassword,
+} from '../client-password-policy.js';
 
 const state = {
   profile: null,
@@ -19,6 +23,7 @@ function escapeHtml(value) {
 
 function setFeedback(targetId, message, variant = 'neutral') {
   const el = document.getElementById(targetId);
+
   if (!el) return;
 
   el.textContent = message || '';
@@ -35,8 +40,40 @@ function getValue(id) {
   return document.getElementById(id)?.value?.trim() || '';
 }
 
+function getPasswordContext() {
+  const client = state.profile?.client || {};
+
+  return {
+    name: getValue('client-profile-name') || client.name || '',
+    email: client.email || '',
+    whatsapp: getValue('client-profile-whatsapp') || client.whatsapp || '',
+  };
+}
+
+function updatePasswordChecklist() {
+  const password = document.getElementById('client-password-new')?.value || '';
+  const container = document.getElementById('client-password-strength');
+
+  if (!container) return;
+
+  container.innerHTML = renderClientPasswordChecklist(password, getPasswordContext());
+}
+
+function bindPasswordChecklist() {
+  [
+    'client-password-new',
+    'client-profile-name',
+    'client-profile-whatsapp',
+  ].forEach((id) => {
+    document.getElementById(id)?.addEventListener('input', updatePasswordChecklist);
+  });
+
+  updatePasswordChecklist();
+}
+
 function renderProfileState() {
   const profileBox = document.getElementById('client-dados-profile-state');
+
   if (!profileBox) return;
 
   const client = state.profile?.client || {};
@@ -59,6 +96,8 @@ function renderProfileState() {
   if (nameInput) nameInput.value = client.name || '';
   if (whatsappInput) whatsappInput.value = client.whatsapp || '';
   if (emailInput) emailInput.value = client.email || '';
+
+  updatePasswordChecklist();
 }
 
 async function loadProfile() {
@@ -83,6 +122,7 @@ async function handleProfileSave() {
 
   try {
     const button = document.getElementById('client-profile-save-btn');
+
     if (button) button.disabled = true;
 
     setFeedback('client-profile-feedback', 'Salvando seus dados...', 'neutral');
@@ -104,6 +144,7 @@ async function handleProfileSave() {
     );
   } finally {
     const button = document.getElementById('client-profile-save-btn');
+
     if (button) button.disabled = false;
   }
 }
@@ -123,8 +164,11 @@ async function handlePasswordChange() {
     return;
   }
 
-  if (newPassword.length < 6) {
-    setFeedback('client-password-feedback', 'A nova senha deve ter pelo menos 6 caracteres.', 'error');
+  const passwordValidation = validateStrongPassword(newPassword, getPasswordContext());
+
+  if (!passwordValidation.valid) {
+    setFeedback('client-password-feedback', passwordValidation.message, 'error');
+    updatePasswordChecklist();
     return;
   }
 
@@ -135,6 +179,7 @@ async function handlePasswordChange() {
 
   try {
     const button = document.getElementById('client-password-save-btn');
+
     if (button) button.disabled = true;
 
     setFeedback('client-password-feedback', 'Alterando sua senha...', 'neutral');
@@ -145,9 +190,15 @@ async function handlePasswordChange() {
       confirmPassword,
     });
 
-    document.getElementById('client-password-current').value = '';
-    document.getElementById('client-password-new').value = '';
-    document.getElementById('client-password-confirm').value = '';
+    const currentInput = document.getElementById('client-password-current');
+    const newInput = document.getElementById('client-password-new');
+    const confirmInput = document.getElementById('client-password-confirm');
+
+    if (currentInput) currentInput.value = '';
+    if (newInput) newInput.value = '';
+    if (confirmInput) confirmInput.value = '';
+
+    updatePasswordChecklist();
 
     setFeedback('client-password-feedback', 'Sua senha foi alterada com sucesso.', 'success');
   } catch (error) {
@@ -158,6 +209,7 @@ async function handlePasswordChange() {
     );
   } finally {
     const button = document.getElementById('client-password-save-btn');
+
     if (button) button.disabled = false;
   }
 }
@@ -251,7 +303,7 @@ export function renderClientDados() {
                 id="client-password-new"
                 class="client-form-input"
                 type="password"
-                placeholder="Digite sua nova senha"
+                placeholder="Mínimo 8 caracteres, letras, números e símbolo"
                 autocomplete="new-password"
               />
             </div>
@@ -266,6 +318,8 @@ export function renderClientDados() {
                 autocomplete="new-password"
               />
             </div>
+
+            <div id="client-password-strength"></div>
 
             <div class="client-action-row">
               <button
@@ -284,6 +338,8 @@ export function renderClientDados() {
 }
 
 export function initClientDadosPage() {
+  bindPasswordChecklist();
+
   (async () => {
     try {
       setFeedback('client-profile-feedback', 'Carregando seus dados...', 'neutral');
