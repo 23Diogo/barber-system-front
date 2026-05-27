@@ -1,8 +1,14 @@
 import { resetPasswordClient } from '../../services/client-auth.js';
+import {
+  renderClientPasswordChecklist,
+  validateStrongPassword,
+} from '../client-password-policy.js';
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('client-feedback');
+
   if (!el) return;
+
   el.textContent = message || '';
   el.className = `client-feedback ${
     variant === 'error'
@@ -18,6 +24,23 @@ function getTokenFromUrl() {
   return params.get('token') || '';
 }
 
+function updatePasswordChecklist() {
+  const password = document.getElementById('client-nova-senha-password')?.value || '';
+  const container = document.getElementById('client-nova-senha-password-strength');
+
+  if (!container) return;
+
+  container.innerHTML = renderClientPasswordChecklist(password);
+}
+
+function bindPasswordChecklist() {
+  document
+    .getElementById('client-nova-senha-password')
+    ?.addEventListener('input', updatePasswordChecklist);
+
+  updatePasswordChecklist();
+}
+
 export function renderClientNovaSenha() {
   return `
     <form id="client-nova-senha-form" class="client-form">
@@ -30,11 +53,11 @@ export function renderClientNovaSenha() {
             id="client-nova-senha-password"
             class="client-form-input"
             type="password"
-            placeholder="Digite sua nova senha"
+            placeholder="Mínimo 8 caracteres, letras, números e símbolo"
             autocomplete="new-password"
-            minlength="6"
           />
         </div>
+
         <div class="client-form-field">
           <label class="client-form-label" for="client-nova-senha-confirm">
             Confirmar nova senha
@@ -45,14 +68,17 @@ export function renderClientNovaSenha() {
             type="password"
             placeholder="Repita sua nova senha"
             autocomplete="new-password"
-            minlength="6"
           />
         </div>
       </div>
+
+      <div id="client-nova-senha-password-strength"></div>
+
       <div class="client-form-actions">
         <button type="submit" class="btn-primary-gradient">
           Redefinir senha
         </button>
+
         <button
           type="button"
           class="btn-cancel"
@@ -68,6 +94,8 @@ export function renderClientNovaSenha() {
 export function initClientNovaSenhaPage({ navigate }) {
   const token = getTokenFromUrl();
 
+  bindPasswordChecklist();
+
   if (!token) {
     setFeedback('Link inválido ou expirado. Solicite uma nova recuperação de senha.', 'error');
     document.getElementById('client-nova-senha-form')?.remove();
@@ -81,18 +109,19 @@ export function initClientNovaSenhaPage({ navigate }) {
   document.getElementById('client-nova-senha-form')?.addEventListener('submit', async (event) => {
     event.preventDefault();
 
-    const newPassword =
-      document.getElementById('client-nova-senha-password')?.value || '';
-    const confirmPassword =
-      document.getElementById('client-nova-senha-confirm')?.value || '';
+    const newPassword = document.getElementById('client-nova-senha-password')?.value || '';
+    const confirmPassword = document.getElementById('client-nova-senha-confirm')?.value || '';
 
     if (!newPassword) {
       setFeedback('Informe sua nova senha.', 'error');
       return;
     }
 
-    if (newPassword.length < 6) {
-      setFeedback('A senha deve ter pelo menos 6 caracteres.', 'error');
+    const passwordValidation = validateStrongPassword(newPassword);
+
+    if (!passwordValidation.valid) {
+      setFeedback(passwordValidation.message, 'error');
+      updatePasswordChecklist();
       return;
     }
 
@@ -102,8 +131,20 @@ export function initClientNovaSenhaPage({ navigate }) {
     }
 
     try {
+      const button = event.target.querySelector('button[type="submit"]');
+
+      if (button) {
+        button.disabled = true;
+        button.textContent = 'Redefinindo...';
+      }
+
       setFeedback('Redefinindo senha...', 'neutral');
-      await resetPasswordClient({ token, newPassword });
+
+      await resetPasswordClient({
+        token,
+        newPassword,
+      });
+
       setFeedback('Senha redefinida com sucesso! Você já pode fazer login.', 'success');
 
       setTimeout(() => {
@@ -114,6 +155,13 @@ export function initClientNovaSenhaPage({ navigate }) {
         error instanceof Error ? error.message : 'Não foi possível redefinir a senha.',
         'error'
       );
+
+      const button = event.target.querySelector('button[type="submit"]');
+
+      if (button) {
+        button.disabled = false;
+        button.textContent = 'Redefinir senha';
+      }
     }
   });
 }
