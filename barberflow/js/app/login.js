@@ -4,7 +4,7 @@ const APP_LOGIN_PATH = '/app/login';
 const APP_HOME_PATH = '/app';
 const APP_SUBSCRIPTION_PATH = '/app/assinatura';
 
-console.info('[BBarberFlow] owner login recovery loaded v5');
+console.info('[BBarberFlow] owner login recovery loaded v6');
 
 function setFeedback(message, variant = 'neutral') {
   const el = document.getElementById('app-feedback');
@@ -51,7 +51,9 @@ function setAuthHeader(title, subtitle) {
 
 function showView(viewName) {
   document.querySelectorAll('[data-auth-view]').forEach((el) => {
-    el.hidden = el.dataset.authView !== viewName;
+    const isActive = el.dataset.authView === viewName;
+    el.style.display = isActive ? '' : 'none';
+    el.hidden = !isActive;
   });
 
   setFeedback('', 'neutral');
@@ -287,6 +289,13 @@ function bindEvents() {
 
 function initOwnerLogin() {
   bindEvents();
+
+  document.querySelectorAll('[data-auth-view]').forEach((el) => {
+    if (el.dataset.authView !== 'login') {
+      el.style.display = 'none';
+      el.hidden = true;
+    }
+  });
 
   if (isResetPasswordRoute()) {
     if (!getResetTokenFromUrl()) {
