@@ -3,7 +3,11 @@ import { renderClientRegister, initClientRegisterPage } from './modules/cadastro
 import { renderClientHome, initClientHomePage } from './modules/home.js';
 import { renderClientForgotPassword, initClientForgotPasswordPage } from './modules/recuperar-senha.js';
 import { renderClientNovaSenha, initClientNovaSenhaPage } from './modules/nova-senha.js';
-import { getClientProfile, logoutClient } from '../services/client-auth.js';
+import {
+  getClientProfile,
+  getClientFlash,
+  logoutClient,
+} from '../services/client-auth.js';
 import { renderClientAgendar, initClientAgendarPage } from './modules/agendar.js';
 import { renderClientAgendamentos, initClientAgendamentosPage } from './modules/agendamentos.js';
 import { renderClientPlanos, initClientPlanosPage } from './modules/planos.js';
@@ -18,8 +22,33 @@ const CLIENT_BASE = '/client';
 
 function getActiveBarbershopName(profile) {
   const shops = Array.isArray(profile?.barbershops) ? profile.barbershops : [];
-  const preferred = shops.find((item) => item?.is_active || item?.is_selected) || shops[0];
+
+  const preferred =
+    shops.find((item) => item?.is_selected === true) ||
+    shops.find((item) => item?.is_active === true) ||
+    shops[0] ||
+    null;
+
   return preferred?.name || 'Nenhuma barbearia selecionada';
+}
+
+function showClientFlash(route) {
+  const flash = getClientFlash();
+
+  if (!flash?.message) return;
+
+  const feedback = document.getElementById('client-feedback');
+
+  if (!feedback) return;
+
+  feedback.textContent = flash.message;
+  feedback.className = `client-feedback ${
+    flash.variant === 'error'
+      ? 'is-error'
+      : flash.variant === 'success'
+        ? 'is-success'
+        : ''
+  }`;
 }
 
 const routes = {
@@ -130,10 +159,12 @@ function getClientRouteFromPath(pathname = window.location.pathname) {
 
   if (normalized.startsWith(`${CLIENT_BASE}/cadastro`)) return 'cadastro';
 
-  // Captura /client/:slug/nova-senha?token=... (link do e-mail de recuperação)
   if (normalized.match(/^\/client\/[^/]+\/nova-senha$/)) return 'nova-senha';
 
-  const entry = Object.entries(routes).find(([, config]) => normalizePath(config.path) === normalized);
+  const entry = Object.entries(routes).find(([, config]) => {
+    return normalizePath(config.path) === normalized;
+  });
+
   return entry?.[0] || 'login';
 }
 
@@ -172,14 +203,9 @@ function bindClientDashboardMenu() {
   overlay?.addEventListener('click', closeClientMenu);
 }
 
-// ─── Scroll hide topbar ────────────────────────────────────────────────────────
-// Esconde o topbar ao rolar para baixo, mostra ao rolar para cima.
-// Só ativa em mobile (≤ 980px). Limpa o listener ao trocar de página.
-
 let _scrollCleanup = null;
 
 function bindScrollHideTopbar() {
-  // Remove listener anterior se existir
   if (_scrollCleanup) {
     _scrollCleanup();
     _scrollCleanup = null;
@@ -195,9 +221,10 @@ function bindScrollHideTopbar() {
 
   const onScroll = () => {
     if (ticking) return;
+
     ticking = true;
+
     requestAnimationFrame(() => {
-      // Não esconde enquanto o menu lateral estiver aberto
       if (document.body.classList.contains('client-menu-open')) {
         topbar.classList.remove('topbar--hidden');
         lastScrollY = window.scrollY;
@@ -222,16 +249,18 @@ function bindScrollHideTopbar() {
 
   window.addEventListener('scroll', onScroll, { passive: true });
 
-  // Guarda cleanup para remover na próxima navegação
   _scrollCleanup = () => window.removeEventListener('scroll', onScroll);
 }
 
 function bindClientRouteTriggers(currentRoute) {
   document.querySelectorAll('[data-client-route]').forEach((element) => {
     const targetRoute = element.getAttribute('data-client-route');
+
     if (!targetRoute) return;
 
-    if (targetRoute === currentRoute) element.classList.add('active');
+    if (targetRoute === currentRoute) {
+      element.classList.add('active');
+    }
 
     const onNavigate = () => {
       closeClientMenu();
@@ -293,6 +322,7 @@ function renderClientPage(route) {
 
   queueMicrotask(() => {
     routeConfig.init?.(navigateClient);
+    showClientFlash(safeRoute);
     bindClientRouteTriggers(safeRoute);
     bindClientGlobalActions();
     bindClientDashboardMenu();
@@ -317,6 +347,7 @@ export function navigateClient(route, options = {}) {
 
 export function initClientRouter() {
   const initialRoute = getClientRouteFromPath(window.location.pathname);
+
   renderClientPage(initialRoute);
 
   window.addEventListener('popstate', () => {
