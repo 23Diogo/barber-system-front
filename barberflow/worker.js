@@ -77,6 +77,19 @@ export default {
     if (pathname === '/app/login' || pathname === '/app/login/') {
       return fetchAsset('/app/login/index.html');
     }
+    
+    // ── App do Barbeiro em breve
+    if (pathname === '/app-barbeiro' || pathname === '/app-barbeiro/') {
+      return Response.redirect(`${url.origin}/app-barbeiro/android/`, 302);
+    }
+    
+    if (pathname === '/app-barbeiro/android' || pathname === '/app-barbeiro/android/') {
+      return fetchAsset('/app-barbeiro/android/index.html');
+    }
+    
+    if (pathname === '/app-barbeiro/ios' || pathname === '/app-barbeiro/ios/') {
+      return fetchAsset('/app-barbeiro/ios/index.html');
+    }    
 
     // ── Arquivos estáticos (JS, CSS, imagens, fontes, manifests etc.)
     const assetResponse = await env.ASSETS.fetch(request);
