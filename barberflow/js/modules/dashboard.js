@@ -189,7 +189,12 @@ function getDashboardSummary(data) {
   const pending = toNumber(appointments.pending);
   const cancelled = toNumber(appointments.cancelled);
   const occupancy = toNumber(appointments.occupancy_pct);
-  const ticketAvg = completed > 0 ? grossIncome / completed : 0;
+  const ticketAvgFromApi = Number(revenue.avg_ticket);
+  const ticketAvg = Number.isFinite(ticketAvgFromApi)
+    ? ticketAvgFromApi
+    : completed > 0
+      ? grossIncome / completed
+      : 0;
   const lowStock = Array.isArray(data?.low_stock) ? data.low_stock : [];
   const todaySchedule = Array.isArray(data?.today_schedule) ? data.today_schedule : [];
   const barberRanking = Array.isArray(data?.barber_ranking) ? data.barber_ranking : [];
@@ -960,7 +965,6 @@ function getWidgetChartItems(widgetId, state = dashboardLastPayload || {}) {
   const summary = getDashboardSummary(dash);
   const snap = state.snap || buildOperationalSnapshot(state.subscriptions, state.todayApts, dash);
   const appointments = dash?.appointments || {};
-  const today = dash?.today || {};
 
   if (widgetId === 'widget-fin') {
     return [
@@ -973,9 +977,9 @@ function getWidgetChartItems(widgetId, state = dashboardLastPayload || {}) {
 
   if (widgetId === 'widget-agenda') {
     return [
-      chartItem('Confirmados', toNumber(appointments.confirmed) + toNumber(today.confirmed), 'purple'),
-      chartItem('Pendentes', toNumber(appointments.pending) + toNumber(today.pending), 'warning'),
-      chartItem('Concluídos', toNumber(appointments.completed) + toNumber(today.completed), 'success'),
+      chartItem('Confirmados', toNumber(appointments.confirmed), 'purple'),
+      chartItem('Pendentes', toNumber(appointments.pending), 'warning'),
+      chartItem('Concluídos', toNumber(appointments.completed), 'success'),
       chartItem('Ausentes', toNumber(appointments.no_show), 'danger'),
     ];
   }
@@ -1013,11 +1017,7 @@ function getTrendItems(widgetId, state = dashboardLastPayload || {}) {
   const base = getWidgetChartItems(widgetId, state);
   if (!base.length) return [];
 
-  return base.map((item, index) => ({
-    ...item,
-    label: item.label,
-    value: item.value + index,
-  }));
+  return base;
 }
 
 function chartToneColor(tone) {
@@ -1141,13 +1141,59 @@ function renderChartTrend(items) {
   `;
 }
 
+function getWidgetChartTotal(widgetId, chartType, items, state = dashboardLastPayload || {}) {
+  const dash = state.dashData || {};
+  const summary = getDashboardSummary(dash);
+  const snap = state.snap || buildOperationalSnapshot(state.subscriptions, state.todayApts, dash);
+  const appointments = dash?.appointments || {};
+  const reviews = Array.isArray(state.reviews) ? state.reviews : [];
+
+  if (widgetId === 'widget-fin') {
+    if (chartType === 'trend' && items.length) {
+      return formatCompactCurrency(items[items.length - 1].value);
+    }
+
+    return formatCompactCurrency(summary.grossIncome);
+  }
+
+  if (widgetId === 'widget-agenda') {
+    return String(toNumber(appointments.total));
+  }
+
+  if (widgetId === 'widget-recorrencia') {
+    return formatCompactCurrencyFromCents(snap.revCents);
+  }
+
+  if (widgetId === 'widget-alertas') {
+    return String(
+      snap.overdueCount +
+      snap.failedCount +
+      snap.criticalStockCount +
+      snap.pastDueCount +
+      snap.dueTodayCount +
+      snap.lowStockCount +
+      snap.agendaPending
+    );
+  }
+
+  if (widgetId === 'widget-aval') {
+    return String(reviews.length);
+  }
+
+  if (widgetId === 'widget-servicos') {
+    return String(items.reduce((sum, item) => sum + toNumber(item.value), 0));
+  }
+
+  return String(items.reduce((sum, item) => sum + toNumber(item.value), 0));
+}
+
 function renderWidgetChart(widgetId, chartType, state = dashboardLastPayload || {}) {
   const meta = DASHBOARD_WIDGETS[widgetId] || {};
   const items = chartType === 'trend'
     ? getTrendItems(widgetId, state)
     : getWidgetChartItems(widgetId, state);
 
-  const total = items.reduce((sum, item) => sum + toNumber(item.value), 0);
+  const total = getWidgetChartTotal(widgetId, chartType, items, state);
   const title = meta.label || 'Widget';
   const subtitle = chartType === 'pie'
     ? 'Distribuição dos indicadores'
