@@ -35,12 +35,23 @@ const financeiroState = {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const PAYMENT_METHODS = {
-  pix:        { label: 'Pix',          color: '#00e676', icon: '⚡' },
-  dinheiro:   { label: 'Dinheiro',     color: '#ffd700', icon: '💵' },
-  debito:     { label: 'Débito',       color: '#4fc3f7', icon: '💳' },
-  credito:    { label: 'Crédito',      color: '#9c6fff', icon: '💎' },
-  pix_cartao: { label: 'Pix+Cartão',  color: '#f97316', icon: '🔀' },
-  cortesia:   { label: 'Cortesia',     color: '#5a6888', icon: '🎁' },
+  pix:            { label: 'Pix',           color: '#00e676', icon: '⚡' },
+  dinheiro:       { label: 'Dinheiro',      color: '#ffd700', icon: '💵' },
+  cash:           { label: 'Dinheiro',      color: '#ffd700', icon: '💵', canonical: 'dinheiro', selectable: false },
+  money:          { label: 'Dinheiro',      color: '#ffd700', icon: '💵', canonical: 'dinheiro', selectable: false },
+  debito:         { label: 'Débito',        color: '#4fc3f7', icon: '💳' },
+  debit_card:     { label: 'Débito',        color: '#4fc3f7', icon: '💳', canonical: 'debito', selectable: false },
+  cartao_debito:  { label: 'Débito',        color: '#4fc3f7', icon: '💳', canonical: 'debito', selectable: false },
+  credito:        { label: 'Crédito',       color: '#9c6fff', icon: '💎' },
+  credit_card:    { label: 'Crédito',       color: '#9c6fff', icon: '💎', canonical: 'credito', selectable: false },
+  cartao_credito: { label: 'Crédito',       color: '#9c6fff', icon: '💎', canonical: 'credito', selectable: false },
+  pix_cartao:     { label: 'Pix + Cartão',  color: '#f97316', icon: '🔀' },
+  transferencia:  { label: 'Transferência', color: '#4fc3f7', icon: '🏦' },
+  transfer:       { label: 'Transferência', color: '#4fc3f7', icon: '🏦', canonical: 'transferencia', selectable: false },
+  bank_transfer:  { label: 'Transferência', color: '#4fc3f7', icon: '🏦', canonical: 'transferencia', selectable: false },
+  cortesia:       { label: 'Cortesia',      color: '#5a6888', icon: '🎁' },
+  outro:          { label: 'Outro',         color: '#8ea1c7', icon: '•' },
+  other:          { label: 'Outro',         color: '#8ea1c7', icon: '•', canonical: 'outro', selectable: false },
 };
 
 const MOVEMENT_TYPES = {
@@ -98,6 +109,50 @@ const setFeedback = (id, msg, variant = 'neutral') => {
 const fmtCents = (v) => fmt(Number(v || 0) / 100);
 
 const centsToAmount = (v) => Number(v || 0) / 100;
+
+const normalizePaymentMethodKey = (value) => {
+  const key = String(value || '').trim().toLowerCase();
+  return PAYMENT_METHODS[key]?.canonical || key;
+};
+
+const getPaymentMethodMeta = (value) => {
+  const key = String(value || '').trim().toLowerCase();
+  const canonical = normalizePaymentMethodKey(key);
+  const meta = PAYMENT_METHODS[key] || PAYMENT_METHODS[canonical];
+
+  if (meta) {
+    return {
+      ...meta,
+      key: canonical,
+      rawKey: key,
+    };
+  }
+
+  return {
+    key: canonical || 'outro',
+    rawKey: key,
+    label: 'Outro',
+    color: '#8ea1c7',
+    icon: '•',
+  };
+};
+
+const getPaymentMethodOptions = () =>
+  Object.entries(PAYMENT_METHODS)
+    .filter(([, meta]) => meta.selectable !== false)
+    .map(([key, meta]) => ({ key, ...meta }));
+
+const groupPaymentMethodAmounts = (byMethod = {}) => {
+  const grouped = {};
+
+  Object.entries(byMethod || {}).forEach(([method, amount]) => {
+    const key = normalizePaymentMethodKey(method) || 'outro';
+    grouped[key] = (grouped[key] || 0) + Number(amount || 0);
+  });
+
+  return grouped;
+};
+
 
 const getMonthRangeFromInput = (value) => {
   const raw = String(value || '').trim();
@@ -193,7 +248,10 @@ const getTransactionCockpit = () => {
   const byCategory = {};
 
   for (const t of transactions) {
-    if (t.payment_method) byMethod[t.payment_method] = (byMethod[t.payment_method] || 0) + Number(t.amount || 0);
+    if (t.payment_method) {
+      const methodKey = normalizePaymentMethodKey(t.payment_method) || 'outro';
+      byMethod[methodKey] = (byMethod[methodKey] || 0) + Number(t.amount || 0);
+    }
     if (t.category) byCategory[t.category] = (byCategory[t.category] || 0) + Number(t.amount || 0);
   }
 
@@ -468,14 +526,17 @@ function renderCashHero() {
   const totalOut = (summary?.totalExpense ?? 0) + (summary?.totalWithdrawal ?? 0);
   const opening = summary?.openingBalance ?? 0;
 
-  const byMethod = summary?.byMethod || {};
+  const byMethod = groupPaymentMethodAmounts(summary?.byMethod || {});
   const methodSegments = Object.entries(byMethod)
     .filter(([, v]) => Number(v) > 0)
-    .map(([key, value]) => ({
-      label: PAYMENT_METHODS[key]?.label || key,
-      value: Number(value),
-      color: PAYMENT_METHODS[key]?.color || '#4fc3f7',
-    }))
+    .map(([key, value]) => {
+      const meta = getPaymentMethodMeta(key);
+      return {
+        label: meta.label,
+        value: Number(value),
+        color: meta.color || '#4fc3f7',
+      };
+    })
     .sort((a, b) => b.value - a.value);
 
   const donut = renderDonutChart(methodSegments, 120, 16);
@@ -612,7 +673,7 @@ function renderMovementsList() {
 
   const rows = movements.map((m) => {
     const meta = MOVEMENT_TYPES[m.type] || MOVEMENT_TYPES.income;
-    const pmeta = m.payment_method ? (PAYMENT_METHODS[m.payment_method] || {}) : {};
+    const pmeta = m.payment_method ? getPaymentMethodMeta(m.payment_method) : {};
     const isPositive = meta.sign > 0;
 
     return `
@@ -943,7 +1004,7 @@ function renderBillsSection() {
 function renderTransactionRow(t) {
   const isIncome = t.type === 'income';
   const color    = isIncome ? '#00e676' : '#ff1744';
-  const pm       = PAYMENT_METHODS[t.payment_method];
+  const pm       = t.payment_method ? getPaymentMethodMeta(t.payment_method) : null;
   return `
     <button type="button" class="finance-row-button"
       data-entry-id="${esc(t.id)}" data-entry-section="transactions">
@@ -992,7 +1053,7 @@ function renderTransactionsSection() {
       ${methodRows.length ? `
         <div class="transactions-v2-methods">
           ${methodRows.map(([key, value]) => {
-            const meta = PAYMENT_METHODS[key] || { label: key, icon: '•', color: '#4fc3f7' };
+            const meta = getPaymentMethodMeta(key);
             return `<span style="--accent:${meta.color}">${meta.icon} ${esc(meta.label)} <b>${fmtCompact(value)}</b></span>`;
           }).join('')}
         </div>` : ''}
@@ -1607,8 +1668,8 @@ function renderTransactionForm() {
           <div>
             <div class="color-section-label">Forma de pagamento</div>
             <select class="modal-input" name="payment_method">
-              ${Object.entries(PAYMENT_METHODS).map(([k,v]) =>
-                `<option value="${esc(k)}">${esc(v.icon)} ${esc(v.label)}</option>`).join('')}
+              ${getPaymentMethodOptions().map(({ key, icon, label }) =>
+                `<option value="${esc(key)}">${esc(icon)} ${esc(label)}</option>`).join('')}
             </select>
           </div>
           <div style="grid-column:1/-1;">
@@ -1741,8 +1802,8 @@ function renderMovementForm(type) {
           <div>
             <div class="color-section-label">Forma de pagamento</div>
             <select class="modal-input" name="payment_method">
-              ${Object.entries(PAYMENT_METHODS).map(([k,v]) =>
-                `<option value="${esc(k)}">${esc(v.icon)} ${esc(v.label)}</option>`).join('')}
+              ${getPaymentMethodOptions().map(({ key, icon, label }) =>
+                `<option value="${esc(key)}">${esc(icon)} ${esc(label)}</option>`).join('')}
             </select>
           </div>` : ''}
         <div>
