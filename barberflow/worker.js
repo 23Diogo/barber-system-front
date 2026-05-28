@@ -10,7 +10,7 @@ export default {
 
     // ── Raiz pública → página institucional para Meta e visitantes
     if (pathname === '/') {
-      return Response.redirect(`${url.origin}/institucional/`, 302);
+       return fetchAsset('/institucional/index.html');
     }
 
     // ── /institucional → normaliza para /institucional/
