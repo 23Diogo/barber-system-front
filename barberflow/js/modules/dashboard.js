@@ -215,44 +215,172 @@ function getDashboardSummary(data) {
   };
 }
 
+
+function centsToMoneyValue(cents) {
+  return toNumber(cents) / 100;
+}
+
+function getOwnerFinancialSummary(ownerMetrics, fallbackSummary = {}) {
+  const revenue = ownerMetrics?.revenue || {};
+  const results = ownerMetrics?.results || {};
+  const commissions = ownerMetrics?.commissions || {};
+  const expenses = ownerMetrics?.expenses || {};
+  const display = ownerMetrics?.display || {};
+
+  const grossRevenue = revenue.grossCents !== undefined
+    ? centsToMoneyValue(revenue.grossCents)
+    : toNumber(display.grossRevenue, toNumber(fallbackSummary.grossIncome));
+
+  const netRevenue = revenue.netCents !== undefined
+    ? centsToMoneyValue(revenue.netCents)
+    : toNumber(display.netRevenue, grossRevenue);
+
+  const managerialResult = results.managerialResultCents !== undefined
+    ? centsToMoneyValue(results.managerialResultCents)
+    : toNumber(display.managerialResult, toNumber(fallbackSummary.netProfit));
+
+  const forecastResult = results.forecastResultCents !== undefined
+    ? centsToMoneyValue(results.forecastResultCents)
+    : toNumber(display.forecastResult, managerialResult);
+
+  const availableAfterObligations = results.availableAfterObligationsCents !== undefined
+    ? centsToMoneyValue(results.availableAfterObligationsCents)
+    : toNumber(display.availableAfterObligations, forecastResult);
+
+  const commissionsGenerated = commissions.generatedCents !== undefined
+    ? centsToMoneyValue(commissions.generatedCents)
+    : toNumber(display.commissionsGenerated);
+
+  const commissionsPaid = commissions.paidCents !== undefined
+    ? centsToMoneyValue(commissions.paidCents)
+    : 0;
+
+  const commissionsPending = commissions.pendingCents !== undefined
+    ? centsToMoneyValue(commissions.pendingCents)
+    : toNumber(display.commissionsPending);
+
+  const expensesPaid = expenses.paidCents !== undefined
+    ? centsToMoneyValue(expenses.paidCents)
+    : toNumber(display.expensesPaid, toNumber(fallbackSummary.totalExpenses));
+
+  const billsOpen = expenses.openCents !== undefined
+    ? centsToMoneyValue(expenses.openCents)
+    : toNumber(display.billsOpen);
+
+  const billsOverdue = expenses.overdueCents !== undefined
+    ? centsToMoneyValue(expenses.overdueCents)
+    : toNumber(display.billsOverdue);
+
+  const cashResult = results.cashResultCents !== undefined
+    ? centsToMoneyValue(results.cashResultCents)
+    : toNumber(display.cashResult);
+
+  const avgTicket = revenue.avgTicketCents !== undefined
+    ? centsToMoneyValue(revenue.avgTicketCents)
+    : toNumber(display.avgTicket, toNumber(fallbackSummary.ticketAvg));
+
+  const ordersCount = toNumber(revenue.ordersCount, toNumber(fallbackSummary.completed));
+  const marginPct = toNumber(results.grossMarginPct);
+
+  return {
+    grossRevenue,
+    netRevenue,
+    managerialResult,
+    forecastResult,
+    availableAfterObligations,
+    commissionsGenerated,
+    commissionsPaid,
+    commissionsPending,
+    expensesPaid,
+    billsOpen,
+    billsOverdue,
+    cashResult,
+    avgTicket,
+    ordersCount,
+    marginPct,
+    hasOwnerMetrics: Boolean(ownerMetrics),
+  };
+}
+
 // ─── Widget: Financeiro ───────────────────────────────────────────────────────
 
-function renderFinWidget(data) {
+function renderFinWidget(data, ownerMetrics) {
   const summary = getDashboardSummary(data);
-  const maxVal = Math.max(summary.grossIncome, summary.totalExpenses, Math.abs(summary.netProfit), 1);
-  const healthTone = summary.netProfit < 0 ? 'danger' : summary.grossIncome > 0 ? 'success' : 'info';
-  const healthText = summary.grossIncome > 0
-    ? `${summary.completed} finalizados · ticket ${formatCompactCurrency(summary.ticketAvg)}`
+  const financial = getOwnerFinancialSummary(ownerMetrics, summary);
+
+  const maxVal = Math.max(
+    financial.grossRevenue,
+    financial.commissionsGenerated,
+    Math.abs(financial.managerialResult),
+    Math.abs(financial.cashResult),
+    1
+  );
+
+  const resultTone = financial.managerialResult < 0 ? 'danger' : financial.grossRevenue > 0 ? 'success' : 'muted';
+  const healthTone = financial.managerialResult < 0 ? 'danger' : financial.grossRevenue > 0 ? 'success' : 'info';
+  const healthText = financial.grossRevenue > 0
+    ? `${financial.ordersCount} comanda${financial.ordersCount === 1 ? '' : 's'} · ticket ${formatCompactCurrency(financial.avgTicket)}`
     : 'Aguardando primeiras movimentações';
 
   return `
     <div class="widget-hero-line">
       <div>
-        <div class="ac-value">${escapeHtml(formatCompactCurrency(summary.grossIncome))}</div>
+        <div class="ac-value">${escapeHtml(formatCompactCurrency(financial.grossRevenue))}</div>
         <div class="ac-sub ac-sub--${healthTone}">${escapeHtml(healthText)}</div>
       </div>
       <div class="widget-status-pill is-${healthTone}">
-        ${summary.netProfit < 0 ? 'Atenção' : summary.grossIncome > 0 ? 'Saudável' : 'Hoje'}
+        ${financial.managerialResult < 0 ? 'Atenção' : financial.grossRevenue > 0 ? 'Gerencial' : 'Mês'}
       </div>
     </div>
 
     <div class="dashboard-widget-grid dashboard-widget-grid--compact">
-      ${statCard('Receita', formatCompactCurrency(summary.grossIncome), 'info')}
-      ${statCard('Lucro', formatCompactCurrency(summary.netProfit), summary.netProfit < 0 ? 'danger' : 'success')}
-      ${statCard('Despesas', formatCompactCurrency(summary.totalExpenses), summary.totalExpenses > 0 ? 'danger' : 'muted')}
-      ${statCard('Ocupação', formatPercent(summary.occupancy), summary.occupancy >= 70 ? 'success' : summary.occupancy > 0 ? 'warning' : 'muted')}
+      ${statCard('Receita', formatCompactCurrency(financial.grossRevenue), 'info')}
+      ${statCard('Resultado', formatCompactCurrency(financial.managerialResult), resultTone, 'após comissões')}
+      ${statCard('Comissões', formatCompactCurrency(financial.commissionsGenerated), financial.commissionsGenerated > 0 ? 'warning' : 'muted')}
+      ${statCard('Ticket médio', formatCompactCurrency(financial.avgTicket), 'purple')}
     </div>
 
-    <div class="dashboard-widget-section-title">Leitura operacional</div>
+    <div class="dashboard-widget-section-title">Leitura gerencial</div>
     ${[
-      { label: 'Receita bruta', value: summary.grossIncome, max: maxVal, display: formatCompactCurrency(summary.grossIncome), tone: 'info', fill: 'linear-gradient(90deg,#4fc3f7,#38bdf8)' },
-      { label: 'Lucro líquido', value: Math.max(summary.netProfit, 0), max: maxVal, display: formatCompactCurrency(summary.netProfit), tone: summary.netProfit < 0 ? 'danger' : 'success', fill: summary.netProfit < 0 ? 'linear-gradient(90deg,#ff6b7a,#ff1744)' : 'linear-gradient(90deg,#00e676,#10b981)' },
-      { label: 'Atendimentos', value: summary.completed, max: Math.max(summary.total, 1), display: `${summary.completed}/${summary.total}`, tone: 'purple', fill: 'linear-gradient(90deg,#9c6fff,#7c3aed)' },
+      {
+        label: 'Receita recebida',
+        value: financial.grossRevenue,
+        max: maxVal,
+        display: formatCompactCurrency(financial.grossRevenue),
+        tone: 'info',
+        fill: 'linear-gradient(90deg,#4fc3f7,#38bdf8)',
+      },
+      {
+        label: 'Resultado gerencial',
+        value: Math.max(financial.managerialResult, 0),
+        max: maxVal,
+        display: formatCompactCurrency(financial.managerialResult),
+        tone: financial.managerialResult < 0 ? 'danger' : 'success',
+        fill: financial.managerialResult < 0
+          ? 'linear-gradient(90deg,#ff6b7a,#ff1744)'
+          : 'linear-gradient(90deg,#00e676,#10b981)',
+      },
+      {
+        label: 'Comissões do time',
+        value: financial.commissionsGenerated,
+        max: maxVal,
+        display: `${formatCompactCurrency(financial.commissionsGenerated)}${financial.commissionsPending > 0 ? ` · pend. ${formatCompactCurrency(financial.commissionsPending)}` : ''}`,
+        tone: financial.commissionsGenerated > 0 ? 'warning' : 'muted',
+        fill: 'linear-gradient(90deg,#f59e0b,#ffd166)',
+      },
+      {
+        label: 'Caixa realizado',
+        value: Math.max(financial.cashResult, 0),
+        max: maxVal,
+        display: formatCompactCurrency(financial.cashResult),
+        tone: financial.cashResult >= 0 ? 'purple' : 'danger',
+        fill: 'linear-gradient(90deg,#9c6fff,#7c3aed)',
+      },
     ].map(progressRow).join('')}
 
     <div class="widget-action-row">
       ${actionButton('Abrir financeiro', 'fin', 'info')}
-      ${actionButton('Ver agenda', 'agenda', 'purple')}
+      ${actionButton('Ver comissões', 'fin', 'warning')}
     </div>
   `;
 }
@@ -905,7 +1033,7 @@ function renderDashboardWidgetContent(widgetId) {
   }
 
   switch (widgetId) {
-    case 'widget-fin': return renderFinWidget(state.dashData);
+    case 'widget-fin': return renderFinWidget(state.dashData, state.ownerMetrics);
     case 'widget-agenda': return renderAgendaWidget(state.dashData);
     case 'widget-recorrencia': return renderRecorrencia(state.snap || buildOperationalSnapshot(state.subscriptions, state.todayApts, state.dashData));
     case 'widget-alertas': return renderAlertas(state.snap || buildOperationalSnapshot(state.subscriptions, state.todayApts, state.dashData));
@@ -967,11 +1095,13 @@ function getWidgetChartItems(widgetId, state = dashboardLastPayload || {}) {
   const appointments = dash?.appointments || {};
 
   if (widgetId === 'widget-fin') {
+    const financial = getOwnerFinancialSummary(state.ownerMetrics, summary);
+
     return [
-      chartItem('Receita', summary.grossIncome, 'info'),
-      chartItem('Lucro', Math.max(summary.netProfit, 0), 'success'),
-      chartItem('Despesas', summary.totalExpenses, 'danger'),
-      chartItem('Ticket', summary.ticketAvg, 'purple'),
+      chartItem('Receita', financial.grossRevenue, 'info'),
+      chartItem('Resultado', Math.max(financial.managerialResult, 0), financial.managerialResult < 0 ? 'danger' : 'success'),
+      chartItem('Comissões', financial.commissionsGenerated, financial.commissionsGenerated > 0 ? 'warning' : 'muted'),
+      chartItem('Ticket', financial.avgTicket, 'purple'),
     ];
   }
 
@@ -1153,7 +1283,8 @@ function getWidgetChartTotal(widgetId, chartType, items, state = dashboardLastPa
       return formatCompactCurrency(items[items.length - 1].value);
     }
 
-    return formatCompactCurrency(summary.grossIncome);
+    const financial = getOwnerFinancialSummary(state.ownerMetrics, summary);
+    return formatCompactCurrency(financial.grossRevenue);
   }
 
   if (widgetId === 'widget-agenda') {
@@ -1422,10 +1553,11 @@ async function refreshDashboardWidgets() {
   try {
     const today = formatDateForApi(new Date());
 
-    const [subscriptions, todayApts, dashData, reviews, revenueChart] = await Promise.all([
+    const [subscriptions, todayApts, dashData, ownerMetrics, reviews, revenueChart] = await Promise.all([
       getSubscriptions().catch(() => []),
       getAppointmentsByDate(today).catch(() => []),
       apiFetch('/api/dashboard').catch(() => null),
+      apiFetch('/api/financial/owner-metrics?period=month').catch(() => null),
       apiFetch('/api/reviews').catch(() => []),
       apiFetch('/api/dashboard/revenue').catch(() => []),
     ]);
@@ -1436,6 +1568,7 @@ async function refreshDashboardWidgets() {
       subscriptions,
       todayApts,
       dashData,
+      ownerMetrics,
       reviews,
       revenueChart,
       snap,
