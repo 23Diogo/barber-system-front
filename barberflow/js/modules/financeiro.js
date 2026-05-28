@@ -1,5 +1,4 @@
-// BBarberFlow Financeiro V2 Premium - Owner Cockpit
-import { apiFetch } from '../services/api.js';
+\import { apiFetch } from '../services/api.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // STATE
@@ -9,6 +8,7 @@ const financeiroState = {
   bills:        [],
   transactions: [],
   commissions:  [],
+  ownerMetrics: null,
   cash:         { register: null, movements: [], summary: null },
   teamCommissions: {
     summary: null,
@@ -65,10 +65,12 @@ const fmt = (v) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(v || 0));
 
 const fmtCompact = (v) => {
-  const n = Math.abs(Number(v || 0));
-  return n >= 1_000_000 ? `R$${(n / 1_000_000).toFixed(1)}M`
-       : n >= 1_000     ? `R$${(n / 1_000).toFixed(1)}k`
-       : fmt(n);
+  const raw = Number(v || 0);
+  const n = Math.abs(raw);
+  const sign = raw < 0 ? '-' : '';
+  return n >= 1_000_000 ? `${sign}R$${(n / 1_000_000).toFixed(1)}M`
+       : n >= 1_000     ? `${sign}R$${(n / 1_000).toFixed(1)}k`
+       : fmt(raw);
 };
 
 const fmtDate = (v) => {
@@ -215,6 +217,93 @@ const getFinanceHealth = (metrics) => {
   if (coverage >= 80) return { label: 'Atenção', color: '#f97316', icon: '🟠', coverage };
   return { label: 'Pressão no caixa', color: '#ff5c74', icon: '🔴', coverage };
 };
+
+const num = (value, fallback = 0) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+function getOwnerFinancialSummary(ownerMetrics, fallback = {}) {
+  const revenue = ownerMetrics?.revenue || {};
+  const results = ownerMetrics?.results || {};
+  const commissions = ownerMetrics?.commissions || {};
+  const expenses = ownerMetrics?.expenses || {};
+  const display = ownerMetrics?.display || {};
+
+  const grossRevenue = revenue.grossCents !== undefined
+    ? centsToAmount(revenue.grossCents)
+    : num(display.grossRevenue, num(fallback.revenue));
+
+  const netRevenue = revenue.netCents !== undefined
+    ? centsToAmount(revenue.netCents)
+    : num(display.netRevenue, grossRevenue);
+
+  const managerialResult = results.managerialResultCents !== undefined
+    ? centsToAmount(results.managerialResultCents)
+    : num(display.managerialResult, num(fallback.profit));
+
+  const forecastResult = results.forecastResultCents !== undefined
+    ? centsToAmount(results.forecastResultCents)
+    : num(display.forecastResult, num(fallback.projectedProfit, managerialResult));
+
+  const availableAfterObligations = results.availableAfterObligationsCents !== undefined
+    ? centsToAmount(results.availableAfterObligationsCents)
+    : num(display.availableAfterObligations, forecastResult);
+
+  const commissionsGenerated = commissions.generatedCents !== undefined
+    ? centsToAmount(commissions.generatedCents)
+    : num(display.commissionsGenerated, num(fallback.commissions));
+
+  const commissionsPaid = commissions.paidCents !== undefined
+    ? centsToAmount(commissions.paidCents)
+    : num(display.commissionsPaid, 0);
+
+  const commissionsPending = commissions.pendingCents !== undefined
+    ? centsToAmount(commissions.pendingCents)
+    : num(display.commissionsPending, Math.max(commissionsGenerated - commissionsPaid, 0));
+
+  const expensesPaid = expenses.paidCents !== undefined
+    ? centsToAmount(expenses.paidCents)
+    : num(display.expensesPaid, num(fallback.expenses));
+
+  const billsOpen = expenses.openCents !== undefined
+    ? centsToAmount(expenses.openCents)
+    : num(display.billsOpen, num(fallback.openBillsAmount));
+
+  const billsOverdue = expenses.overdueCents !== undefined
+    ? centsToAmount(expenses.overdueCents)
+    : num(display.billsOverdue, num(fallback.overdueBillsAmount));
+
+  const cashResult = results.cashResultCents !== undefined
+    ? centsToAmount(results.cashResultCents)
+    : num(display.cashResult, num(fallback.cashResult, num(fallback.profit)));
+
+  const avgTicket = revenue.avgTicketCents !== undefined
+    ? centsToAmount(revenue.avgTicketCents)
+    : num(display.avgTicket, 0);
+
+  const ordersCount = num(revenue.ordersCount, num(fallback.transactionsCount));
+  const marginPct = num(results.grossMarginPct, num(fallback.margin));
+
+  return {
+    grossRevenue,
+    netRevenue,
+    managerialResult,
+    forecastResult,
+    availableAfterObligations,
+    commissionsGenerated,
+    commissionsPaid,
+    commissionsPending,
+    expensesPaid,
+    billsOpen,
+    billsOverdue,
+    cashResult,
+    avgTicket,
+    ordersCount,
+    marginPct,
+    hasOwnerMetrics: Boolean(ownerMetrics),
+  };
+}
 
 
 const getPreviousMonthRange = (periodStart, offset = 1) => {
@@ -596,12 +685,12 @@ function getMetrics() {
     financeiroState.teamCommissions.summary?.totals?.totalGeneratedCents || 0
   );
 
-  const commissions = Math.max(legacyCommissions, teamCommissionGenerated);
-  const realizedProfit = tx.incomeAmount - tx.expenseAmount - commissions;
-  const projectedProfit = tx.incomeAmount - tx.expenseAmount - bills.openAmount - commissions;
+  const localCommissions = Math.max(legacyCommissions, teamCommissionGenerated);
+  const realizedProfit = tx.incomeAmount - tx.expenseAmount - localCommissions;
+  const projectedProfit = tx.incomeAmount - tx.expenseAmount - bills.openAmount - localCommissions;
   const margin = tx.incomeAmount > 0 ? Math.round((realizedProfit / tx.incomeAmount) * 100) : 0;
 
-  return {
+  const localMetrics = {
     revenue: tx.incomeAmount,
     expenses: tx.expenseAmount,
     openBillsAmount: bills.openAmount,
@@ -614,29 +703,90 @@ function getMetrics() {
     paidBillsCount: bills.paid.length,
     profit: realizedProfit,
     projectedProfit,
-    commissions,
+    availableAfterObligations: projectedProfit,
+    cashResult: realizedProfit,
+    commissions: localCommissions,
+    commissionsPaid: 0,
+    commissionsPending: localCommissions,
     margin,
     transactionsCount: tx.total,
+    avgTicket: 0,
+    hasOwnerMetrics: false,
+  };
+
+  const owner = getOwnerFinancialSummary(financeiroState.ownerMetrics, localMetrics);
+
+  if (!owner.hasOwnerMetrics) return localMetrics;
+
+  return {
+    ...localMetrics,
+    revenue: owner.grossRevenue,
+    netRevenue: owner.netRevenue,
+    expenses: owner.expensesPaid,
+    openBillsAmount: owner.billsOpen,
+    overdueBillsAmount: owner.billsOverdue,
+    profit: owner.managerialResult,
+    projectedProfit: owner.forecastResult,
+    availableAfterObligations: owner.availableAfterObligations,
+    cashResult: owner.cashResult,
+    commissions: owner.commissionsGenerated,
+    commissionsPaid: owner.commissionsPaid,
+    commissionsPending: owner.commissionsPending,
+    margin: owner.marginPct,
+    avgTicket: owner.avgTicket,
+    ordersCount: owner.ordersCount,
+    hasOwnerMetrics: true,
   };
 }
-
 
 
 function renderMetricsBar() {
   const m = getMetrics();
   const health = getFinanceHealth(m);
-  const totalObligations = m.expenses + m.openBillsAmount + m.commissions;
-  const maxM = Math.max(m.revenue, totalObligations, 1);
+  const totalObligations = m.expenses + m.openBillsAmount + Math.max(m.commissionsPending ?? m.commissions, 0);
+  const maxM = Math.max(m.revenue, totalObligations, Math.abs(m.profit), Math.abs(m.availableAfterObligations), 1);
   const revW = Math.round((m.revenue / maxM) * 100);
   const obligationsW = Math.round((totalObligations / maxM) * 100);
+  const resultW = Math.round((Math.abs(m.availableAfterObligations) / maxM) * 100);
   const monthLabel = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }).toUpperCase();
+  const sourceLabel = m.hasOwnerMetrics ? 'DADOS CONSOLIDADOS DO DONO' : 'MODO COMPATIBILIDADE';
 
   const cards = [
-    { label: 'Receita realizada', value: m.revenue, color: '#4fc3f7', sub: 'Entradas já registradas', icon: '↗' },
-    { label: 'Despesas pagas', value: m.expenses, color: '#ff5c74', sub: 'Já virou saída', icon: '↘' },
-    { label: 'Contas em aberto', value: m.openBillsAmount, color: '#f97316', sub: `${m.openBillsCount} pendente(s)`, icon: '⌁' },
-    { label: 'Comissões', value: m.commissions, color: '#ffd700', sub: 'Time, Clube e baixas', icon: '✦' },
-    { label: 'Resultado previsto', value: m.projectedProfit, color: m.projectedProfit >= 0 ? '#00e676' : '#ff5c74', sub: `Realizado ${fmtCompact(m.profit)}`, icon: '◇' },
+    {
+      label: 'Receita recebida',
+      value: m.revenue,
+      color: '#4fc3f7',
+      sub: m.ordersCount ? `${m.ordersCount} comanda(s) · ticket ${fmtCompact(m.avgTicket)}` : 'Entradas realizadas no mês',
+      icon: '↗',
+    },
+    {
+      label: 'Despesas pagas',
+      value: m.expenses,
+      color: '#ff5c74',
+      sub: 'Só o que já virou saída',
+      icon: '↘',
+    },
+    {
+      label: 'Comissões do time',
+      value: m.commissions,
+      color: '#ffd700',
+      sub: m.commissionsPending > 0 ? `Pendente ${fmtCompact(m.commissionsPending)}` : 'Time, Clube e baixas',
+      icon: '✦',
+    },
+    {
+      label: 'Contas em aberto',
+      value: m.openBillsAmount,
+      color: '#f97316',
+      sub: `${m.openBillsCount} pendente(s)${m.overdueBillsCount ? ` · ${m.overdueBillsCount} vencida(s)` : ''}`,
+      icon: '⌁',
+    },
+    {
+      label: 'Disponível gerencial',
+      value: m.availableAfterObligations,
+      color: m.availableAfterObligations >= 0 ? '#00e676' : '#ff5c74',
+      sub: `Resultado ${fmtCompact(m.profit)}`,
+      icon: '◇',
+    },
   ];
 
   return `
@@ -644,11 +794,12 @@ function renderMetricsBar() {
       <div class="finance-command-glow"></div>
       <div class="finance-command-head">
         <div>
-          <div class="finance-kicker">CENTRAL FINANCEIRA · ${esc(monthLabel)}</div>
+          <div class="finance-kicker">CENTRAL FINANCEIRA · ${esc(monthLabel)} · ${esc(sourceLabel)}</div>
           <h2>Dinheiro claro, decisão rápida.</h2>
           <p>
-            Separação limpa entre <strong>despesa paga</strong>, <strong>conta em aberto</strong>,
-            <strong>comissão do time</strong> e <strong>resultado previsto</strong>. Sem número fantasma no balcão.
+            A mesma leitura gerencial do dashboard: <strong>receita recebida</strong>,
+            <strong>despesa paga</strong>, <strong>comissão do time</strong>,
+            <strong>contas em aberto</strong> e <strong>disponível gerencial</strong>.
           </p>
         </div>
         <div class="finance-health-pill" style="--health:${health.color}">
@@ -671,7 +822,7 @@ function renderMetricsBar() {
 
       <div class="finance-flow-board">
         <div class="finance-flow-line">
-          <span>Receita</span>
+          <span>Receita recebida</span>
           <div><i style="width:${revW}%"></i></div>
           <b>${fmtCompact(m.revenue)}</b>
         </div>
@@ -680,12 +831,17 @@ function renderMetricsBar() {
           <div><i style="width:${obligationsW}%"></i></div>
           <b>${fmtCompact(totalObligations)}</b>
         </div>
+        <div class="finance-flow-line is-result">
+          <span>Disponível gerencial</span>
+          <div><i style="width:${resultW}%"></i></div>
+          <b>${fmtCompact(m.availableAfterObligations)}</b>
+        </div>
       </div>
 
       <div class="finance-clarity-strip">
-        <span>🧾 Contas a pagar abertas não somem: entram em <b>Contas em aberto</b>.</span>
-        <span>✅ Só vira <b>Despesa paga</b> quando for baixada.</span>
-        <span>💈 Comissão aparece como obrigação do time.</span>
+        <span>🧾 Aberto continua previsão: entra em <b>Contas em aberto</b>.</span>
+        <span>✅ Pago vira <b>Despesa paga</b>.</span>
+        <span>💈 Comissão fica visível como obrigação do time.</span>
       </div>
     </section>
   `;
@@ -1678,18 +1834,20 @@ async function loadFinanceiroData() {
 
     const teamQuery = buildTeamQuery();
 
-    const [bills, transactions, commissions, cashData, teamSummary, teamSources] = await Promise.all([
+    const [bills, transactions, commissions, cashData, teamSummary, teamSources, ownerMetrics] = await Promise.all([
       apiFetch('/api/financial/bills'),
       apiFetch(`/api/financial/transactions?start=${start}&end=${end}`),
       apiFetch('/api/financial/commissions'),
       apiFetch(`/api/financial/cash?date=${financeiroState.cashDate}`),
       safeApiFetch(`/api/team-commissions/summary?${teamQuery}`, { items: [], totals: {} }),
       safeApiFetch(`/api/team-commissions/sources?${teamQuery}`, { items: [] }),
+      safeApiFetch('/api/financial/owner-metrics?period=month', null),
     ]);
 
     financeiroState.bills         = Array.isArray(bills)        ? bills        : [];
     financeiroState.transactions  = Array.isArray(transactions) ? transactions : [];
     financeiroState.commissions   = Array.isArray(commissions)  ? commissions  : [];
+    financeiroState.ownerMetrics  = ownerMetrics && typeof ownerMetrics === 'object' ? ownerMetrics : null;
     financeiroState.cash          = cashData && typeof cashData === 'object'
       ? { register: cashData.register || null, movements: cashData.movements || [], summary: cashData.summary || null }
       : { register: null, movements: [], summary: null };
