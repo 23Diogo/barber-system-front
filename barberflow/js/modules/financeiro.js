@@ -1,4 +1,4 @@
-\import { apiFetch } from '../services/api.js';
+import { apiFetch } from '../services/api.js';
 
 // ══════════════════════════════════════════════════════════════════════════════
 // STATE
