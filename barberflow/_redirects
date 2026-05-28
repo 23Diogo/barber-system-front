@@ -1,8 +1,0 @@
-/ /institucional/ 302
-/institucional /institucional/ 301
-
-/app /index.html 200
-/app/* /index.html 200
-
-/client /client.html 200
-/client/* /client.html 200
