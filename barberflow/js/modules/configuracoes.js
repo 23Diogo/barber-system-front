@@ -9,17 +9,20 @@ const configState = {
   overview: null,
   whatsappStatus: null,
   inviteStats: null,
+  platformLicense: null,
   settings: null,
   workingHours: null,
   activeTab: getInitialTab(),
   isLoading: false,
   isSaving: false,
   isConnectingMeta: false,
+  isLicenseActionLoading: false,
 };
 
 const TABS = [
   { id: 'overview', label: 'Comando', icon: '⚙️' },
   { id: 'business', label: 'Meu negócio', icon: '🏪' },
+  { id: 'billing', label: 'Assinatura', icon: '💳' },
   { id: 'agenda', label: 'Agenda', icon: '📅' },
   { id: 'whatsapp', label: 'WhatsApp', icon: '💬' },
   { id: 'notifications', label: 'Notificações', icon: '🔔' },
@@ -568,17 +571,19 @@ async function loadConfigData() {
   rerenderConfig();
 
   try {
-    const [me, overview, whatsappStatus, inviteStats] = await Promise.all([
+    const [me, overview, whatsappStatus, inviteStats, platformLicense] = await Promise.all([
       safeApi('/api/auth/me', null),
       safeApi('/api/barbershops/config/overview', null),
       safeApi('/api/whatsapp/status', null),
       safeApi('/api/barbershops/invites/stats', null),
+      safeApi('/api/platform-license/status', null),
     ]);
 
     configState.shop = me?.barbershop || me?.barbershops || overview?.shop || null;
     configState.overview = overview;
     configState.whatsappStatus = whatsappStatus;
     configState.inviteStats = inviteStats;
+    configState.platformLicense = platformLicense;
     configState.settings = configState.shop?.notification_settings || null;
     configState.workingHours = configState.shop?.working_hours || null;
   } finally {
@@ -843,6 +848,290 @@ async function runNotificationTest(endpoint, btn) {
     btn.disabled = false;
     setTimeout(() => { if (status) status.textContent = ''; }, 4000);
   }
+}
+
+
+// ─── Assinatura da plataforma ────────────────────────────────────────────────
+
+function formatMoney(value) {
+  const amount = Number(value || 0);
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number.isFinite(amount) ? amount : 0);
+}
+
+function formatDateTime(value) {
+  if (!value) return '—';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '—';
+  return date.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function getPlatformLicensePayload() {
+  return configState.platformLicense || {};
+}
+
+function getLicense() {
+  return getPlatformLicensePayload().license || {};
+}
+
+function getLicenseStatus() {
+  return String(getLicense()?.status || getPlatformLicensePayload()?.shop?.plan_status || 'suspended').toLowerCase();
+}
+
+function getLicenseStatusInfo(status = getLicenseStatus()) {
+  const map = {
+    active: { label: 'Ativa', tone: 'success', icon: '✓' },
+    trial: { label: 'Teste', tone: 'success', icon: '✓' },
+    past_due: { label: 'Pendente', tone: 'warning', icon: '!' },
+    suspended: { label: 'Suspensa', tone: 'danger', icon: '!' },
+    cancelled: { label: 'Cancelada', tone: 'danger', icon: '×' },
+    canceled: { label: 'Cancelada', tone: 'danger', icon: '×' },
+  };
+
+  return map[status] || { label: status || '—', tone: 'neutral', icon: '•' };
+}
+
+function getPaymentModeLabel(mode) {
+  const value = String(mode || '').toLowerCase();
+  if (value === 'card_recurring') return 'Cartão recorrente';
+  if (value === 'pix_manual') return 'Pix mensal manual';
+  return 'Não definido';
+}
+
+function getCheckoutUrl(payload) {
+  return payload?.paymentUrl || payload?.initPoint || payload?.init_point || payload?.sandboxInitPoint || payload?.sandbox_init_point || payload?.nextPaymentUrl || null;
+}
+
+async function reloadPlatformLicense() {
+  configState.platformLicense = await safeApi('/api/platform-license/status', configState.platformLicense);
+  rerenderConfig();
+}
+
+async function runPlatformLicenseAction(action, button) {
+  if (configState.isLicenseActionLoading) return;
+
+  const actions = {
+    card: {
+      endpoint: '/api/platform-license/card-subscription',
+      loading: 'Gerando assinatura...',
+      success: 'Link de assinatura criado. Redirecionando...',
+      redirect: true,
+    },
+    pix: {
+      endpoint: '/api/platform-license/pix-payment',
+      loading: 'Gerando Pix...',
+      success: 'Pix criado. Redirecionando...',
+      redirect: true,
+    },
+    changeCard: {
+      endpoint: '/api/platform-license/change-card',
+      loading: 'Gerando troca de cartão...',
+      success: 'Link para troca de cartão criado. Redirecionando...',
+      redirect: true,
+      confirm: 'Gerar uma nova assinatura para trocar o cartão? Após a confirmação do novo cartão, a assinatura antiga será substituída.',
+    },
+    cancel: {
+      endpoint: '/api/platform-license/cancel',
+      loading: 'Cancelando recorrência...',
+      success: 'Cancelamento solicitado com sucesso.',
+      confirm: 'Cancelar a recorrência da assinatura? O acesso poderá permanecer até o fim do período já pago.',
+      body: { keepAccessUntilPeriodEnd: true, reason: 'Cancelamento solicitado pelo dono no painel.' },
+    },
+    pause: {
+      endpoint: '/api/platform-license/pause',
+      loading: 'Pausando cobrança...',
+      success: 'Cobrança pausada com sucesso.',
+      confirm: 'Pausar a cobrança recorrente? O acesso poderá permanecer até o fim do período já pago.',
+      body: { reason: 'Pausa solicitada pelo dono no painel.' },
+    },
+    reactivate: {
+      endpoint: '/api/platform-license/reactivate',
+      loading: 'Reativando assinatura...',
+      success: 'Assinatura reativada com sucesso.',
+    },
+    refresh: {
+      refreshOnly: true,
+      loading: 'Atualizando...',
+      success: 'Status atualizado.',
+    },
+  };
+
+  const config = actions[action];
+  if (!config) return;
+
+  if (config.confirm && !window.confirm(config.confirm)) return;
+
+  configState.isLicenseActionLoading = true;
+  const originalText = button?.textContent || '';
+  if (button) {
+    button.disabled = true;
+    button.textContent = config.loading;
+  }
+
+  try {
+    let payload = null;
+
+    if (config.refreshOnly) {
+      await reloadPlatformLicense();
+      showToast(config.success, 'success');
+      return;
+    }
+
+    payload = await apiFetch(config.endpoint, {
+      method: 'POST',
+      body: JSON.stringify(config.body || {}),
+      timeoutMs: 30000,
+    });
+
+    const checkoutUrl = getCheckoutUrl(payload);
+
+    if (config.redirect) {
+      if (!checkoutUrl) throw new Error('Link de pagamento não retornado pela API.');
+      showToast(config.success, 'success');
+      window.location.href = checkoutUrl;
+      return;
+    }
+
+    showToast(config.success, 'success');
+    await reloadPlatformLicense();
+  } catch (error) {
+    const message = normalizeApiErrorMessage(error);
+    showToast(message, 'error');
+  } finally {
+    configState.isLicenseActionLoading = false;
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
+function renderBilling() {
+  const payload = getPlatformLicensePayload();
+  const license = getLicense();
+  const mp = payload.mercadoPagoSubscription || {};
+  const status = getLicenseStatus();
+  const statusInfo = getLicenseStatusInfo(status);
+  const nextPaymentUrl = payload.nextPaymentUrl || license.next_payment_url || license.mp_init_point || null;
+  const mpError = mp?.error || null;
+  const hasCardRecurring = Boolean(license.mp_subscription_id);
+  const hasPeriod = Boolean(license.current_period_end);
+
+  return renderSectionShell(`
+    <div class="cfg-layout cfg-billing-layout">
+      <main class="cfg-main">
+        <section class="cfg-card cfg-card--spotlight cfg-billing-hero">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Assinatura e cobrança</div>
+              <h2>Licença do BBarberFlow</h2>
+              <p>Gerencie a assinatura do dono com o SaaS. Este painel não interfere nos planos de corte dos clientes da barbearia.</p>
+            </div>
+            <span class="cfg-license-status cfg-license-status--${escapeHtml(statusInfo.tone)}">
+              ${escapeHtml(statusInfo.icon)} ${escapeHtml(statusInfo.label)}
+            </span>
+          </div>
+
+          <div class="cfg-billing-grid">
+            <div class="cfg-billing-stat">
+              <span>Status local</span>
+              <strong>${escapeHtml(statusInfo.label)}</strong>
+              <small>${escapeHtml(getPaymentModeLabel(license.payment_mode))}</small>
+            </div>
+            <div class="cfg-billing-stat">
+              <span>Valor</span>
+              <strong>${escapeHtml(formatMoney(license.amount || 0))}</strong>
+              <small>Mensalidade da plataforma</small>
+            </div>
+            <div class="cfg-billing-stat">
+              <span>Período atual</span>
+              <strong>${escapeHtml(hasPeriod ? formatDate(license.current_period_end) : '—')}</strong>
+              <small>Vencimento / tolerância: ${escapeHtml(String(license.grace_days ?? 5))} dias</small>
+            </div>
+          </div>
+        </section>
+
+        <section class="cfg-card">
+          <div class="cfg-card-head">
+            <div>
+              <div class="cfg-section-title">Ações do dono</div>
+              <h2>Formas de pagamento</h2>
+            </div>
+          </div>
+
+          <div class="cfg-billing-actions">
+            <button type="button" class="cfg-billing-action cfg-billing-action--primary" data-platform-license-action="card">
+              <span>💳</span>
+              <strong>Ativar cartão recorrente</strong>
+              <em>Renovação automática mensal pelo Mercado Pago.</em>
+            </button>
+
+            <button type="button" class="cfg-billing-action cfg-billing-action--success" data-platform-license-action="pix">
+              <span>⚡</span>
+              <strong>Gerar Pix mensal</strong>
+              <em>Pagamento manual. Renova após confirmação.</em>
+            </button>
+
+            <button type="button" class="cfg-billing-action" data-platform-license-action="changeCard" ${!hasCardRecurring ? 'disabled' : ''}>
+              <span>🔁</span>
+              <strong>Trocar cartão</strong>
+              <em>Cria uma nova assinatura para informar outro cartão.</em>
+            </button>
+
+            <button type="button" class="cfg-billing-action" data-platform-license-action="pause" ${!hasCardRecurring ? 'disabled' : ''}>
+              <span>⏸️</span>
+              <strong>Pausar cobrança</strong>
+              <em>Pausa a recorrência sem confundir com planos de clientes.</em>
+            </button>
+
+            <button type="button" class="cfg-billing-action cfg-billing-action--danger" data-platform-license-action="cancel" ${!hasCardRecurring ? 'disabled' : ''}>
+              <span>🛑</span>
+              <strong>Cancelar recorrência</strong>
+              <em>Cancela a assinatura da plataforma no Mercado Pago.</em>
+            </button>
+
+            <button type="button" class="cfg-billing-action" data-platform-license-action="reactivate" ${!hasCardRecurring ? 'disabled' : ''}>
+              <span>▶️</span>
+              <strong>Reativar assinatura</strong>
+              <em>Tenta reativar uma assinatura pausada.</em>
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <aside class="cfg-side">
+        <section class="cfg-card cfg-card--spotlight">
+          <div class="cfg-section-title">Mercado Pago</div>
+          <div class="cfg-billing-info-list">
+            <div><span>Assinatura</span><strong>${escapeHtml(license.mp_subscription_id || '—')}</strong></div>
+            <div><span>Status MP</span><strong>${escapeHtml(license.mp_subscription_status || mp?.status || '—')}</strong></div>
+            <div><span>Último pagamento</span><strong>${escapeHtml(license.mp_last_payment_id || '—')}</strong></div>
+            <div><span>Último webhook</span><strong>${escapeHtml(formatDateTime(license.last_webhook_at))}</strong></div>
+            <div><span>Próxima cobrança MP</span><strong>${escapeHtml(formatDateTime(mp?.next_payment_date))}</strong></div>
+          </div>
+          ${mpError ? `<p class="cfg-billing-warning">Não foi possível consultar a assinatura no Mercado Pago: ${escapeHtml(mpError)}</p>` : ''}
+          <div class="cfg-billing-side-actions">
+            ${nextPaymentUrl ? `<a class="cfg-mini-btn" href="${escapeHtml(nextPaymentUrl)}" target="_blank" rel="noopener">Abrir link atual</a>` : ''}
+            <button type="button" class="cfg-mini-btn" data-platform-license-action="refresh">Atualizar status</button>
+          </div>
+        </section>
+
+        <section class="cfg-card cfg-card--warning">
+          <div class="cfg-section-title">Separação importante</div>
+          <p><strong>Esta assinatura é do dono com o BBarberFlow.</strong></p>
+          <p>Planos de corte dos clientes ficam em Planos/Assinaturas e usam tabelas próprias. Um cancelamento aqui não cancela planos dos clientes.</p>
+        </section>
+      </aside>
+    </div>
+  `);
 }
 
 // ─── Render primitives ────────────────────────────────────────────────────────
@@ -1522,6 +1811,7 @@ function renderTests() {
 
 function renderActiveSection() {
   if (configState.activeTab === 'business') return renderBusiness();
+  if (configState.activeTab === 'billing') return renderBilling();
   if (configState.activeTab === 'agenda') return renderAgenda();
   if (configState.activeTab === 'whatsapp') return renderWhatsapp();
   if (configState.activeTab === 'notifications') return renderNotifications();
@@ -1569,6 +1859,11 @@ function bindConfigEvents() {
 
   document.querySelectorAll('[data-test-endpoint]').forEach((btn) => {
     btn.addEventListener('click', () => runNotificationTest(btn.dataset.testEndpoint, btn));
+  });
+
+
+  document.querySelectorAll('[data-platform-license-action]').forEach((btn) => {
+    btn.addEventListener('click', () => runPlatformLicenseAction(btn.dataset.platformLicenseAction, btn));
   });
 
   document.querySelectorAll('.cfg-var-chip[data-var]').forEach((btn) => {
