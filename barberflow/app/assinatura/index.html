@@ -3,90 +3,91 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Assinatura — BarberFlow</title>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet"/>
+  <title>Assinatura — BBarberFlow</title>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@700;900&family=DM+Sans:wght@400;500;600;700;900&display=swap" rel="stylesheet"/>
   <link rel="stylesheet" href="/styles/app/assinatura.css"/>
 </head>
 <body>
+  <main id="assinatura-hero">
+    <section class="ass-brand" aria-label="BBarberFlow">
+      <div class="hero-logo">
+        <div class="hero-B">B</div>
+        <div class="hero-name">BBarber<span>Flow</span></div>
+      </div>
+      <p class="ass-brand-subtitle">Gestão inteligente para barbearias</p>
+    </section>
 
-  <div id="assinatura-hero">
-
-    <!-- Logo idêntico ao hero do dashboard -->
-    <div class="hero-logo">
-      <div class="hero-B">B</div>
-      <div class="hero-name">Barber<span>Flow</span></div>
-    </div>
-
-    <!-- Card central -->
-    <div class="ass-card">
-
-      <!-- Status badge -->
-      <div class="ass-badge">
+    <section class="ass-card" aria-labelledby="assinatura-title">
+      <div class="ass-badge" id="assBadge">
         <span class="ass-badge__dot"></span>
-        ASSINATURA SUSPENSA
+        VERIFICANDO ASSINATURA
       </div>
 
-      <h1 class="ass-title">Acesso Bloqueado</h1>
+      <h1 class="ass-title" id="assinatura-title">Regularize sua assinatura</h1>
       <p class="ass-subtitle">
-        Sua barbearia está temporariamente bloqueada.<br/>
-        Regularize o pagamento para voltar a atender.
+        Escolha como deseja manter o BBarberFlow ativo para sua barbearia.
       </p>
 
-      <!-- Price widget — estilo analytics-card do sistema -->
-      <div class="ass-price">
+      <div class="ass-price" aria-label="Plano mensal BBarberFlow">
         <div class="ac-title">PLANO MENSAL</div>
         <div class="ass-price__value">
           <span class="ass-price__currency">R$</span>
-          <span class="ass-price__amount">89</span>
-          <span class="ass-price__cents">,90</span>
+          <span class="ass-price__amount" id="assAmount">89</span>
+          <span class="ass-price__cents" id="assCents">,90</span>
         </div>
         <div class="data-row" style="margin-top:8px">
-          <div class="data-name">PIX</div>
+          <div class="data-name">Formas de pagamento</div>
           <div class="data-bar">
             <div class="data-fill" style="width:100%;background:linear-gradient(90deg,#4fc3f7,#9c6fff)"></div>
           </div>
-          <div class="data-val">Mensal</div>
+          <div class="data-val">Cartão ou Pix</div>
         </div>
       </div>
 
-      <!-- Features — estilo widget-module do sistema -->
+      <div class="ass-payment-grid">
+        <article class="ass-payment-card ass-payment-card--recommended">
+          <div class="ass-payment-kicker">Recomendado</div>
+          <h2>Cartão recorrente</h2>
+          <p>Renovação automática mensal. Ideal para manter o sistema ativo sem preocupação.</p>
+          <button class="ass-btn ass-btn--primary" id="btnCardSubscription" type="button">
+            Ativar recorrência no cartão
+          </button>
+        </article>
+
+        <article class="ass-payment-card">
+          <div class="ass-payment-kicker ass-payment-kicker--pix">Alternativa</div>
+          <h2>Pix mensal manual</h2>
+          <p>Para quem não possui cartão. O acesso é renovado após a confirmação do pagamento.</p>
+          <button class="ass-btn ass-btn--secondary" id="btnPixPayment" type="button">
+            Gerar Pix da mensalidade
+          </button>
+        </article>
+      </div>
+
       <div class="ass-features">
-        <div class="ass-feature">
-          <span class="widget-module" style="margin:0">📅 Agenda online ilimitada</span>
-        </div>
-        <div class="ass-feature">
-          <span class="widget-module" style="margin:0;color:#d8b4fe;border-color:rgba(156,111,255,.24);background:rgba(156,111,255,.08)">💬 Bot WhatsApp automático</span>
-        </div>
-        <div class="ass-feature">
-          <span class="widget-module" style="margin:0;color:#00e676;border-color:rgba(0,230,118,.24);background:rgba(0,230,118,.08)">👥 Clientes e fidelidade</span>
-        </div>
-        <div class="ass-feature">
-          <span class="widget-module" style="margin:0;color:#f59e0b;border-color:rgba(245,158,11,.24);background:rgba(245,158,11,.08)">💰 Financeiro completo</span>
-        </div>
-        <div class="ass-feature">
-          <span class="widget-module" style="margin:0">✂️ App para barbeiros</span>
-        </div>
+        <div class="ass-feature"><span class="widget-module">📅 Agenda online ilimitada</span></div>
+        <div class="ass-feature"><span class="widget-module widget-module--purple">💬 Bot WhatsApp automático</span></div>
+        <div class="ass-feature"><span class="widget-module widget-module--green">👥 Clientes e fidelidade</span></div>
+        <div class="ass-feature"><span class="widget-module widget-module--gold">💰 Financeiro completo</span></div>
+        <div class="ass-feature"><span class="widget-module">✂️ App para barbeiros</span></div>
       </div>
 
-      <!-- Botões -->
-      <button class="ass-btn ass-btn--primary" id="btnPagar">
-        Pagar agora via PIX
-      </button>
-
-      <button class="ass-btn ass-btn--ghost" id="btnLogout">
-        Sair da conta
-      </button>
+      <div class="ass-actions-row">
+        <button class="ass-btn ass-btn--ghost" id="btnVerify" type="button">
+          Verificar assinatura
+        </button>
+        <button class="ass-btn ass-btn--ghost" id="btnLogout" type="button">
+          Sair da conta
+        </button>
+      </div>
 
       <p class="ass-error" id="assinaturaError"></p>
+    </section>
 
-    </div>
-
-    <!-- Rodapé -->
     <p class="ass-footer">
-      Dúvidas? <a href="mailto:suporte@bbarberflow.com.br">suporte@bbarberflow.com.br</a>
+      Dúvidas? <a href="https://wa.me/5511980945446" target="_blank" rel="noopener">Fale com o suporte pelo WhatsApp</a>
     </p>
-
-  </div>
+  </main>
 
   <script type="module" src="/js/app/assinatura.js"></script>
 </body>
