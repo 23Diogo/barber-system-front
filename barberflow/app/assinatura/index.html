@@ -10,11 +10,10 @@
 <body>
   <main id="assinatura-hero">
     <section class="ass-shell" aria-label="Assinatura BBarberFlow">
-
       <section class="ass-brand" aria-label="BBarberFlow">
         <div class="hero-logo">
           <div class="hero-B">B</div>
-          <div>
+          <div class="hero-copy">
             <div class="hero-name">BBarber<span>Flow</span></div>
             <p class="ass-brand-subtitle">Gestão inteligente para barbearias</p>
           </div>
@@ -24,8 +23,8 @@
       <section class="ass-card" aria-labelledby="assinatura-title">
         <div class="ass-card-glow"></div>
 
-        <div class="ass-header">
-          <div>
+        <header class="ass-header">
+          <div class="ass-header-copy">
             <div class="ass-badge" id="assBadge">
               <span class="ass-badge__dot"></span>
               VERIFICANDO ASSINATURA
@@ -37,14 +36,14 @@
             </p>
           </div>
 
-          <div class="ass-health-card">
+          <aside class="ass-health-card" aria-label="Status do acesso">
             <span>Status do acesso</span>
             <strong id="assAccessStatus">Em análise</strong>
             <small id="assAccessDetail">Consultando assinatura...</small>
-          </div>
-        </div>
+          </aside>
+        </header>
 
-        <div class="ass-price" aria-label="Plano mensal BBarberFlow">
+        <section class="ass-price" aria-label="Plano mensal BBarberFlow">
           <div class="ass-price-top">
             <div>
               <div class="ac-title">PLANO PROFISSIONAL</div>
@@ -53,7 +52,7 @@
             <span class="ass-plan-pill">Tudo incluso</span>
           </div>
 
-          <div class="ass-price__value">
+          <div class="ass-price__value" aria-label="Valor do plano">
             <span class="ass-price__currency">R$</span>
             <span class="ass-price__amount" id="assAmount">89</span>
             <span class="ass-price__cents" id="assCents">,90</span>
@@ -70,9 +69,9 @@
             </div>
             <div class="data-val">100%</div>
           </div>
-        </div>
+        </section>
 
-        <div class="ass-payment-grid">
+        <section class="ass-payment-grid" aria-label="Formas de pagamento">
           <article class="ass-payment-card ass-payment-card--recommended">
             <div class="ass-payment-kicker">Recomendado</div>
             <h2>Cartão recorrente</h2>
@@ -108,7 +107,7 @@
               Gerar Pix da mensalidade
             </button>
           </article>
-        </div>
+        </section>
 
         <section class="ass-feature-panel" aria-label="Recursos inclusos no plano">
           <div class="ass-section-head">
@@ -120,92 +119,92 @@
           </div>
 
           <div class="ass-feature-grid">
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>📅</span>
               <strong>Agenda inteligente</strong>
-              <p>Controle de horários, status de atendimento e organização da rotina.</p>
-            </div>
+              <p>Controle horários, status de atendimento e organização da rotina.</p>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>👥</span>
               <strong>Clientes e CRM</strong>
               <p>Cadastro, histórico, fidelidade e relacionamento com clientes.</p>
-            </div>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>✂️</span>
               <strong>App do barbeiro</strong>
-              <p>Visão operacional para profissionais acompanharem agenda e atendimentos.</p>
-            </div>
+              <p>Visão operacional para equipe acompanhar agenda e atendimentos.</p>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>💬</span>
               <strong>WhatsApp Bot</strong>
-              <p>Comunicação automatizada para melhorar atendimento e lembretes.</p>
-            </div>
+              <p>Automação de comunicação, lembretes e relacionamento.</p>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>💳</span>
               <strong>Planos de assinatura</strong>
-              <p>Venda clubes e planos de corte para seus clientes.</p>
-            </div>
+              <p>Venda clubes e planos de corte para clientes da barbearia.</p>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>💰</span>
               <strong>Financeiro completo</strong>
               <p>Receitas, despesas, transações, caixa e visão gerencial.</p>
-            </div>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>📊</span>
               <strong>Relatórios gerenciais</strong>
-              <p>Indicadores para acompanhar desempenho, faturamento e evolução.</p>
-            </div>
+              <p>Indicadores para acompanhar faturamento, evolução e performance.</p>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>🚀</span>
               <strong>Crescimento do negócio</strong>
-              <p>Insights, métricas e ferramentas para tomar decisões melhores.</p>
-            </div>
+              <p>Insights para tomar decisões melhores e aumentar previsibilidade.</p>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>📦</span>
               <strong>Estoque e produtos</strong>
               <p>Controle produtos, movimentações e vendas complementares.</p>
-            </div>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>🏆</span>
               <strong>Fidelidade</strong>
               <p>Crie benefícios e acompanhe engajamento dos clientes.</p>
-            </div>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>🧾</span>
               <strong>Taxas e repasses</strong>
               <p>Mais clareza sobre cobranças, repasses e regras financeiras.</p>
-            </div>
+            </article>
 
-            <div class="ass-feature-card">
+            <article class="ass-feature-card">
               <span>🧠</span>
               <strong>Painel do dono</strong>
-              <p>Uma central de comando para gerenciar a barbearia inteira.</p>
-            </div>
+              <p>Central de comando para gerenciar a barbearia inteira.</p>
+            </article>
           </div>
         </section>
 
         <section class="ass-trust-row" aria-label="Garantias operacionais">
           <div>
             <strong>Sem travar sua operação</strong>
-            <span>O BBarberFlow organiza agenda, equipe, clientes e financeiro em um só lugar.</span>
+            <span>Organize agenda, equipe, clientes e financeiro em um só lugar.</span>
           </div>
           <div>
             <strong>Pix como alternativa</strong>
-            <span>Quem não usa cartão pode manter o acesso com pagamento mensal manual.</span>
+            <span>Quem não usa cartão mantém o acesso com pagamento mensal manual.</span>
           </div>
           <div>
             <strong>Controle pelo painel</strong>
-            <span>Você pode acompanhar, trocar forma de pagamento e verificar status.</span>
+            <span>Acompanhe status, forma de pagamento e regularização.</span>
           </div>
         </section>
 
