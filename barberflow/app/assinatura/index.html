@@ -9,84 +9,222 @@
 </head>
 <body>
   <main id="assinatura-hero">
-    <section class="ass-brand" aria-label="BBarberFlow">
-      <div class="hero-logo">
-        <div class="hero-B">B</div>
-        <div class="hero-name">Barber<span>Flow</span></div>
-      </div>
-      <p class="ass-brand-subtitle">Gestão inteligente para barbearias</p>
-    </section>
+    <section class="ass-shell" aria-label="Assinatura BBarberFlow">
 
-    <section class="ass-card" aria-labelledby="assinatura-title">
-      <div class="ass-badge" id="assBadge">
-        <span class="ass-badge__dot"></span>
-        VERIFICANDO ASSINATURA
-      </div>
-
-      <h1 class="ass-title" id="assinatura-title">Regularize sua assinatura</h1>
-      <p class="ass-subtitle">
-        Escolha como deseja manter o BBarberFlow ativo para sua barbearia.
-      </p>
-
-      <div class="ass-price" aria-label="Plano mensal BBarberFlow">
-        <div class="ac-title">PLANO MENSAL</div>
-        <div class="ass-price__value">
-          <span class="ass-price__currency">R$</span>
-          <span class="ass-price__amount" id="assAmount">89</span>
-          <span class="ass-price__cents" id="assCents">,90</span>
-        </div>
-        <div class="data-row" style="margin-top:8px">
-          <div class="data-name">Formas de pagamento</div>
-          <div class="data-bar">
-            <div class="data-fill" style="width:100%;background:linear-gradient(90deg,#4fc3f7,#9c6fff)"></div>
+      <section class="ass-brand" aria-label="BBarberFlow">
+        <div class="hero-logo">
+          <div class="hero-B">B</div>
+          <div>
+            <div class="hero-name">BBarber<span>Flow</span></div>
+            <p class="ass-brand-subtitle">Gestão inteligente para barbearias</p>
           </div>
-          <div class="data-val">Cartão ou Pix</div>
         </div>
-      </div>
+      </section>
 
-      <div class="ass-payment-grid">
-        <article class="ass-payment-card ass-payment-card--recommended">
-          <div class="ass-payment-kicker">Recomendado</div>
-          <h2>Cartão recorrente</h2>
-          <p>Renovação automática mensal. Ideal para manter o sistema ativo sem preocupação.</p>
-          <button class="ass-btn ass-btn--primary" id="btnCardSubscription" type="button">
-            Ativar recorrência no cartão
+      <section class="ass-card" aria-labelledby="assinatura-title">
+        <div class="ass-card-glow"></div>
+
+        <div class="ass-header">
+          <div>
+            <div class="ass-badge" id="assBadge">
+              <span class="ass-badge__dot"></span>
+              VERIFICANDO ASSINATURA
+            </div>
+
+            <h1 class="ass-title" id="assinatura-title">Regularize sua assinatura</h1>
+            <p class="ass-subtitle">
+              Escolha como deseja manter o BBarberFlow ativo e continue usando todos os recursos para gerenciar, vender, acompanhar e fazer sua barbearia crescer.
+            </p>
+          </div>
+
+          <div class="ass-health-card">
+            <span>Status do acesso</span>
+            <strong id="assAccessStatus">Em análise</strong>
+            <small id="assAccessDetail">Consultando assinatura...</small>
+          </div>
+        </div>
+
+        <div class="ass-price" aria-label="Plano mensal BBarberFlow">
+          <div class="ass-price-top">
+            <div>
+              <div class="ac-title">PLANO PROFISSIONAL</div>
+              <p>Licença mensal do BBarberFlow para donos de barbearia.</p>
+            </div>
+            <span class="ass-plan-pill">Tudo incluso</span>
+          </div>
+
+          <div class="ass-price__value">
+            <span class="ass-price__currency">R$</span>
+            <span class="ass-price__amount" id="assAmount">89</span>
+            <span class="ass-price__cents" id="assCents">,90</span>
+          </div>
+
+          <div class="ass-price-caption">
+            Cartão recorrente ou Pix mensal manual
+          </div>
+
+          <div class="data-row">
+            <div class="data-name">Cobertura do plano</div>
+            <div class="data-bar">
+              <div class="data-fill"></div>
+            </div>
+            <div class="data-val">100%</div>
+          </div>
+        </div>
+
+        <div class="ass-payment-grid">
+          <article class="ass-payment-card ass-payment-card--recommended">
+            <div class="ass-payment-kicker">Recomendado</div>
+            <h2>Cartão recorrente</h2>
+            <p>
+              Renovação automática mensal. Ideal para manter o sistema ativo sem preocupação com vencimento.
+            </p>
+
+            <ul class="ass-mini-list">
+              <li>✓ Cobrança automática</li>
+              <li>✓ Menos risco de bloqueio</li>
+              <li>✓ Melhor para operação diária</li>
+            </ul>
+
+            <button class="ass-btn ass-btn--primary" id="btnCardSubscription" type="button">
+              Ativar recorrência no cartão
+            </button>
+          </article>
+
+          <article class="ass-payment-card">
+            <div class="ass-payment-kicker ass-payment-kicker--pix">Alternativa</div>
+            <h2>Pix mensal manual</h2>
+            <p>
+              Para quem não possui cartão. O acesso é renovado após a confirmação do pagamento.
+            </p>
+
+            <ul class="ass-mini-list">
+              <li>✓ Pagamento por Pix</li>
+              <li>✓ Liberação após confirmação</li>
+              <li>✓ Renovação manual mensal</li>
+            </ul>
+
+            <button class="ass-btn ass-btn--secondary" id="btnPixPayment" type="button">
+              Gerar Pix da mensalidade
+            </button>
+          </article>
+        </div>
+
+        <section class="ass-feature-panel" aria-label="Recursos inclusos no plano">
+          <div class="ass-section-head">
+            <div>
+              <span class="ass-section-kicker">Recursos inclusos</span>
+              <h2>O plano libera a operação completa da sua barbearia</h2>
+            </div>
+            <span class="ass-section-badge">BBarberFlow Pro</span>
+          </div>
+
+          <div class="ass-feature-grid">
+            <div class="ass-feature-card">
+              <span>📅</span>
+              <strong>Agenda inteligente</strong>
+              <p>Controle de horários, status de atendimento e organização da rotina.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>👥</span>
+              <strong>Clientes e CRM</strong>
+              <p>Cadastro, histórico, fidelidade e relacionamento com clientes.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>✂️</span>
+              <strong>App do barbeiro</strong>
+              <p>Visão operacional para profissionais acompanharem agenda e atendimentos.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>💬</span>
+              <strong>WhatsApp Bot</strong>
+              <p>Comunicação automatizada para melhorar atendimento e lembretes.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>💳</span>
+              <strong>Planos de assinatura</strong>
+              <p>Venda clubes e planos de corte para seus clientes.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>💰</span>
+              <strong>Financeiro completo</strong>
+              <p>Receitas, despesas, transações, caixa e visão gerencial.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>📊</span>
+              <strong>Relatórios gerenciais</strong>
+              <p>Indicadores para acompanhar desempenho, faturamento e evolução.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>🚀</span>
+              <strong>Crescimento do negócio</strong>
+              <p>Insights, métricas e ferramentas para tomar decisões melhores.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>📦</span>
+              <strong>Estoque e produtos</strong>
+              <p>Controle produtos, movimentações e vendas complementares.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>🏆</span>
+              <strong>Fidelidade</strong>
+              <p>Crie benefícios e acompanhe engajamento dos clientes.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>🧾</span>
+              <strong>Taxas e repasses</strong>
+              <p>Mais clareza sobre cobranças, repasses e regras financeiras.</p>
+            </div>
+
+            <div class="ass-feature-card">
+              <span>🧠</span>
+              <strong>Painel do dono</strong>
+              <p>Uma central de comando para gerenciar a barbearia inteira.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="ass-trust-row" aria-label="Garantias operacionais">
+          <div>
+            <strong>Sem travar sua operação</strong>
+            <span>O BBarberFlow organiza agenda, equipe, clientes e financeiro em um só lugar.</span>
+          </div>
+          <div>
+            <strong>Pix como alternativa</strong>
+            <span>Quem não usa cartão pode manter o acesso com pagamento mensal manual.</span>
+          </div>
+          <div>
+            <strong>Controle pelo painel</strong>
+            <span>Você pode acompanhar, trocar forma de pagamento e verificar status.</span>
+          </div>
+        </section>
+
+        <div class="ass-actions-row">
+          <button class="ass-btn ass-btn--ghost" id="btnVerify" type="button">
+            Verificar assinatura
           </button>
-        </article>
-
-        <article class="ass-payment-card">
-          <div class="ass-payment-kicker ass-payment-kicker--pix">Alternativa</div>
-          <h2>Pix mensal manual</h2>
-          <p>Para quem não possui cartão. O acesso é renovado após a confirmação do pagamento.</p>
-          <button class="ass-btn ass-btn--secondary" id="btnPixPayment" type="button">
-            Gerar Pix da mensalidade
+          <button class="ass-btn ass-btn--ghost" id="btnLogout" type="button">
+            Sair da conta
           </button>
-        </article>
-      </div>
+        </div>
 
-      <div class="ass-features">
-        <div class="ass-feature"><span class="widget-module">📅 Agenda online ilimitada</span></div>
-        <div class="ass-feature"><span class="widget-module widget-module--purple">💬 Bot WhatsApp automático</span></div>
-        <div class="ass-feature"><span class="widget-module widget-module--green">👥 Clientes e fidelidade</span></div>
-        <div class="ass-feature"><span class="widget-module widget-module--gold">💰 Financeiro completo</span></div>
-        <div class="ass-feature"><span class="widget-module">✂️ App para barbeiros</span></div>
-      </div>
+        <p class="ass-error" id="assinaturaError"></p>
+      </section>
 
-      <div class="ass-actions-row">
-        <button class="ass-btn ass-btn--ghost" id="btnVerify" type="button">
-          Verificar assinatura
-        </button>
-        <button class="ass-btn ass-btn--ghost" id="btnLogout" type="button">
-          Sair da conta
-        </button>
-      </div>
-
-      <p class="ass-error" id="assinaturaError"></p>
+      <p class="ass-footer">
+        Dúvidas? <a href="https://wa.me/5511980945446" target="_blank" rel="noopener">Fale com o suporte pelo WhatsApp</a>
+      </p>
     </section>
-
-    <p class="ass-footer">
-      Dúvidas? <a href="https://wa.me/5511980945446" target="_blank" rel="noopener">Fale com o suporte pelo WhatsApp</a>
-    </p>
   </main>
 
   <script type="module" src="/js/app/assinatura.js"></script>
