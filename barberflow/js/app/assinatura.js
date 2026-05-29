@@ -14,26 +14,60 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+function formatDate(value) {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  return new Intl.DateTimeFormat('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  }).format(date);
+}
+
 function getReturnStatus() {
   const params = new URLSearchParams(window.location.search);
   const mpStatus = String(params.get('mp_status') || '').toLowerCase();
   const status = String(params.get('status') || params.get('collection_status') || '').toLowerCase();
   const paymentId = String(params.get('payment_id') || params.get('collection_id') || '').trim();
 
-  if (['success', 'approved', 'assinatura', 'troca_cartao', 'pix_sucesso'].includes(mpStatus) || ['success', 'approved', 'assinatura', 'troca_cartao', 'pix_sucesso'].includes(status)) return 'success';
-  if (['pending', 'in_process', 'authorized', 'pix_pendente'].includes(mpStatus) || ['pending', 'in_process', 'authorized', 'pix_pendente'].includes(status)) return 'pending';
-  if (['failure', 'failed', 'rejected', 'cancelled', 'canceled', 'pix_falha'].includes(mpStatus) || ['rejected', 'cancelled', 'canceled', 'cancelled_by_user', 'pix_falha'].includes(status)) return 'failure';
+  if (
+    ['success', 'approved', 'assinatura', 'troca_cartao', 'pix_sucesso'].includes(mpStatus) ||
+    ['success', 'approved', 'assinatura', 'troca_cartao', 'pix_sucesso'].includes(status)
+  ) return 'success';
+
+  if (
+    ['pending', 'in_process', 'authorized', 'pix_pendente'].includes(mpStatus) ||
+    ['pending', 'in_process', 'authorized', 'pix_pendente'].includes(status)
+  ) return 'pending';
+
+  if (
+    ['failure', 'failed', 'rejected', 'cancelled', 'canceled', 'pix_falha'].includes(mpStatus) ||
+    ['rejected', 'cancelled', 'canceled', 'cancelled_by_user', 'pix_falha'].includes(status)
+  ) return 'failure';
+
   if (paymentId && !status) return 'pending';
   return '';
 }
 
 function getCheckoutUrl(payload) {
-  return payload?.paymentUrl || payload?.initPoint || payload?.init_point || payload?.sandboxInitPoint || payload?.sandbox_init_point || payload?.nextPaymentUrl || null;
+  return (
+    payload?.paymentUrl ||
+    payload?.initPoint ||
+    payload?.init_point ||
+    payload?.sandboxInitPoint ||
+    payload?.sandbox_init_point ||
+    payload?.nextPaymentUrl ||
+    null
+  );
 }
 
 function formatMoney(value) {
   const amount = Number(value || 89.90);
-  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number.isFinite(amount) ? amount : 89.90);
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+  }).format(Number.isFinite(amount) ? amount : 89.90);
 }
 
 function splitAmount(value) {
@@ -43,17 +77,22 @@ function splitAmount(value) {
 }
 
 function getLicense(payload) {
-  return payload?.license || payload?.payload?.license || payload || {};
+  return payload?.license || payload?.payload?.license || {};
+}
+
+function getShop(payload) {
+  return payload?.shop || payload?.barbershop || payload?.payload?.shop || {};
 }
 
 function getLicenseStatus(payload) {
   const license = getLicense(payload);
+  const shop = getShop(payload);
+
   return String(
     license?.status ||
     payload?.status ||
     payload?.licenseStatus ||
-    payload?.shop?.plan_status ||
-    payload?.barbershop?.plan_status ||
+    shop?.plan_status ||
     ''
   ).toLowerCase();
 }
@@ -62,6 +101,20 @@ function canAccess(payload) {
   if (payload?.license?.canAccess === true || payload?.canAccess === true) return true;
   const status = getLicenseStatus(payload);
   return ['active', 'trial', 'past_due'].includes(status);
+}
+
+function hasCancelledRecurrence(payload) {
+  const license = getLicense(payload);
+  return Boolean(license?.cancel_at_period_end);
+}
+
+function shouldRedirectToPanel(payload) {
+  return canAccess(payload) && !hasCancelledRecurrence(payload);
+}
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value || '';
 }
 
 function setAssinaturaMessage(message, variant = 'neutral') {
@@ -93,11 +146,52 @@ function setAllActionsLoading(isLoading, sourceButton = null, text = 'Aguarde...
     const btn = document.getElementById(id);
     if (!btn) return;
 
-    if (sourceButton && btn === sourceButton) setButtonLoading(btn, isLoading, text);
-    else btn.disabled = Boolean(isLoading);
+    if (sourceButton && btn === sourceButton) {
+      setButtonLoading(btn, isLoading, text);
+    } else {
+      btn.disabled = Boolean(isLoading);
+    }
 
     if (!isLoading && btn !== sourceButton) btn.disabled = false;
   });
+}
+
+function setHealthUi(status, payload = {}) {
+  const license = getLicense(payload);
+  const periodEnd = formatDate(license?.current_period_end || payload?.canAccessUntil);
+
+  if (license?.cancel_at_period_end && periodEnd) {
+    setText('assAccessStatus', 'Recorrência cancelada');
+    setText('assAccessDetail', `Acesso ativo até ${periodEnd}. Ative uma nova forma de pagamento para continuar depois.`);
+    return;
+  }
+
+  if (['active', 'trial'].includes(status)) {
+    setText('assAccessStatus', 'Ativo');
+    setText('assAccessDetail', periodEnd ? `Liberado até ${periodEnd}` : 'Acesso liberado');
+    return;
+  }
+
+  if (status === 'past_due') {
+    setText('assAccessStatus', 'Pendente');
+    setText('assAccessDetail', periodEnd ? `Regularize antes da tolerância. Período atual até ${periodEnd}` : 'Regularize para evitar bloqueio.');
+    return;
+  }
+
+  if (status === 'pending') {
+    setText('assAccessStatus', 'Aguardando');
+    setText('assAccessDetail', 'Pagamento em confirmação pelo Mercado Pago.');
+    return;
+  }
+
+  if (status === 'cancelled' || status === 'canceled') {
+    setText('assAccessStatus', 'Cancelado');
+    setText('assAccessDetail', 'Escolha uma forma de pagamento para reativar.');
+    return;
+  }
+
+  setText('assAccessStatus', 'Bloqueado');
+  setText('assAccessDetail', 'Regularize a assinatura para voltar ao painel.');
 }
 
 function setStatusUi(status, payload = null) {
@@ -115,6 +209,23 @@ function setStatusUi(status, payload = null) {
 
   if (badge) {
     badge.classList.remove('is-active', 'is-pending');
+  }
+
+  setHealthUi(status, payload || {});
+
+  if (license?.cancel_at_period_end && ['active', 'trial'].includes(status)) {
+    if (badge) {
+      badge.classList.add('is-pending');
+      badge.innerHTML = '<span class="ass-badge__dot"></span> RECORRÊNCIA CANCELADA';
+    }
+    if (title) title.textContent = 'Sua recorrência foi cancelada';
+    if (subtitle) {
+      const periodEnd = formatDate(license?.current_period_end);
+      subtitle.innerHTML = periodEnd
+        ? `Seu acesso continua ativo até ${periodEnd}.<br/>Ative cartão recorrente ou Pix mensal para manter o BBarberFlow depois desse período.`
+        : 'Seu acesso atual segue ativo. Ative uma nova forma de pagamento para continuar depois.';
+    }
+    return;
   }
 
   if (['active', 'trial'].includes(status)) {
@@ -177,7 +288,7 @@ async function redirectIfLicenseActive() {
   const status = getLicenseStatus(payload);
   setStatusUi(status, payload);
 
-  if (canAccess(payload)) {
+  if (shouldRedirectToPanel(payload)) {
     setAssinaturaMessage('Assinatura confirmada! Abrindo painel...', 'success');
     setAllActionsLoading(true, null, 'Abrindo painel...');
 
@@ -186,6 +297,10 @@ async function redirectIfLicenseActive() {
     }, 450);
 
     return true;
+  }
+
+  if (canAccess(payload) && hasCancelledRecurrence(payload)) {
+    setAssinaturaMessage('Seu acesso segue ativo até o fim do período pago, mas a recorrência está cancelada.', 'pending');
   }
 
   return false;
@@ -234,8 +349,15 @@ async function startCheckout(endpoint, sourceButton, loadingText) {
     setAssinaturaMessage('');
     setAllActionsLoading(true, sourceButton, 'Verificando assinatura...');
 
-    const didRedirect = await redirectIfLicenseActive();
-    if (didRedirect) return;
+    const payloadStatus = await fetchPlatformLicenseStatus();
+    const currentStatus = getLicenseStatus(payloadStatus);
+    setStatusUi(currentStatus, payloadStatus);
+
+    if (shouldRedirectToPanel(payloadStatus)) {
+      setAssinaturaMessage('Sua assinatura já está ativa. Abrindo painel...', 'success');
+      setTimeout(() => window.location.replace(APP_PATH), 450);
+      return;
+    }
 
     setAllActionsLoading(true, sourceButton, loadingText);
 
