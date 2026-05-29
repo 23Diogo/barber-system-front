@@ -430,6 +430,53 @@ export async function getPaymentLink() {
   });
 }
 
+
+export async function getPlatformLicenseStatus() {
+  return apiFetch('/api/platform-license/status');
+}
+
+export async function createPlatformCardSubscription(payload = {}) {
+  return apiFetch('/api/platform-license/card-subscription', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function createPlatformPixPayment(payload = {}) {
+  return apiFetch('/api/platform-license/pix-payment', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function changePlatformLicenseCard(payload = {}) {
+  return apiFetch('/api/platform-license/change-card', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function cancelPlatformLicense(payload = {}) {
+  return apiFetch('/api/platform-license/cancel', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function pausePlatformLicense(payload = {}) {
+  return apiFetch('/api/platform-license/pause', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function reactivatePlatformLicense(payload = {}) {
+  return apiFetch('/api/platform-license/reactivate', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  });
+}
+
 /* =========================
    PLANOS
 ========================= */
@@ -743,6 +790,13 @@ window.BarberFlowApi = {
   createAppointment,
   updateAppointmentStatus,
   getPaymentLink,
+  getPlatformLicenseStatus,
+  createPlatformCardSubscription,
+  createPlatformPixPayment,
+  changePlatformLicenseCard,
+  cancelPlatformLicense,
+  pausePlatformLicense,
+  reactivatePlatformLicense,
   getPlans,
   getPlanById,
   createPlan,
