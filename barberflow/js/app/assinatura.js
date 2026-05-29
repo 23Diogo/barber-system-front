@@ -1,15 +1,9 @@
-import { apiFetch, getPaymentLink, clearAuthToken, hasAuthToken } from '../services/api.js';
+import { apiFetch, clearAuthToken, hasAuthToken } from './services/api.js';
 
 const LOGIN_PATH = '/app/login';
 const APP_PATH = '/app';
-const DEFAULT_PAY_BUTTON_TEXT = 'Pagar agora via PIX';
-const VERIFY_BUTTON_TEXT = 'Verificar assinatura';
-const REPAY_BUTTON_TEXT = 'Pagar novamente';
-
 const POLL_INTERVAL_MS = 3000;
-const POLL_MAX_ATTEMPTS = 12;
-
-let buttonMode = 'pay'; // pay | verify
+const POLL_MAX_ATTEMPTS = 14;
 
 function redirectToLogin() {
   clearAuthToken();
@@ -22,24 +16,52 @@ function sleep(ms) {
 
 function getReturnStatus() {
   const params = new URLSearchParams(window.location.search);
-
   const mpStatus = String(params.get('mp_status') || '').toLowerCase();
   const status = String(params.get('status') || params.get('collection_status') || '').toLowerCase();
   const paymentId = String(params.get('payment_id') || params.get('collection_id') || '').trim();
 
-  if (['success', 'approved'].includes(mpStatus) || status === 'approved') return 'success';
-  if (
-    ['pending', 'in_process', 'authorized'].includes(mpStatus) ||
-    ['pending', 'in_process', 'authorized'].includes(status)
-  ) return 'pending';
-  if (
-    ['failure', 'failed', 'rejected', 'cancelled', 'canceled'].includes(mpStatus) ||
-    ['rejected', 'cancelled', 'canceled', 'cancelled_by_user'].includes(status)
-  ) return 'failure';
-
+  if (['success', 'approved', 'assinatura', 'troca_cartao', 'pix_sucesso'].includes(mpStatus) || ['success', 'approved', 'assinatura', 'troca_cartao', 'pix_sucesso'].includes(status)) return 'success';
+  if (['pending', 'in_process', 'authorized', 'pix_pendente'].includes(mpStatus) || ['pending', 'in_process', 'authorized', 'pix_pendente'].includes(status)) return 'pending';
+  if (['failure', 'failed', 'rejected', 'cancelled', 'canceled', 'pix_falha'].includes(mpStatus) || ['rejected', 'cancelled', 'canceled', 'cancelled_by_user', 'pix_falha'].includes(status)) return 'failure';
   if (paymentId && !status) return 'pending';
-
   return '';
+}
+
+function getCheckoutUrl(payload) {
+  return payload?.paymentUrl || payload?.initPoint || payload?.init_point || payload?.sandboxInitPoint || payload?.sandbox_init_point || payload?.nextPaymentUrl || null;
+}
+
+function formatMoney(value) {
+  const amount = Number(value || 89.90);
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number.isFinite(amount) ? amount : 89.90);
+}
+
+function splitAmount(value) {
+  const formatted = formatMoney(value).replace('R$', '').trim();
+  const [reais, cents = '00'] = formatted.split(',');
+  return { reais, cents: `,${cents}` };
+}
+
+function getLicense(payload) {
+  return payload?.license || payload?.payload?.license || payload || {};
+}
+
+function getLicenseStatus(payload) {
+  const license = getLicense(payload);
+  return String(
+    license?.status ||
+    payload?.status ||
+    payload?.licenseStatus ||
+    payload?.shop?.plan_status ||
+    payload?.barbershop?.plan_status ||
+    ''
+  ).toLowerCase();
+}
+
+function canAccess(payload) {
+  if (payload?.license?.canAccess === true || payload?.canAccess === true) return true;
+  const status = getLicenseStatus(payload);
+  return ['active', 'trial', 'past_due'].includes(status);
 }
 
 function setAssinaturaMessage(message, variant = 'neutral') {
@@ -48,94 +70,97 @@ function setAssinaturaMessage(message, variant = 'neutral') {
 
   el.textContent = message || '';
   el.style.display = message ? 'block' : 'none';
-
   el.classList.remove('is-error', 'is-success', 'is-pending', 'is-neutral');
   el.classList.add(`is-${variant}`);
 }
 
-function setPayButtonLoading(isLoading, text) {
-  const btn = document.getElementById('btnPagar');
-  if (!btn) return;
+function setButtonLoading(button, isLoading, text = 'Aguarde...') {
+  if (!button) return;
 
-  btn.disabled = Boolean(isLoading);
-  btn.textContent = text || (buttonMode === 'verify' ? VERIFY_BUTTON_TEXT : DEFAULT_PAY_BUTTON_TEXT);
+  if (isLoading) {
+    button.dataset.originalText = button.textContent || '';
+    button.disabled = true;
+    button.textContent = text;
+    return;
+  }
+
+  button.disabled = false;
+  button.textContent = button.dataset.originalText || button.textContent || 'Continuar';
 }
 
-function setButtonMode(mode) {
-  buttonMode = mode === 'verify' ? 'verify' : 'pay';
+function setAllActionsLoading(isLoading, sourceButton = null, text = 'Aguarde...') {
+  ['btnCardSubscription', 'btnPixPayment', 'btnVerify'].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
 
-  const btn = document.getElementById('btnPagar');
-  if (!btn || btn.disabled) return;
+    if (sourceButton && btn === sourceButton) setButtonLoading(btn, isLoading, text);
+    else btn.disabled = Boolean(isLoading);
 
-  btn.textContent = buttonMode === 'verify' ? VERIFY_BUTTON_TEXT : DEFAULT_PAY_BUTTON_TEXT;
+    if (!isLoading && btn !== sourceButton) btn.disabled = false;
+  });
 }
 
-function setReturnUi(status) {
-  const badge = document.querySelector('.ass-badge');
+function setStatusUi(status, payload = null) {
+  const badge = document.getElementById('assBadge') || document.querySelector('.ass-badge');
   const title = document.querySelector('.ass-title');
   const subtitle = document.querySelector('.ass-subtitle');
+  const license = getLicense(payload || {});
+  const amount = license?.amount || payload?.amount || 89.90;
+  const { reais, cents } = splitAmount(amount);
 
-  if (status === 'success') {
-    setButtonMode('verify');
+  const amountEl = document.getElementById('assAmount');
+  const centsEl = document.getElementById('assCents');
+  if (amountEl) amountEl.textContent = reais;
+  if (centsEl) centsEl.textContent = cents;
 
-    if (badge) badge.innerHTML = '<span class="ass-badge__dot"></span> PAGAMENTO EM CONFIRMAÇÃO';
-    if (title) title.textContent = 'Confirmando pagamento';
-    if (subtitle) {
-      subtitle.innerHTML = 'Recebemos o retorno do Mercado Pago.<br/>Estamos confirmando sua assinatura no BarberFlow.';
+  if (badge) {
+    badge.classList.remove('is-active', 'is-pending');
+  }
+
+  if (['active', 'trial'].includes(status)) {
+    if (badge) {
+      badge.classList.add('is-active');
+      badge.innerHTML = '<span class="ass-badge__dot"></span> ASSINATURA ATIVA';
     }
+    if (title) title.textContent = 'Assinatura confirmada';
+    if (subtitle) subtitle.innerHTML = 'Seu acesso ao BBarberFlow está ativo.<br/>Abrindo o painel do dono.';
+    return;
+  }
 
-    setAssinaturaMessage('Estamos verificando sua assinatura automaticamente.', 'pending');
+  if (status === 'past_due') {
+    if (badge) {
+      badge.classList.add('is-pending');
+      badge.innerHTML = '<span class="ass-badge__dot"></span> PAGAMENTO PENDENTE';
+    }
+    if (title) title.textContent = 'Regularize sua assinatura';
+    if (subtitle) subtitle.innerHTML = 'Identificamos uma pendência de pagamento.<br/>Regularize antes do fim da tolerância para evitar suspensão.';
+    return;
+  }
+
+  if (status === 'cancelled' || status === 'canceled') {
+    if (badge) badge.innerHTML = '<span class="ass-badge__dot"></span> ASSINATURA CANCELADA';
+    if (title) title.textContent = 'Assinatura cancelada';
+    if (subtitle) subtitle.innerHTML = 'Escolha cartão recorrente ou Pix mensal para reativar o acesso.';
     return;
   }
 
   if (status === 'pending') {
-    setButtonMode('verify');
-
-    if (badge) badge.innerHTML = '<span class="ass-badge__dot"></span> PAGAMENTO PENDENTE';
-    if (title) title.textContent = 'Pagamento em processamento';
-    if (subtitle) {
-      subtitle.innerHTML = 'Seu pagamento ainda pode estar em confirmação.<br/>Quando o Mercado Pago confirmar, o painel será liberado.';
+    if (badge) {
+      badge.classList.add('is-pending');
+      badge.innerHTML = '<span class="ass-badge__dot"></span> AGUARDANDO PAGAMENTO';
     }
-
-    setAssinaturaMessage('Pagamento pendente. Clique em verificar ou aguarde a confirmação automática.', 'pending');
+    if (title) title.textContent = 'Pagamento em confirmação';
+    if (subtitle) subtitle.innerHTML = 'Assim que o Mercado Pago confirmar, seu painel será liberado.';
     return;
   }
 
-  if (status === 'failure') {
-    setButtonMode('pay');
-
-    if (badge) badge.innerHTML = '<span class="ass-badge__dot"></span> PAGAMENTO NÃO CONFIRMADO';
-    if (title) title.textContent = 'Pagamento não confirmado';
-    if (subtitle) {
-      subtitle.innerHTML = 'Não foi possível confirmar o pagamento anterior.<br/>Você pode tentar novamente pelo botão abaixo.';
-    }
-
-    setAssinaturaMessage('O pagamento não foi aprovado ou foi cancelado. Tente novamente.', 'error');
-  }
+  if (badge) badge.innerHTML = '<span class="ass-badge__dot"></span> ASSINATURA SUSPENSA';
+  if (title) title.textContent = 'Acesso bloqueado';
+  if (subtitle) subtitle.innerHTML = 'Sua barbearia está temporariamente bloqueada.<br/>Regularize o pagamento para voltar a atender.';
 }
 
-function getLicenseStatus(payload) {
-  return String(
-    payload?.license?.status ||
-    payload?.licenseStatus ||
-    payload?.barbershop?.plan_status ||
-    payload?.status ||
-    ''
-  ).toLowerCase();
-}
-
-function canAccess(payload) {
-  if (payload?.license?.canAccess === true) return true;
-  if (payload?.canAccess === true) return true;
-
-  const status = getLicenseStatus(payload);
-  return status === 'active';
-}
-
-async function fetchLicenseStatus() {
-  // Endpoint dedicado, sem cache e sem depender do /api/auth/me.
-  // Evita 304 sem payload e evita ler estado velho depois do webhook.
-  const payload = await apiFetch(`/api/auth/license-status?_=${Date.now()}`, {
+async function fetchPlatformLicenseStatus() {
+  return apiFetch(`/api/platform-license/status?_=${Date.now()}`, {
     method: 'GET',
     cache: 'no-store',
     headers: {
@@ -145,20 +170,16 @@ async function fetchLicenseStatus() {
     },
     timeoutMs: 20000,
   });
-
-  return {
-    status: getLicenseStatus(payload),
-    canAccess: canAccess(payload),
-    payload,
-  };
 }
 
 async function redirectIfLicenseActive() {
-  const license = await fetchLicenseStatus();
+  const payload = await fetchPlatformLicenseStatus();
+  const status = getLicenseStatus(payload);
+  setStatusUi(status, payload);
 
-  if (license.canAccess || license.status === 'active') {
+  if (canAccess(payload)) {
     setAssinaturaMessage('Assinatura confirmada! Abrindo painel...', 'success');
-    setPayButtonLoading(true, 'Abrindo painel...');
+    setAllActionsLoading(true, null, 'Abrindo painel...');
 
     setTimeout(() => {
       window.location.replace(APP_PATH);
@@ -171,8 +192,8 @@ async function redirectIfLicenseActive() {
 }
 
 async function waitForLicenseActivation() {
-  setButtonMode('verify');
-  setPayButtonLoading(true, 'Verificando assinatura...');
+  const verifyBtn = document.getElementById('btnVerify');
+  setButtonLoading(verifyBtn, true, 'Verificando...');
 
   for (let attempt = 1; attempt <= POLL_MAX_ATTEMPTS; attempt++) {
     try {
@@ -182,35 +203,28 @@ async function waitForLicenseActivation() {
       const remaining = POLL_MAX_ATTEMPTS - attempt;
       setAssinaturaMessage(
         remaining > 0
-          ? `Pagamento ainda não confirmado no sistema. Nova verificação em alguns segundos... (${remaining})`
+          ? `Pagamento ainda não confirmado. Nova verificação em alguns segundos... (${remaining})`
           : 'Pagamento ainda não confirmado no sistema.',
         'pending'
       );
     } catch (error) {
       const message = error instanceof Error ? error.message : '';
-
       if (/401|403|não autenticado|unauthorized|forbidden|sessão/i.test(message)) {
         redirectToLogin();
         return false;
       }
-
       setAssinaturaMessage('Não foi possível consultar a assinatura agora. Tentando novamente...', 'pending');
     }
 
     await sleep(POLL_INTERVAL_MS);
   }
 
-  setButtonMode('pay');
-  setPayButtonLoading(false, REPAY_BUTTON_TEXT);
-  setAssinaturaMessage(
-    'Ainda não consegui confirmar a assinatura. Se você já pagou, aguarde alguns instantes e atualize a página. Se não pagou, tente novamente.',
-    'pending'
-  );
-
+  setButtonLoading(verifyBtn, false);
+  setAssinaturaMessage('Ainda não consegui confirmar a assinatura. Se você já pagou, aguarde alguns instantes e tente verificar novamente.', 'pending');
   return false;
 }
 
-async function handlePagar() {
+async function startCheckout(endpoint, sourceButton, loadingText) {
   try {
     if (!hasAuthToken()) {
       redirectToLogin();
@@ -218,29 +232,27 @@ async function handlePagar() {
     }
 
     setAssinaturaMessage('');
+    setAllActionsLoading(true, sourceButton, 'Verificando assinatura...');
 
-    // Regra final: antes de gerar qualquer novo link, sempre consulta a licença.
-    // Se o webhook já ativou, não cria cobrança duplicada e manda direto ao painel.
-    setPayButtonLoading(true, 'Verificando assinatura...');
     const didRedirect = await redirectIfLicenseActive();
     if (didRedirect) return;
 
-    if (buttonMode === 'verify') {
-      await waitForLicenseActivation();
-      return;
+    setAllActionsLoading(true, sourceButton, loadingText);
+
+    const payload = await apiFetch(endpoint, {
+      method: 'POST',
+      body: JSON.stringify({}),
+      timeoutMs: 30000,
+    });
+
+    const checkoutUrl = getCheckoutUrl(payload);
+    if (!checkoutUrl) {
+      throw new Error('Link de pagamento não retornado. Tente novamente.');
     }
 
-    setPayButtonLoading(true, 'Gerando link...');
-
-    const data = await getPaymentLink();
-
-    if (!data?.paymentUrl) {
-      throw new Error('Link de pagamento não gerado. Tente novamente.');
-    }
-
-    window.location.href = data.paymentUrl;
+    window.location.href = checkoutUrl;
   } catch (error) {
-    const message = error instanceof Error ? error.message : 'Erro ao gerar link. Tente novamente.';
+    const message = error instanceof Error ? error.message : 'Erro ao gerar pagamento. Tente novamente.';
 
     if (/401|403|não autenticado|unauthorized|forbidden|sessão/i.test(message)) {
       redirectToLogin();
@@ -248,7 +260,26 @@ async function handlePagar() {
     }
 
     setAssinaturaMessage(message, 'error');
-    setPayButtonLoading(false);
+    setAllActionsLoading(false, sourceButton);
+  }
+}
+
+function setReturnUi(status) {
+  if (status === 'success') {
+    setStatusUi('pending');
+    setAssinaturaMessage('Recebemos o retorno do Mercado Pago. Verificando sua assinatura automaticamente.', 'pending');
+    return;
+  }
+
+  if (status === 'pending') {
+    setStatusUi('pending');
+    setAssinaturaMessage('Pagamento pendente. Clique em verificar ou aguarde a confirmação automática.', 'pending');
+    return;
+  }
+
+  if (status === 'failure') {
+    setStatusUi('suspended');
+    setAssinaturaMessage('O pagamento não foi aprovado ou foi cancelado. Tente novamente.', 'error');
   }
 }
 
@@ -258,27 +289,28 @@ function init() {
     return;
   }
 
-  const btnPagar = document.getElementById('btnPagar');
+  const btnCard = document.getElementById('btnCardSubscription');
+  const btnPix = document.getElementById('btnPixPayment');
+  const btnVerify = document.getElementById('btnVerify');
   const btnLogout = document.getElementById('btnLogout');
   const returnStatus = getReturnStatus();
 
-  if (btnPagar) btnPagar.addEventListener('click', handlePagar);
-  if (btnLogout) btnLogout.addEventListener('click', redirectToLogin);
+  btnCard?.addEventListener('click', () => startCheckout('/api/platform-license/card-subscription', btnCard, 'Gerando assinatura...'));
+  btnPix?.addEventListener('click', () => startCheckout('/api/platform-license/pix-payment', btnPix, 'Gerando Pix...'));
+  btnVerify?.addEventListener('click', waitForLicenseActivation);
+  btnLogout?.addEventListener('click', redirectToLogin);
 
   if (returnStatus) {
     setReturnUi(returnStatus);
-
     if (returnStatus === 'success' || returnStatus === 'pending') {
       waitForLicenseActivation();
       return;
     }
   }
 
-  // Mesmo sem querystring do Mercado Pago, se o usuário cair nesta tela com a licença já ativa,
-  // tira da tela de assinatura imediatamente.
   redirectIfLicenseActive().catch(() => {
-    setButtonMode('pay');
-    setPayButtonLoading(false, DEFAULT_PAY_BUTTON_TEXT);
+    setStatusUi('suspended');
+    setAllActionsLoading(false);
   });
 }
 
