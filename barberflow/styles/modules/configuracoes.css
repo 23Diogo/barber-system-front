@@ -1185,3 +1185,233 @@
     }
   }
 }
+
+
+/* ─── Assinatura e Cobrança da Plataforma ───────────────────────── */
+.page--configuracoes {
+  .cfg-billing-layout .cfg-card p strong {
+    color: #e8f0fe;
+  }
+
+  .cfg-license-status {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 28px;
+    padding: 6px 11px;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .10em;
+    text-transform: uppercase;
+    border: 1px solid rgba(255,255,255,.10);
+    color: #8ea0c2;
+    background: rgba(255,255,255,.035);
+    white-space: nowrap;
+  }
+
+  .cfg-license-status--success {
+    color: #00e676;
+    background: rgba(0,230,118,.10);
+    border-color: rgba(0,230,118,.24);
+  }
+
+  .cfg-license-status--warning {
+    color: #f59e0b;
+    background: rgba(245,158,11,.10);
+    border-color: rgba(245,158,11,.24);
+  }
+
+  .cfg-license-status--danger {
+    color: #ff7b91;
+    background: rgba(255,23,68,.10);
+    border-color: rgba(255,23,68,.24);
+  }
+
+  .cfg-billing-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .cfg-billing-stat {
+    min-width: 0;
+    padding: 13px;
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 16px;
+    background: rgba(10,12,26,.62);
+  }
+
+  .cfg-billing-stat span,
+  .cfg-billing-info-list span {
+    display: block;
+    color: #5a6888;
+    font-size: 10px;
+    font-weight: 900;
+    letter-spacing: .09em;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+
+  .cfg-billing-stat strong {
+    display: block;
+    color: #e8f0fe;
+    font-family: 'Orbitron', sans-serif;
+    font-size: 18px;
+    line-height: 1.15;
+  }
+
+  .cfg-billing-stat small {
+    display: block;
+    margin-top: 6px;
+    color: #8ea0c2;
+    font-size: 11px;
+    line-height: 1.4;
+  }
+
+  .cfg-billing-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .cfg-billing-action {
+    min-width: 0;
+    display: grid;
+    grid-template-columns: 34px minmax(0, 1fr);
+    gap: 10px;
+    align-items: center;
+    text-align: left;
+    padding: 13px;
+    border: 1px solid rgba(79,195,247,.13);
+    border-radius: 16px;
+    background: rgba(255,255,255,.025);
+    color: #e8f0fe;
+    cursor: pointer;
+    transition: transform .18s ease, border-color .18s ease, background .18s ease, opacity .18s ease;
+  }
+
+  .cfg-billing-action:hover:not(:disabled) {
+    transform: translateY(-1px);
+    border-color: rgba(79,195,247,.32);
+    background: rgba(79,195,247,.06);
+  }
+
+  .cfg-billing-action:disabled {
+    opacity: .48;
+    cursor: not-allowed;
+  }
+
+  .cfg-billing-action span {
+    width: 34px;
+    height: 34px;
+    display: grid;
+    place-items: center;
+    border-radius: 12px;
+    background: rgba(79,195,247,.10);
+    border: 1px solid rgba(79,195,247,.20);
+  }
+
+  .cfg-billing-action strong,
+  .cfg-billing-action em {
+    grid-column: 2;
+    min-width: 0;
+  }
+
+  .cfg-billing-action strong {
+    color: #e8f0fe;
+    font-size: 12px;
+    line-height: 1.2;
+  }
+
+  .cfg-billing-action em {
+    margin-top: -3px;
+    color: #8ea0c2;
+    font-size: 11px;
+    line-height: 1.35;
+    font-style: normal;
+  }
+
+  .cfg-billing-action--primary {
+    border-color: rgba(79,195,247,.24);
+    background: linear-gradient(135deg, rgba(79,195,247,.10), rgba(156,111,255,.06));
+  }
+
+  .cfg-billing-action--success {
+    border-color: rgba(0,230,118,.22);
+  }
+
+  .cfg-billing-action--success span {
+    background: rgba(0,230,118,.10);
+    border-color: rgba(0,230,118,.22);
+  }
+
+  .cfg-billing-action--danger {
+    border-color: rgba(255,23,68,.20);
+  }
+
+  .cfg-billing-action--danger span {
+    background: rgba(255,23,68,.10);
+    border-color: rgba(255,23,68,.22);
+  }
+
+  .cfg-billing-info-list {
+    display: grid;
+    gap: 10px;
+  }
+
+  .cfg-billing-info-list div {
+    min-width: 0;
+    padding: 10px;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 14px;
+    background: rgba(10,12,26,.52);
+  }
+
+  .cfg-billing-info-list strong {
+    display: block;
+    color: #e8f0fe;
+    font-size: 11px;
+    overflow-wrap: anywhere;
+  }
+
+  .cfg-billing-warning {
+    margin-top: 10px !important;
+    padding: 10px;
+    border-radius: 13px;
+    color: #f59e0b !important;
+    background: rgba(245,158,11,.08);
+    border: 1px solid rgba(245,158,11,.20);
+  }
+
+  .cfg-billing-side-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+  }
+
+  .cfg-mini-btn {
+    min-height: 34px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 11px;
+    border-radius: 999px;
+    border: 1px solid rgba(79,195,247,.20);
+    background: rgba(79,195,247,.07);
+    color: #4fc3f7;
+    font-size: 11px;
+    font-weight: 900;
+    text-decoration: none;
+    cursor: pointer;
+  }
+
+  @media (max-width: 860px) {
+    .cfg-billing-grid,
+    .cfg-billing-actions {
+      grid-template-columns: 1fr;
+    }
+  }
+}
