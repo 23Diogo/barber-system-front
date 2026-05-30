@@ -1,4 +1,4 @@
-import { apiFetch, clearAuthToken, hasAuthToken } from './services/api.js';
+import { apiFetch, clearAuthToken, hasAuthToken } from '../services/api.js';
 
 const LOGIN_PATH = '/app/login';
 const APP_PATH = '/app';
