@@ -1,4 +1,4 @@
-import { apiFetch, clearAuthToken, hasAuthToken } from '../services/api.js';
+import { apiFetch, clearAuthToken, hasAuthToken } from './services/api.js';
 
 const LOGIN_PATH = '/app/login';
 const APP_PATH = '/app';
@@ -174,7 +174,7 @@ function setHealthUi(status, payload = {}) {
 
   if (status === 'past_due') {
     setText('assAccessStatus', 'Pendente');
-    setText('assAccessDetail', periodEnd ? `Regularize antes da tolerância. Período atual até ${periodEnd}` : 'Regularize para evitar bloqueio.');
+    setText('assAccessDetail', periodEnd ? `Regularize até o vencimento. Período atual até ${periodEnd}` : 'Regularize para evitar bloqueio.');
     return;
   }
 
@@ -285,7 +285,7 @@ function setStatusUi(status, payload = null) {
       badge.innerHTML = '<span class="ass-badge__dot"></span> PAGAMENTO PENDENTE';
     }
     if (title) title.textContent = 'Regularize sua assinatura';
-    if (subtitle) subtitle.innerHTML = 'Identificamos uma pendência de pagamento.<br/>Regularize antes do fim da tolerância para evitar suspensão.';
+    if (subtitle) subtitle.innerHTML = 'Identificamos uma pendência de pagamento.<br/>Regularize até o vencimento para evitar suspensão.';
     return;
   }
 
