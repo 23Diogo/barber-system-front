@@ -906,6 +906,28 @@ function getPaymentModeLabel(mode) {
   return 'Não definido';
 }
 
+
+function renderPlatformRenewalAlert(alert) {
+  if (!alert?.show) return '';
+
+  const level = String(alert.level || 'warning').toLowerCase();
+  const dueDate = alert.dueDateLabel || formatDate(alert.dueDate);
+
+  return `
+    <section class="cfg-renewal-alert cfg-renewal-alert--${escapeHtml(level)}">
+      <div class="cfg-renewal-alert__icon">⚡</div>
+      <div>
+        <strong>${escapeHtml(alert.title || 'Sua assinatura via Pix vence em breve')}</strong>
+        <p>${escapeHtml(alert.message || 'Gere um novo Pix para continuar usando o BBarberFlow sem interrupções.')}</p>
+        ${dueDate ? `<small>Vencimento: ${escapeHtml(dueDate)}</small>` : ''}
+      </div>
+      <button type="button" class="cfg-mini-btn cfg-mini-btn--success" data-platform-license-action="pix">
+        ${escapeHtml(alert.actionLabel || 'Gerar Pix')}
+      </button>
+    </section>
+  `;
+}
+
 function getCheckoutUrl(payload) {
   return payload?.paymentUrl || payload?.initPoint || payload?.init_point || payload?.sandboxInitPoint || payload?.sandbox_init_point || payload?.nextPaymentUrl || null;
 }
@@ -1024,6 +1046,7 @@ function renderBilling() {
   const mpError = mp?.error || null;
   const hasCardRecurring = Boolean(license.mp_subscription_id);
   const hasPeriod = Boolean(license.current_period_end);
+  const renewalAlert = payload.renewalAlert || null;
 
   return renderSectionShell(`
     <div class="cfg-layout cfg-billing-layout">
@@ -1057,6 +1080,8 @@ function renderBilling() {
               <small>Vencimento / tolerância: ${escapeHtml(String(license.grace_days ?? 5))} dias</small>
             </div>
           </div>
+
+          ${renderPlatformRenewalAlert(renewalAlert)}
         </section>
 
         <section class="cfg-card">
