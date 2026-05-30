@@ -1,0 +1,202 @@
+/* ─── Banner global de vencimento da licença via Pix manual ─────────────── */
+.bf-license-alert {
+  position: fixed;
+  top: 12px;
+  left: 236px;
+  right: 18px;
+  z-index: 99990;
+  min-height: 62px;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid rgba(249, 115, 22, .32);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at top left, rgba(249, 115, 22, .18), transparent 36%),
+    radial-gradient(circle at bottom right, rgba(79, 195, 247, .12), transparent 32%),
+    rgba(9, 12, 28, .96);
+  box-shadow: 0 18px 44px rgba(0,0,0,.36), 0 0 28px rgba(249, 115, 22, .12);
+  backdrop-filter: blur(14px);
+  color: #e8f0fe;
+}
+
+.bf-license-alert--danger {
+  border-color: rgba(255, 23, 68, .38);
+  box-shadow: 0 18px 44px rgba(0,0,0,.36), 0 0 34px rgba(255, 23, 68, .16);
+}
+
+.bf-license-alert--info {
+  border-color: rgba(79, 195, 247, .32);
+  box-shadow: 0 18px 44px rgba(0,0,0,.36), 0 0 28px rgba(79, 195, 247, .12);
+}
+
+.bf-license-alert__pulse {
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.08), transparent);
+  transform: translateX(-100%);
+  animation: bfLicenseSweep 4s ease-in-out infinite;
+}
+
+@keyframes bfLicenseSweep {
+  0%, 42% { transform: translateX(-100%); opacity: 0; }
+  52% { opacity: 1; }
+  72%, 100% { transform: translateX(100%); opacity: 0; }
+}
+
+.bf-license-alert__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: rgba(249, 115, 22, .12);
+  border: 1px solid rgba(249, 115, 22, .28);
+  font-size: 20px;
+}
+
+.bf-license-alert--danger .bf-license-alert__icon {
+  background: rgba(255, 23, 68, .12);
+  border-color: rgba(255, 23, 68, .28);
+}
+
+.bf-license-alert--info .bf-license-alert__icon {
+  background: rgba(79, 195, 247, .12);
+  border-color: rgba(79, 195, 247, .28);
+}
+
+.bf-license-alert__content {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.bf-license-alert__content strong {
+  color: #fff7ed;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: .01em;
+}
+
+.bf-license-alert__content span,
+.bf-license-alert__content small {
+  color: #c0cce8;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.bf-license-alert__content small {
+  color: #fbbf24;
+  font-weight: 900;
+}
+
+.bf-license-alert__btn {
+  min-height: 38px;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 13px;
+  background: linear-gradient(135deg, #00e676, #4fc3f7);
+  color: #041018;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  box-shadow: 0 10px 26px rgba(0,230,118,.18);
+}
+
+.bf-license-alert__btn:disabled {
+  opacity: .65;
+  cursor: wait;
+}
+
+.bf-license-toast {
+  position: fixed;
+  top: 86px;
+  right: 20px;
+  z-index: 99999;
+  width: min(390px, calc(100vw - 28px));
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 16px;
+  border: 1px solid rgba(249, 115, 22, .30);
+  background: rgba(9, 12, 28, .96);
+  box-shadow: 0 18px 44px rgba(0,0,0,.36);
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity .22s ease, transform .22s ease;
+}
+
+.bf-license-toast.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.bf-license-toast__icon {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  background: rgba(249, 115, 22, .12);
+  color: #f97316;
+  font-weight: 900;
+}
+
+.bf-license-toast strong {
+  display: block;
+  color: #e8f0fe;
+  font-size: 12px;
+  font-weight: 900;
+  margin-bottom: 3px;
+}
+
+.bf-license-toast span {
+  display: block;
+  color: #8ea0c2;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+body.light-theme .bf-license-alert,
+body.light-theme .bf-license-toast {
+  background: rgba(255, 255, 255, .94);
+  color: #0f172a;
+  box-shadow: 0 18px 44px rgba(15,23,42,.12);
+}
+
+body.light-theme .bf-license-alert__content strong,
+body.light-theme .bf-license-toast strong {
+  color: #0f172a;
+}
+
+body.light-theme .bf-license-alert__content span,
+body.light-theme .bf-license-toast span {
+  color: #475569;
+}
+
+@media (max-width: 900px) {
+  .bf-license-alert {
+    left: 12px;
+    right: 12px;
+    top: 12px;
+    grid-template-columns: 36px minmax(0, 1fr);
+  }
+
+  .bf-license-alert__btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+
+  .bf-license-toast {
+    top: 118px;
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+}
