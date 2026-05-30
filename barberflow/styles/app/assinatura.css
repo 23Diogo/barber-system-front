@@ -682,3 +682,106 @@ html, body {
     min-height: auto;
   }
 }
+
+/* ─── Alerta de renovação Pix manual ─────────────────────────────────────── */
+.ass-renewal-alert {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  margin-top: 14px;
+  padding: 14px;
+  border-radius: 18px;
+  border: 1px solid rgba(245, 158, 11, .26);
+  background:
+    radial-gradient(circle at top left, rgba(245,158,11,.13), transparent 38%),
+    rgba(255,255,255,.035);
+}
+
+.ass-renewal-alert--danger {
+  border-color: rgba(255, 77, 109, .30);
+  background:
+    radial-gradient(circle at top left, rgba(255,77,109,.14), transparent 38%),
+    rgba(255,255,255,.035);
+}
+
+.ass-renewal-alert--info {
+  border-color: rgba(79, 195, 247, .26);
+  background:
+    radial-gradient(circle at top left, rgba(79,195,247,.13), transparent 38%),
+    rgba(255,255,255,.035);
+}
+
+.ass-renewal-alert__icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  border-radius: 15px;
+  color: #f59e0b;
+  background: rgba(245,158,11,.12);
+  border: 1px solid rgba(245,158,11,.25);
+  font-size: 20px;
+}
+
+.ass-renewal-alert--danger .ass-renewal-alert__icon {
+  color: #ff4d6d;
+  background: rgba(255,77,109,.12);
+  border-color: rgba(255,77,109,.25);
+}
+
+.ass-renewal-alert--info .ass-renewal-alert__icon {
+  color: #4fc3f7;
+  background: rgba(79,195,247,.12);
+  border-color: rgba(79,195,247,.25);
+}
+
+.ass-renewal-alert__content {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ass-renewal-alert__content strong {
+  color: #e8f0fe;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.ass-renewal-alert__content span,
+.ass-renewal-alert__content small {
+  color: #9ba9c9;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ass-renewal-alert__content small {
+  color: #f59e0b;
+  font-weight: 900;
+}
+
+.ass-renewal-alert__btn {
+  min-height: 38px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 13px;
+  color: #041014;
+  background: linear-gradient(135deg, #00e676, #7dd3fc);
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .ass-renewal-alert {
+    grid-template-columns: 38px minmax(0, 1fr);
+  }
+
+  .ass-renewal-alert__btn {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

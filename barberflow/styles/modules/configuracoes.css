@@ -1415,3 +1415,96 @@
     }
   }
 }
+
+/* ─── Alerta assinatura Pix manual ───────────────────────────────────────── */
+.page--configuracoes {
+  .cfg-renewal-alert {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 18px;
+    border: 1px solid rgba(245,158,11,.26);
+    background:
+      radial-gradient(circle at top left, rgba(245,158,11,.13), transparent 38%),
+      rgba(10,12,26,.66);
+  }
+
+  .cfg-renewal-alert--danger {
+    border-color: rgba(255,23,68,.28);
+    background:
+      radial-gradient(circle at top left, rgba(255,23,68,.14), transparent 38%),
+      rgba(10,12,26,.66);
+  }
+
+  .cfg-renewal-alert--info {
+    border-color: rgba(79,195,247,.28);
+    background:
+      radial-gradient(circle at top left, rgba(79,195,247,.13), transparent 38%),
+      rgba(10,12,26,.66);
+  }
+
+  .cfg-renewal-alert__icon {
+    width: 42px;
+    height: 42px;
+    display: grid;
+    place-items: center;
+    border-radius: 15px;
+    color: #f59e0b;
+    background: rgba(245,158,11,.12);
+    border: 1px solid rgba(245,158,11,.25);
+    font-size: 20px;
+  }
+
+  .cfg-renewal-alert--danger .cfg-renewal-alert__icon {
+    color: #ff7b91;
+    background: rgba(255,23,68,.12);
+    border-color: rgba(255,23,68,.25);
+  }
+
+  .cfg-renewal-alert--info .cfg-renewal-alert__icon {
+    color: #4fc3f7;
+    background: rgba(79,195,247,.12);
+    border-color: rgba(79,195,247,.25);
+  }
+
+  .cfg-renewal-alert strong {
+    color: #e8f0fe;
+    font-size: 13px;
+    font-weight: 900;
+  }
+
+  .cfg-renewal-alert p {
+    margin: 4px 0 0;
+    color: #8ea0c2;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+
+  .cfg-renewal-alert small {
+    display: inline-block;
+    margin-top: 5px;
+    color: #f59e0b;
+    font-size: 11px;
+    font-weight: 900;
+  }
+
+  .cfg-mini-btn--success {
+    border-color: rgba(0,230,118,.26) !important;
+    color: #00e676 !important;
+    background: rgba(0,230,118,.08) !important;
+  }
+
+  @media (max-width: 760px) {
+    .cfg-renewal-alert {
+      grid-template-columns: 38px minmax(0, 1fr);
+    }
+
+    .cfg-renewal-alert .cfg-mini-btn {
+      grid-column: 1 / -1;
+      width: 100%;
+    }
+  }
+}

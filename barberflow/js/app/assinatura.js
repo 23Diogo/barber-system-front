@@ -194,6 +194,46 @@ function setHealthUi(status, payload = {}) {
   setText('assAccessDetail', 'Regularize a assinatura para voltar ao painel.');
 }
 
+
+function renderRenewalAlert(payload = {}) {
+  const alert = payload?.renewalAlert || null;
+  const card = document.querySelector('.ass-card');
+  const price = document.querySelector('.ass-price');
+  if (!card || !price) return;
+
+  let el = document.getElementById('assRenewalAlert');
+
+  if (!alert?.show) {
+    if (el) el.remove();
+    return;
+  }
+
+  if (!el) {
+    el = document.createElement('section');
+    el.id = 'assRenewalAlert';
+    price.insertAdjacentElement('afterend', el);
+  }
+
+  const level = String(alert.level || 'warning').toLowerCase();
+  const actionLabel = alert.actionLabel || 'Gerar Pix da mensalidade';
+  const dueDate = alert.dueDateLabel || formatDate(alert.dueDate);
+
+  el.className = `ass-renewal-alert ass-renewal-alert--${level}`;
+  el.innerHTML = `
+    <div class="ass-renewal-alert__icon">⚡</div>
+    <div class="ass-renewal-alert__content">
+      <strong>${alert.title || 'Sua assinatura via Pix vence em breve'}</strong>
+      <span>${alert.message || 'Gere um novo Pix para continuar usando o BBarberFlow sem interrupções.'}</span>
+      ${dueDate ? `<small>Vencimento: ${dueDate}</small>` : ''}
+    </div>
+    <button type="button" class="ass-renewal-alert__btn" id="btnRenewalPix">${actionLabel}</button>
+  `;
+
+  el.querySelector('#btnRenewalPix')?.addEventListener('click', () => {
+    document.getElementById('btnPixPayment')?.click();
+  });
+}
+
 function setStatusUi(status, payload = null) {
   const badge = document.getElementById('assBadge') || document.querySelector('.ass-badge');
   const title = document.querySelector('.ass-title');
@@ -212,6 +252,7 @@ function setStatusUi(status, payload = null) {
   }
 
   setHealthUi(status, payload || {});
+  renderRenewalAlert(payload || {});
 
   if (license?.cancel_at_period_end && ['active', 'trial'].includes(status)) {
     if (badge) {
