@@ -1077,7 +1077,7 @@ function renderBilling() {
             <div class="cfg-billing-stat">
               <span>Período atual</span>
               <strong>${escapeHtml(hasPeriod ? formatDate(license.current_period_end) : '—')}</strong>
-              <small>Vencimento / tolerância: ${escapeHtml(String(license.grace_days ?? 5))} dias</small>
+              <small>Acesso liberado até esta data</small>
             </div>
           </div>
 
@@ -1096,13 +1096,13 @@ function renderBilling() {
             <button type="button" class="cfg-billing-action cfg-billing-action--primary" data-platform-license-action="card">
               <span>💳</span>
               <strong>Ativar cartão recorrente</strong>
-              <em>Renovação automática mensal pelo Mercado Pago.</em>
+              <em>Renovação automática pelo Mercado Pago.</em>
             </button>
 
             <button type="button" class="cfg-billing-action cfg-billing-action--success" data-platform-license-action="pix">
               <span>⚡</span>
               <strong>Gerar Pix mensal</strong>
-              <em>Pagamento manual. Renova após confirmação.</em>
+              <em>Pagamento manual. Renova após confirmação do Pix.</em>
             </button>
 
             <button type="button" class="cfg-billing-action" data-platform-license-action="changeCard" ${!hasCardRecurring ? 'disabled' : ''}>
