@@ -8,6 +8,7 @@ import { navigate, initRouter } from './router.js';
 import { initMobileSidebar } from './components/mobile-sidebar.js';
 import { initNavBadges }     from './components/nav-badges.js';
 import { initPWABanner }     from './pwa-install.js';
+import { initLicenseAlert }  from './components/license-alert.js';
 
 function initAdminApp() {
   bindSidebar(navigate);
@@ -20,6 +21,7 @@ function initAdminApp() {
   initDevAuth();
   initNavBadges();
   initPWABanner();    // só exibe se mobile + não instalado + não dispensado recentemente
+  initLicenseAlert(); // banner fixo de vencimento Pix manual da licença
 }
 
 window.addEventListener('DOMContentLoaded', initAdminApp);
