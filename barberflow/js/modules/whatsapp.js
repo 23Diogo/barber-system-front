@@ -99,22 +99,22 @@ async function launchEmbeddedSignup() {
     await loadMetaSdk();
 
     FB.login(async (response) => {
-      if (response.authResponse?.code) {
-        await exchangeCodeForToken(response.authResponse.code);
-      } else {
-        setFeedback('Conexão cancelada ou sem permissão.', 'error');
-        if (btn) { btn.disabled = false; btn.textContent = '🔗 Conectar WhatsApp'; }
-      }
-    }, {
-      config_id:    '', // Preencher com config_id após criar no Meta Developers
-      response_type: 'code',
-      override_default_response_type: true,
-      extras: {
-        setup: {},
-        featureType: '',
-        sessionInfoVersion: '3',
-      }
-    });
+  if (response.authResponse?.code) {
+    await exchangeCodeForToken(response.authResponse.code);
+  } else {
+    setFeedback('Conexão cancelada ou sem permissão.', 'error');
+    if (btn) { btn.disabled = false; btn.textContent = '🔗 Conectar WhatsApp'; }
+  }
+}, {
+  config_id: '148286232799067',
+  response_type: 'code',
+  override_default_response_type: true,
+  extras: {
+    setup: {},
+    featureType: '',
+    sessionInfoVersion: '3',
+  }
+});
 
   } catch (err) {
     console.error('Embedded Signup error:', err);
